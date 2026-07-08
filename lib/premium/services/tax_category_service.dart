@@ -4,9 +4,10 @@ class TaxCategoryService {
   TaxCategoryService._();
 
   static final List<TaxCategory> defaults = [
-    TaxCategory(id: 'tax_travel', name: 'Travel'),
-    TaxCategory(id: 'tax_office', name: 'Office Supplies'),
-    TaxCategory(id: 'tax_meals', name: 'Client Meals'),
-    TaxCategory(id: 'tax_software', name: 'Software Subscriptions'),
+    TaxCategory(id: '80C', name: '80C (ELSS, LIC, PPF)'),
+    TaxCategory(id: '80D', name: '80D (Health Insurance)'),
+    TaxCategory(id: 'HRA', name: 'House Rent Allowance (HRA)'),
+    TaxCategory(id: 'LTA', name: 'Leave Travel Allowance (LTA)'),
+    TaxCategory(id: '80E', name: '80E (Education Loan)'),
   ];
 }

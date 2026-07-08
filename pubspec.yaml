@@ -1,7 +1,7 @@
 name: pet
 description: "P.E.T - Personal Expense Tracker for Indian users"
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.1+4
 
 environment:
   sdk: ^3.10.8
@@ -22,6 +22,7 @@ dependencies:
   flutter_slidable: ^3.1.1
   google_fonts: ^6.2.1
   shared_preferences: ^2.3.5
+  timezone: ^0.9.4
   # Firebase + Google Sign-In
   firebase_core: ^3.13.0
   firebase_auth: ^5.5.2
@@ -38,6 +39,7 @@ dependencies:
   share_plus: ^12.0.1
   flutter_animate: ^4.5.0
   local_auth: ^2.3.0
+  purchases_flutter: ^8.0.0
 
 dev_dependencies:
   flutter_test:

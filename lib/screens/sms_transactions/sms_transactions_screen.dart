@@ -38,7 +38,9 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
         context,
         listen: false,
       );
-      if (provider.transactions.isEmpty) {
+      // Only trigger a load if initialize() has not already done so
+      // (i.e., not currently loading AND list is empty).
+      if (!provider.isLoading && provider.transactions.isEmpty) {
         provider.loadTransactions();
       }
     });
@@ -105,7 +107,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
                         final count = await provider.scanInbox(
                           lookbackDays: 90,
                         );
-                        if (!context.mounted) return;
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
@@ -315,7 +317,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
                   listen: false,
                 );
                 final count = await provider.scanInbox(lookbackDays: 180);
-                if (!context.mounted) return;
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -353,7 +355,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
                 // Reset reconciliation watermark to force full rescan
                 await provider.resetReconciliationWatermark();
                 final count = await provider.scanInbox(lookbackDays: 365);
-                if (!context.mounted) return;
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(

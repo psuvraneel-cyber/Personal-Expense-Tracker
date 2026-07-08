@@ -72,7 +72,7 @@ class _AlertsScreenState extends State<AlertsScreen>
         ),
         actions: [
           Consumer<AlertProvider>(
-            builder: (_, provider, __) {
+            builder: (_, provider, _) {
               final unread = provider.alerts.where((a) => !a.isRead).length;
               if (unread == 0) return const SizedBox.shrink();
               return TextButton(

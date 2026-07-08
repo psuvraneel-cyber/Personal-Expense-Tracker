@@ -13,6 +13,7 @@ import 'package:pet/screens/auth/google_sign_in_screen.dart';
 import 'package:pet/screens/onboarding/onboarding_screen.dart';
 import 'package:pet/utils/retry_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pet/services/firebase_auth_service.dart';
 
 class SplashScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -76,15 +77,16 @@ class _SplashScreenState extends State<SplashScreen>
 
     // ── Auth Gate ──
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      final isLoggedIn = FirebaseAuthService().isLoggedIn;
+      
       AppLogger.debug(
         '[AUTH] authStateChanges fired → user=${user?.uid ?? "null"} '
+        'isLoggedIn=$isLoggedIn '
         'email=${user?.email ?? "none"} '
         '_authResolved=$_authResolved '
         '_hasNavigated=$_hasNavigated',
       );
       if (!mounted) return;
-
-      final isLoggedIn = user != null;
 
       if (_authResolved == null) {
         AppLogger.debug(

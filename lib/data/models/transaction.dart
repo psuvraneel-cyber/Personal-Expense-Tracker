@@ -15,6 +15,7 @@ class TransactionRecord {
   final String? taxCategory;
   final TransactionSource source;
   final String? accountId;
+  final DateTime? updatedAt;
 
   TransactionRecord({
     required this.id,
@@ -30,6 +31,7 @@ class TransactionRecord {
     this.taxCategory,
     this.source = TransactionSource.manual,
     this.accountId,
+    this.updatedAt,
   });
 
   /// Serialize to SQLite row — enums are stored as their string representation
@@ -49,6 +51,7 @@ class TransactionRecord {
       'taxCategory': taxCategory,
       'source': source.toJson(),
       'accountId': accountId,
+      'updatedAt': updatedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
     };
   }
 
@@ -71,6 +74,7 @@ class TransactionRecord {
       taxCategory: map['taxCategory'] as String?,
       source: TransactionSource.fromJson(map['source'] as String?),
       accountId: map['accountId'] as String?,
+      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt'] as String) : null,
     );
   }
 
@@ -88,6 +92,7 @@ class TransactionRecord {
     String? taxCategory,
     TransactionSource? source,
     String? accountId,
+    DateTime? updatedAt,
   }) {
     return TransactionRecord(
       id: id ?? this.id,
@@ -103,6 +108,7 @@ class TransactionRecord {
       taxCategory: taxCategory ?? this.taxCategory,
       source: source ?? this.source,
       accountId: accountId ?? this.accountId,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -146,6 +152,7 @@ class TransactionRecord {
       taxCategory: data['taxCategory'] as String?,
       source: TransactionSource.fromJson(data['source'] as String?),
       accountId: data['accountId'] as String?,
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );
   }
 }

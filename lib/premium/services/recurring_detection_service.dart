@@ -69,9 +69,18 @@ class RecurringDetectionService {
       case 'weekly':
         return last.add(const Duration(days: 7));
       case 'monthly':
-        return DateTime(last.year, last.month + 1, last.day);
+        final nextMonth = last.month + 1;
+        final year = last.year + (nextMonth > 12 ? 1 : 0);
+        final month = nextMonth > 12 ? 1 : nextMonth;
+        var day = last.day;
+        final maxDays = DateTime(year, month + 1, 0).day;
+        if (day > maxDays) day = maxDays;
+        return DateTime(year, month, day);
       case 'yearly':
-        return DateTime(last.year + 1, last.month, last.day);
+        var day = last.day;
+        final maxDays = DateTime(last.year + 1, last.month + 1, 0).day;
+        if (day > maxDays) day = maxDays;
+        return DateTime(last.year + 1, last.month, day);
       default:
         return last.add(const Duration(days: 30));
     }

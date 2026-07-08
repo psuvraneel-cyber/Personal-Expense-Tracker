@@ -13,6 +13,8 @@ class AlertProvider extends ChangeNotifier {
 
   List<BudgetAlert> _alerts = [];
   bool _isLoading = false;
+  List<TransactionRecord>? _lastTransactionsForAnomalies;
+  Map<String, double>? _lastSpentForBudgets;
 
   List<BudgetAlert> get alerts => _alerts;
   bool get isLoading => _isLoading;
@@ -29,6 +31,7 @@ class AlertProvider extends ChangeNotifier {
 
   Future<void> recordAlert(BudgetAlert alert) async {
     if (alert.alertKey != null) {
+      if (_alerts.any((a) => a.alertKey == alert.alertKey)) return;
       final exists = await _repository.existsByKey(alert.alertKey!);
       if (exists) return;
     }
@@ -68,6 +71,8 @@ class AlertProvider extends ChangeNotifier {
   }
 
   Future<void> refreshAnomalies(List<TransactionRecord> transactions) async {
+    if (identical(_lastTransactionsForAnomalies, transactions)) return;
+    _lastTransactionsForAnomalies = transactions;
     final baseline = _computeBaseline(transactions);
     await detectAnomalies(transactions: transactions, baseline: baseline);
   }
@@ -76,6 +81,8 @@ class AlertProvider extends ChangeNotifier {
     required Map<String, double> budgets,
     required Map<String, double> spent,
   }) async {
+    if (identical(_lastSpentForBudgets, spent)) return;
+    _lastSpentForBudgets = spent;
     for (final entry in budgets.entries) {
       final budgetAmount = entry.value;
       final spentAmount = spent[entry.key] ?? 0;

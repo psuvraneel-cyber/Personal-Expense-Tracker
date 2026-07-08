@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -20,27 +21,29 @@ class CashflowScreen extends StatefulWidget {
 class _CashflowScreenState extends State<CashflowScreen> {
   final _fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
 
-  CashflowForecast? _forecast;
-  String? _errorMessage;
-  String _incomeRisk = 'Low';
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _compute());
   }
 
-  void _compute() {
-    try {
-      final txns = context.read<TransactionProvider>().allTransactions;
-      setState(() {
-        _forecast = CashflowForecastService.forecast(txns);
-        _incomeRisk = _computeIncomeRisk(txns);
-        _errorMessage = null;
-      });
-    } catch (e) {
-      setState(() => _errorMessage = e.toString());
+  String _computeIncomeRisk(List<TransactionRecord> transactions) {
+    final incomes = transactions
+        .where((t) => t.type == TransactionType.income)
+        .map((t) => t.amount)
+        .toList();
+    if (incomes.length < 2) return 'Low';
+    final avg = incomes.reduce((a, b) => a + b) / incomes.length;
+    if (avg <= 0) return 'Low';
+    double variance = 0;
+    for (final income in incomes) {
+      variance += (income - avg) * (income - avg);
     }
+    variance /= incomes.length;
+    final std = variance == 0 ? 0.0 : sqrt(variance);
+    final cv = std / avg;
+    if (cv >= 0.6) return 'High';
+    if (cv >= 0.3) return 'Medium';
+    return 'Low';
   }
 
   @override
@@ -57,27 +60,54 @@ class _CashflowScreenState extends State<CashflowScreen> {
         subtitle: 'See your next 30 days and safe-to-spend.',
         child: Consumer<TransactionProvider>(
           builder: (context, provider, _) {
-            // Re-compute when transactions change, after the frame.
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              _compute();
-            });
-
-            if (_errorMessage != null) {
-              return _buildError(isDark);
-            }
-
-            final forecast = _forecast;
-            if (forecast == null) {
-              return const Center(child: CircularProgressIndicator());
+            CashflowForecast forecast;
+            String incomeRisk;
+            
+            try {
+              forecast = CashflowForecastService.forecast(provider.allTransactions);
+              incomeRisk = _computeIncomeRisk(provider.allTransactions);
+            } catch (e) {
+              return _buildError(isDark, e.toString());
             }
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
               children: [
                 _buildSafeToSpendHero(forecast.safeToSpend, isDark),
+                if (forecast.hasInsufficientData) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningYellow.withAlpha(isDark ? 18 : 12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.warningYellow.withAlpha(isDark ? 40 : 25),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('⚠️ ', style: TextStyle(fontSize: 14)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Less than 7 days of data — projections may be unreliable. '
+                            'Keep using the app to improve accuracy.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? AppTheme.textTertiary
+                                  : AppTheme.textSecondaryLight,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
-                _buildStatsRow(forecast, isDark),
+                _buildStatsRow(forecast, incomeRisk, isDark),
                 const SizedBox(height: 20),
                 _buildForecastChart(forecast, isDark),
                 const SizedBox(height: 20),
@@ -135,7 +165,7 @@ class _CashflowScreenState extends State<CashflowScreen> {
     );
   }
 
-  Widget _buildError(bool isDark) {
+  Widget _buildError(bool isDark, String errorMsg) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -154,7 +184,7 @@ class _CashflowScreenState extends State<CashflowScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _errorMessage ?? '',
+              errorMsg,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 12,
@@ -162,11 +192,6 @@ class _CashflowScreenState extends State<CashflowScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _compute,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-            ),
           ],
         ),
       ),
@@ -229,7 +254,7 @@ class _CashflowScreenState extends State<CashflowScreen> {
     );
   }
 
-  Widget _buildStatsRow(CashflowForecast forecast, bool isDark) {
+  Widget _buildStatsRow(CashflowForecast forecast, String incomeRisk, bool isDark) {
     final items = [
       (
         'Starting balance',
@@ -243,7 +268,7 @@ class _CashflowScreenState extends State<CashflowScreen> {
             ? AppTheme.expenseRed
             : AppTheme.accentTeal,
       ),
-      ('Income risk', _incomeRisk, AppTheme.warningYellow),
+      ('Income risk', incomeRisk, AppTheme.warningYellow),
     ];
 
     return Row(
@@ -338,25 +363,6 @@ class _CashflowScreenState extends State<CashflowScreen> {
     );
   }
 
-  String _computeIncomeRisk(List<TransactionRecord> transactions) {
-    final incomes = transactions
-        .where((t) => t.type == TransactionType.income)
-        .map((t) => t.amount)
-        .toList();
-    if (incomes.length < 2) return 'Low';
-    final avg = incomes.reduce((a, b) => a + b) / incomes.length;
-    if (avg <= 0) return 'Low';
-    double variance = 0;
-    for (final income in incomes) {
-      variance += (income - avg) * (income - avg);
-    }
-    variance /= incomes.length;
-    final std = variance == 0 ? 0.0 : sqrt(variance);
-    final cv = std / avg;
-    if (cv >= 0.6) return 'High';
-    if (cv >= 0.3) return 'Medium';
-    return 'Low';
-  }
 }
 
 class _BarChartPainter extends CustomPainter {
@@ -402,5 +408,5 @@ class _BarChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BarChartPainter old) =>
-      old.points != points || old.isDark != isDark;
+      !listEquals(old.points, points) || old.isDark != isDark;
 }

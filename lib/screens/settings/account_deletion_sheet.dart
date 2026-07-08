@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 import 'package:pet/services/account_deletion_service.dart';
+import 'package:pet/services/firebase_auth_service.dart';
+import 'package:pet/screens/auth/google_sign_in_screen.dart';
 
 class AccountDeletionSheet extends StatefulWidget {
   const AccountDeletionSheet({super.key});
@@ -156,20 +157,14 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
 
   Future<void> _reAuthenticate() async {
     try {
-      final googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return; // user cancelled
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-      if (!mounted) return;
-      final success = await context
-          .read<AccountDeletionService>()
-          .reAuthenticate(credential);
-      if (success && mounted) setState(() => _step = 2);
+      final success = await FirebaseAuthService().reauthenticateGoogle();
+      if (!success) {
+        if (mounted) setState(() => _errorMessage = 'Sign-in failed or was cancelled.');
+        return;
+      }
+      if (mounted) setState(() => _step = 2);
     } catch (e) {
-      setState(() => _errorMessage = 'Sign-in failed. Please try again.');
+      if (mounted) setState(() => _errorMessage = 'Sign-in failed. Please try again.');
     }
   }
 
@@ -352,7 +347,11 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
       (step) {
         if (mounted) setState(() => _currentDeletionStep = step);
         if (step == DeletionStep.complete && mounted) {
-          setState(() => _step = 4);
+          // Immediately route to sign-in
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const GoogleSignInScreen()),
+            (route) => false,
+          );
         }
       },
       onError: (e) {
@@ -363,7 +362,8 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
     try {
       await service.deleteAccount();
     } catch (e) {
-      // Stream error listener will handle UI state update
+      // Handle synchronous or unexpected errors that didn't go through the stream
+      if (mounted) setState(() => _errorMessage = 'Deletion failed: $e');
     }
   }
 

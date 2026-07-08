@@ -15,6 +15,7 @@ class RecurringProvider extends ChangeNotifier {
 
   List<RecurringPayment> _recurring = [];
   bool _isLoading = false;
+  List<SmsTransaction>? _lastSmsForRecurring;
 
   List<RecurringPayment> get recurring => _recurring;
   bool get isLoading => _isLoading;
@@ -24,6 +25,7 @@ class RecurringProvider extends ChangeNotifier {
     notifyListeners();
 
     _recurring = await _repository.getAll();
+    await _scheduleUpcomingReminders(_recurring);
 
     _isLoading = false;
     notifyListeners();
@@ -50,6 +52,7 @@ class RecurringProvider extends ChangeNotifier {
     );
     await _repository.upsert(payment);
     _recurring.insert(0, payment);
+    await _scheduleUpcomingReminders([payment]);
     notifyListeners();
   }
 
@@ -72,6 +75,7 @@ class RecurringProvider extends ChangeNotifier {
     final updated = bill.copyWith(nextDueAt: bill.nextDueAt.add(cycle));
     _recurring[index] = updated;
     await _repository.upsert(updated);
+    await _scheduleUpcomingReminders([updated]);
     notifyListeners();
   }
 
@@ -82,15 +86,19 @@ class RecurringProvider extends ChangeNotifier {
   }
 
   Future<void> refreshFromSms(List<SmsTransaction> sms) async {
+    if (identical(_lastSmsForRecurring, sms)) return;
+    _lastSmsForRecurring = sms;
     _isLoading = true;
     notifyListeners();
 
     final detected = RecurringDetectionService.detect(sms);
-    await _repository.clearAll();
-    for (final payment in detected) {
-      await _repository.upsert(payment);
-    }
-    _recurring = detected;
+    
+    final existing = await _repository.getAll();
+    final manuals = existing.where((r) => r.source == 'manual').toList();
+
+    // Atomic replace — all-or-nothing within a single SQL transaction
+    await _repository.replaceAll(manuals, detected);
+    _recurring = [...manuals, ...detected];
 
     await _notifyUpcomingBills(detected);
 
@@ -121,10 +129,33 @@ class RecurringProvider extends ChangeNotifier {
       await _alertRepository.insert(alert);
 
       await NotificationService.showInstant(
-        id: alert.createdAt.millisecondsSinceEpoch ~/ 1000,
+        id: NotificationService.collisionSafeId(alertKey),
         title: alert.title,
         body: alert.message,
       );
+    }
+    await _scheduleUpcomingReminders(recurring);
+  }
+
+  Future<void> _scheduleUpcomingReminders(List<RecurringPayment> recurring) async {
+    final now = DateTime.now();
+    for (final item in recurring) {
+      // Schedule a notification 3 days before the due date at 10 AM.
+      final scheduleDate = DateTime(
+        item.nextDueAt.year,
+        item.nextDueAt.month,
+        item.nextDueAt.day - 3,
+        10, 0, 0,
+      );
+      
+      if (scheduleDate.isAfter(now)) {
+        await NotificationService.scheduleNotification(
+          id: NotificationService.collisionSafeId('sched_${item.id}_${item.nextDueAt.toIso8601String()}'),
+          title: 'Upcoming bill reminder',
+          body: '${item.merchantName} is due in 3 days.',
+          scheduledDate: scheduleDate,
+        );
+      }
     }
   }
 }

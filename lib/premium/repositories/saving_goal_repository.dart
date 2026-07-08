@@ -12,6 +12,9 @@ class SavingGoalRepository {
   }
 
   Future<void> upsert(SavingGoal goal) async {
+    if (goal.currentAmount < 0) {
+      throw ArgumentError('SavingGoal currentAmount cannot be negative');
+    }
     final db = await _dbHelper.database;
     await db.insert(
       'saving_goals',

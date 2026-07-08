@@ -523,8 +523,8 @@ class TransactionParser {
     // Step 8: Extract reference ID
     final referenceId = _extractReferenceId(smsBody);
 
-    // Step 9: Extract date
-    final parsedDate = _extractDate(smsBody) ?? smsTimestamp;
+    // Step 9: Extract date (preserve time from OS timestamp)
+    final parsedDate = _extractDate(smsBody, smsTimestamp) ?? smsTimestamp;
 
     // Step 10: Extract account tail
     final accountTail = _extractAccountTail(smsBody);
@@ -874,7 +874,12 @@ class TransactionParser {
 
   // ── Stage 10: Date Extraction ─────────────────────────────────────
 
-  static DateTime? _extractDate(String body) {
+  /// Extract date from SMS body, preserving the time component from [smsTime].
+  ///
+  /// SMS bodies contain only the date (e.g., '21-05-2026') without time.
+  /// The OS-level SMS timestamp [smsTime] has the accurate reception time,
+  /// so we copy its hour/minute/second onto the extracted date.
+  static DateTime? _extractDate(String body, DateTime smsTime) {
     // Try ISO format first (yyyy-mm-dd) — most unambiguous
     final isoMatch = _dateIso.firstMatch(body);
     if (isoMatch != null) {
@@ -882,6 +887,7 @@ class TransactionParser {
         int.parse(isoMatch.group(1)!),
         int.parse(isoMatch.group(2)!),
         int.parse(isoMatch.group(3)!),
+        smsTime,
       );
     }
 
@@ -892,6 +898,7 @@ class TransactionParser {
         int.parse(colonMatch.group(1)!),
         int.parse(colonMatch.group(2)!),
         int.parse(colonMatch.group(3)!),
+        smsTime,
       );
       if (dt != null) return dt;
     }
@@ -905,7 +912,7 @@ class TransactionParser {
       var year = int.parse(monthMatch.group(3)!);
       if (year < 100) year += 2000;
       if (month != null) {
-        return _safeDate(year, month, day);
+        return _safeDate(year, month, day, smsTime);
       }
     }
 
@@ -919,21 +926,29 @@ class TransactionParser {
 
       // Indian SMS uses dd-mm-yyyy (not mm-dd-yyyy)
       if (a <= 31 && b <= 12) {
-        return _safeDate(c, b, a);
+        return _safeDate(c, b, a, smsTime);
       }
       // Fallback: try mm-dd-yyyy if dd-mm fails
       if (b <= 31 && a <= 12) {
-        return _safeDate(c, a, b);
+        return _safeDate(c, a, b, smsTime);
       }
     }
 
     return null;
   }
 
-  static DateTime? _safeDate(int year, int month, int day) {
+  /// Build a DateTime from extracted date components, preserving the time
+  /// from [smsTime]. If [smsTime] falls on a different calendar day than
+  /// the extracted date, the time is still copied — the date from the SMS
+  /// body is authoritative for the day, but the OS timestamp's time is the
+  /// most accurate source for hour/minute/second.
+  static DateTime? _safeDate(int year, int month, int day, DateTime smsTime) {
     try {
       if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-      final dt = DateTime(year, month, day);
+      final dt = DateTime(
+        year, month, day,
+        smsTime.hour, smsTime.minute, smsTime.second,
+      );
       // Reject dates more than 2 years in the future or 10 years in the past
       final now = DateTime.now();
       if (dt.isAfter(now.add(const Duration(days: 730)))) return null;

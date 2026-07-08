@@ -57,6 +57,7 @@ class WeeklyPlannerProvider extends ChangeNotifier {
   List<DaySpend> _weekDays = [];
   double _totalWeekSpent = 0;
   double _totalWeekLimit = 0;
+  List<TransactionRecord>? _lastTransactionsForPlanner;
 
   List<WeeklyPlannerEntry> get entries => _entries;
   List<DaySpend> get weekDays => _weekDays;
@@ -109,6 +110,8 @@ class WeeklyPlannerProvider extends ChangeNotifier {
   }
 
   void refreshFromTransactions(List<TransactionRecord> transactions) {
+    if (identical(_lastTransactionsForPlanner, transactions)) return;
+    _lastTransactionsForPlanner = transactions;
     final now = DateTime.now();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
     final mondayMidnight = DateTime(

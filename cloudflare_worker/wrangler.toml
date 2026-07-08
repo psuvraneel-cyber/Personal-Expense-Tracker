@@ -5,4 +5,4 @@ compatibility_date = "2024-03-31"
 [vars]
 # Your Firebase Web API Key for verifying Auth tokens.
 # Do NOT put your GROQ_API_KEY here.
-FIREBASE_WEB_API_KEY = "AIzaSyD0nFjgCbv1-rLVkOiHNVIspdstX7cwRuc"
+FIREBASE_WEB_API_KEY = "REPLACE_ME"

@@ -99,11 +99,11 @@ class AccountDeletionService {
 
       _progressController.add(DeletionStep.complete);
     } catch (e, stack) {
-      _progressController.addError(e, stack);
+      if (!_progressController.isClosed) {
+        _progressController.addError(e, stack);
+      }
       AppLogger.debug('[AccountDeletion] FAILED: $e\n$stack');
       rethrow;
-    } finally {
-      _progressController.close();
     }
   }
 

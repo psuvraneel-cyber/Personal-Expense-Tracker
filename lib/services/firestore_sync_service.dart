@@ -46,8 +46,9 @@ class FirestoreSyncService {
   /// Whether the current user is authenticated.
   /// Callers should check this before attempting Firestore operations.
   bool get isAuthenticated {
+    if (_auth.isLocalGuest || _auth.currentUser?.isAnonymous == true) return false;
     final uid = _auth.currentUserId;
-    return uid != null && uid.isNotEmpty;
+    return uid != null && uid.isNotEmpty && uid != 'guest_user';
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────
@@ -113,11 +114,12 @@ class FirestoreSyncService {
   // ── Transaction Read / Stream Operations ─────────────────────────────
 
   /// Real-time stream of all transactions for the current user.
-  Stream<List<TransactionRecord>> transactionsStream() {
+  Stream<List<TransactionRecord>> transactionsStream({int limit = 1000}) {
     if (_auth.currentUserId == null) return Stream.value([]);
 
     return _txnCollection
         .orderBy('date', descending: true)
+        .limit(limit)
         .snapshots()
         .map(_docsToTransactions)
         .handleError((Object e) {
@@ -127,7 +129,7 @@ class FirestoreSyncService {
   }
 
   /// One-time fetch of ALL transactions for the current user.
-  Future<List<TransactionRecord>> fetchAllTransactions() async {
+  Future<List<TransactionRecord>> fetchAllTransactions({int limit = 1000}) async {
     if (_auth.currentUserId == null) {
       AppLogger.debug(
         '[Firestore] fetchAllTransactions: user not authenticated',
@@ -135,7 +137,7 @@ class FirestoreSyncService {
       return [];
     }
     try {
-      final snap = await _txnCollection.orderBy('date', descending: true).get();
+      final snap = await _txnCollection.orderBy('date', descending: true).limit(limit).get();
       AppLogger.debug(
         '[Firestore] fetchAllTransactions: got ${snap.docs.length} docs',
       );

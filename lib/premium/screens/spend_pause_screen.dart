@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/premium/models/spend_pause.dart';
@@ -17,6 +18,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
   late final AnimationController _breathCtrl;
   late final Animation<double> _breathAnim;
   String _selectedDuration = 'Until midnight';
+  Timer? _countdownTimer;
 
   static const _durations = ['1 hour', 'Until midnight', '3 days', 'Custom'];
 
@@ -41,10 +43,16 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
       end: 1.1,
     ).animate(CurvedAnimation(parent: _breathCtrl, curve: Curves.easeInOut));
     _load();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_pause.enabled && _pause.until != null && mounted) {
+        setState(() {}); // Trigger rebuild to update countdown text
+      }
+    });
   }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _breathCtrl.dispose();
     super.dispose();
   }
@@ -183,7 +191,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
           Text(
             _pause.isActive
                 ? (_pause.until != null
-                      ? 'Active until ${_formatUntil(_pause.until!)}'
+                      ? _formatUntil(_pause.until!)
                       : 'Active indefinitely')
                 : 'Set a duration below and activate',
             style: Theme.of(context).textTheme.bodySmall,
@@ -385,12 +393,18 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
 
   String _formatUntil(DateTime until) {
     final now = DateTime.now();
-    if (until.difference(now).inDays < 1) {
-      // Same day — show time only
-      final h = until.hour % 12 == 0 ? 12 : until.hour % 12;
-      final m = until.minute.toString().padLeft(2, '0');
-      final ampm = until.hour < 12 ? 'AM' : 'PM';
-      return '$h:$m $ampm';
+    final diff = until.difference(now);
+
+    if (diff.isNegative) {
+      return 'Expired';
+    }
+
+    if (diff.inDays < 1) {
+      final h = diff.inHours;
+      final m = (diff.inMinutes % 60).toString().padLeft(2, '0');
+      final s = (diff.inSeconds % 60).toString().padLeft(2, '0');
+      if (h > 0) return 'Ends in $h:$m:$s';
+      return 'Ends in $m:$s';
     } else {
       // Multi-day — show date
       const months = [
@@ -408,7 +422,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
         'Nov',
         'Dec',
       ];
-      return '${until.day} ${months[until.month]}';
+      return 'Active until ${until.day} ${months[until.month]}';
     }
   }
 

@@ -138,6 +138,10 @@ class SmsTransactionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // One-time cleanup: remove any duplicates that may have been inserted
+      // before the in-batch deduplication fix (idempotent — no-op if clean).
+      await _repository.deduplicateExisting();
+
       final all = await _repository.getAllSmsTransactions();
       _transactions = all
           .where((t) => t.isVerified || t.confidence >= 0.55)
@@ -264,16 +268,7 @@ class SmsTransactionProvider extends ChangeNotifier {
       // Reload transactions after scan
       await loadTransactions();
 
-      // Start listening for new SMS
-      _smsService.startListening(
-        onNewTransaction: (transaction) {
-          _transactions.insert(0, transaction);
-          _invalidateComputedCache();
-          notifyListeners();
-        },
-      );
-
-      // Enable background scanning
+      // Enable background scanning (listener is already started in initialize)
       await initSmsBackgroundService();
     } catch (e) {
       AppLogger.debug('[PET-SMS] Error during scan: $e');

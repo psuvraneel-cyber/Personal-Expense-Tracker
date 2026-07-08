@@ -5,11 +5,12 @@ import 'package:pet/data/models/transaction.dart';
 class TransactionRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper();
 
-  Future<List<TransactionRecord>> getAllTransactions() async {
+  Future<List<TransactionRecord>> getAllTransactions({int limit = 1000}) async {
     final db = await _dbHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(
       'transactions',
       orderBy: 'date DESC',
+      limit: limit,
     );
     return maps.map((map) => TransactionRecord.fromMap(map)).toList();
   }
@@ -138,6 +139,21 @@ class TransactionRepository {
     );
   }
 
+  /// Insert multiple transactions atomically using a batch.
+  Future<void> insertTransactionsBatch(List<TransactionRecord> transactions) async {
+    if (transactions.isEmpty) return;
+    final db = await _dbHelper.database;
+    final batch = db.batch();
+    for (final t in transactions) {
+      batch.insert(
+        'transactions',
+        t.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<void> updateTransaction(TransactionRecord transaction) async {
     final db = await _dbHelper.database;
     await db.update(
@@ -158,6 +174,7 @@ class TransactionRepository {
   Future<void> deleteAllTransactions() async {
     final db = await _dbHelper.database;
     await db.delete('transactions');
+    await db.delete('sms_transactions');
   }
 
   Future<double> getTotalByType(String type, int month, int year) async {

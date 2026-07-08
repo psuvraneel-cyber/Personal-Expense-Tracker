@@ -19,6 +19,7 @@ class BudgetProvider extends ChangeNotifier {
   bool _isLoading = false;
   int _currentMonth = DateTime.now().month;
   int _currentYear = DateTime.now().year;
+  List<TransactionRecord>? _lastTransactionsForSpent;
 
   List<Budget> get budgets => _budgets;
   Map<String, double> get spentAmounts => _spentAmounts;
@@ -166,6 +167,8 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   void refreshSpentFromTransactions(List<TransactionRecord> transactions) {
+    if (identical(_lastTransactionsForSpent, transactions)) return;
+    _lastTransactionsForSpent = transactions;
     if (_budgets.isEmpty) return;
 
     final Map<String, double> spent = {};

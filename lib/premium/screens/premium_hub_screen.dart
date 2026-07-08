@@ -1,3 +1,4 @@
+import 'package:pet/premium/widgets/premium_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -17,9 +18,77 @@ import 'package:pet/premium/screens/spend_pause_screen.dart';
 import 'package:pet/premium/screens/tax_buckets_screen.dart';
 import 'package:pet/premium/screens/weekly_planner_screen.dart';
 import 'package:pet/premium/widgets/feature_card.dart';
+import 'package:pet/data/models/transaction.dart';
+import 'package:pet/premium/models/saving_goal.dart';
+import 'package:pet/premium/models/recurring_payment.dart';
+import 'package:pet/data/models/budget.dart';
 
-class PremiumHubScreen extends StatelessWidget {
+class PremiumHubScreen extends StatefulWidget {
   const PremiumHubScreen({super.key});
+
+  @override
+  State<PremiumHubScreen> createState() => _PremiumHubScreenState();
+}
+
+class _PremiumHubScreenState extends State<PremiumHubScreen> {
+  // Memoization cache
+  List<TransactionRecord>? _lastTxns;
+  List<SavingGoal>? _lastGoals;
+  List<RecurringPayment>? _lastBills;
+  List<Budget>? _lastBudgets;
+
+  SpendHealthResult? _cachedHealth;
+  double _monthIncome = 0.0;
+  double _monthExpense = 0.0;
+
+  void _recomputeIfNeeded(
+    TransactionProvider txnProvider,
+    GoalProvider goalProvider,
+    RecurringProvider recurringProvider,
+    BudgetProvider budgetProvider,
+  ) {
+    bool txnsChanged = !identical(_lastTxns, txnProvider.allTransactions);
+    bool goalsChanged = !identical(_lastGoals, goalProvider.goals);
+    bool billsChanged = !identical(_lastBills, recurringProvider.recurring);
+    bool budgetsChanged = !identical(_lastBudgets, budgetProvider.budgets);
+
+    if (txnsChanged) {
+      _lastTxns = txnProvider.allTransactions;
+
+      final now = DateTime.now();
+      final monthStart = DateTime(now.year, now.month, 1);
+      final cutoff = monthStart.subtract(const Duration(days: 1));
+
+      double income = 0.0;
+      double expense = 0.0;
+      for (final t in _lastTxns!) {
+        if (t.date.isAfter(cutoff)) {
+          if (t.type == TransactionType.income) {
+            income += t.amount;
+          } else if (t.type == TransactionType.expense) {
+            expense += t.amount;
+          }
+        }
+      }
+      _monthIncome = income;
+      _monthExpense = expense;
+    }
+
+    if (txnsChanged || goalsChanged || billsChanged || budgetsChanged) {
+      _lastGoals = goalProvider.goals;
+      _lastBills = recurringProvider.recurring;
+      _lastBudgets = budgetProvider.budgets;
+
+      _cachedHealth = SpendHealthService.instance.calculate(
+        transactions: _lastTxns!,
+        categoryBudgets: {
+          for (final b in _lastBudgets!) b.categoryId: b.amount,
+        },
+        goals: _lastGoals!,
+        budgetSpent: budgetProvider.spentAmounts,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,112 +97,195 @@ class PremiumHubScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
-      body:
-          Consumer4<
-            TransactionProvider,
-            GoalProvider,
-            RecurringProvider,
-            BudgetProvider
-          >(
-            builder:
-                (
-                  context,
-                  txnProvider,
-                  goalProvider,
-                  recurringProvider,
-                  budgetProvider,
-                  _,
-                ) {
-                  final health = SpendHealthService.instance.calculate(
-                    transactions: txnProvider.allTransactions,
-                    goals: goalProvider.goals,
-                    bills: recurringProvider.recurring,
-                    categoryBudgets: {
-                      for (final b in budgetProvider.budgets)
-                        b.categoryId: b.amount,
-                    },
-                    totalBudget: budgetProvider.budgets.fold(
-                      0.0,
-                      (s, b) => s + b.amount,
+      appBar: AppBar(
+        title: const Text('Premium Hub'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: PremiumGate(
+        title: 'Unlock Premium Features',
+        subtitle: 'Get advanced insights, AI guidance, and financial tools.',
+        child: Consumer4<
+          TransactionProvider,
+          GoalProvider,
+          RecurringProvider,
+          BudgetProvider
+        >(
+          builder: (
+            context,
+            txnProvider,
+            goalProvider,
+            recurringProvider,
+            budgetProvider,
+            _,
+          ) {
+            _recomputeIfNeeded(
+              txnProvider,
+              goalProvider,
+              recurringProvider,
+              budgetProvider,
+            );
+
+          final health = _cachedHealth!;
+          final now = DateTime.now();
+
+          final totalSaved = goalProvider.goals.fold(
+            0.0,
+            (s, g) => s + g.currentAmount,
+          );
+          final billsDueSoon = recurringProvider.recurring
+              .where(
+                (b) =>
+                    b.nextDueAt.isAfter(now) &&
+                    b.nextDueAt.difference(now).inDays <= 7,
+              )
+              .length;
+
+          final goalBadge = goalProvider.goals.isEmpty
+              ? null
+              : '${goalProvider.goals.length} goal${goalProvider.goals.length > 1 ? 's' : ''} · '
+                  '${fmt.format(totalSaved)} saved';
+
+          final billBadge = recurringProvider.recurring.isEmpty
+              ? null
+              : '${recurringProvider.recurring.length} tracked';
+
+          final features = [
+            (
+              Icons.flag_rounded,
+              'Savings Goals',
+              'Set targets & top up',
+              AppTheme.accentPurple,
+              goalBadge,
+              () => _push(context, const GoalsScreen()),
+            ),
+            (
+              Icons.repeat_rounded,
+              'Bills & Subscriptions',
+              'Upcoming payments',
+              AppTheme.accentTeal,
+              billBadge,
+              () => _push(context, const RecurringBillsScreen()),
+            ),
+            (
+              Icons.insights_rounded,
+              'Cash Flow',
+              'Safe-to-spend & runway',
+              const Color(0xFF8B5CF6),
+              null,
+              () => _push(context, const CashflowScreen()),
+            ),
+            (
+              Icons.calendar_view_week_rounded,
+              'Weekly Planner',
+              'Daily spend tracker',
+              AppTheme.accentTeal,
+              null,
+              () => _push(context, const WeeklyPlannerScreen()),
+            ),
+            (
+              Icons.pause_circle_rounded,
+              'Focus Mode',
+              'Pause impulse spending',
+              const Color(0xFFf59e0b),
+              null,
+              () => _push(context, const SpendPauseScreen()),
+            ),
+            (
+              Icons.receipt_long_rounded,
+              'Tax Buckets',
+              '80C, 80D, HRA & more',
+              const Color(0xFF10b981),
+              null,
+              () => _push(context, const TaxBucketsScreen()),
+            ),
+            (
+              Icons.auto_awesome_rounded,
+              'AI Copilot',
+              'Ask your finances anything',
+              const Color(0xFFec4899),
+              null,
+              () => _push(context, const AiCopilotScreen()),
+            ),
+            (
+              Icons.notifications_active_rounded,
+              'Alerts Centre',
+              'Budget & anomaly alerts',
+              AppTheme.expenseRed,
+              null,
+              () => _push(context, const AlertsScreen()),
+            ),
+          ];
+
+          return CustomScrollView(
+            slivers: [
+              _buildAppBar(context, isDark),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    const SizedBox(height: 8),
+                    _buildHealthBanner(context, health, isDark),
+                    const SizedBox(height: 14),
+                    _buildQuickStats(
+                      context,
+                      totalSaved,
+                      billsDueSoon,
+                      _monthIncome,
+                      _monthExpense,
+                      fmt,
+                      isDark,
                     ),
-                    budgetSpent: budgetProvider.spentAmounts,
-                  );
-
-                  final now = DateTime.now();
-                  final monthStart = DateTime(now.year, now.month, 1);
-                  final monthTxns = txnProvider.allTransactions
-                      .where(
-                        (t) => t.date.isAfter(
-                          monthStart.subtract(const Duration(days: 1)),
-                        ),
-                      )
-                      .toList();
-                  final monthIncome = monthTxns
-                      .where((t) => t.type == TransactionType.income)
-                      .fold(0.0, (s, t) => s + t.amount);
-                  final monthExpense = monthTxns
-                      .where((t) => t.type == TransactionType.expense)
-                      .fold(0.0, (s, t) => s + t.amount);
-                  final totalSaved = goalProvider.goals.fold(
-                    0.0,
-                    (s, g) => s + g.currentAmount,
-                  );
-                  final billsDueSoon = recurringProvider.recurring
-                      .where(
-                        (b) =>
-                            b.nextDueAt.isAfter(now) &&
-                            b.nextDueAt.difference(now).inDays <= 7,
-                      )
-                      .length;
-
-                  return CustomScrollView(
-                    slivers: [
-                      _buildAppBar(context, isDark),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-                        sliver: SliverList(
-                          delegate: SliverChildListDelegate([
-                            const SizedBox(height: 8),
-                            _buildHealthBanner(context, health, isDark),
-                            const SizedBox(height: 14),
-                            _buildQuickStats(
-                              context,
-                              totalSaved,
-                              billsDueSoon,
-                              monthIncome,
-                              monthExpense,
-                              fmt,
-                              isDark,
-                            ),
-                            const SizedBox(height: 20),
-                            _buildSectionTitle(context, 'Features'),
-                            const SizedBox(height: 10),
-                            _buildFeatureGrid(
-                              context,
-                              goalProvider,
-                              recurringProvider,
-                              fmt,
-                              isDark,
-                            ),
-                            if (health.insights.isNotEmpty) ...[
-                              const SizedBox(height: 20),
-                              _buildSectionTitle(
-                                context,
-                                '💡 Insights for You',
-                              ),
-                              const SizedBox(height: 10),
-                              ...health.insights.map(
-                                (tip) =>
-                                    _buildInsightCard(context, tip, isDark),
-                              ),
-                            ],
-                          ]),
-                        ),
+                    const SizedBox(height: 20),
+                    _buildSectionTitle(context, 'Features'),
+                    const SizedBox(height: 10),
+                  ]),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.1,
+                  ),
+                  delegate: SliverChildBuilderDelegate((_, i) {
+                    final f = features[i];
+                    return FeatureCard(
+                      icon: f.$1,
+                      title: f.$2,
+                      subtitle: f.$3,
+                      accentColor: f.$4,
+                      badge: f.$5,
+                      onTap: f.$6,
+                    );
+                  }, childCount: features.length),
+                ),
+              ),
+              if (health.insights.isNotEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _buildSectionTitle(context, '💡 Insights for You'),
+                      const SizedBox(height: 10),
+                      ...health.insights.map(
+                        (tip) => _buildInsightCard(context, tip, isDark),
                       ),
-                    ],
-                  );
-                },
-          ),
+                    ]),
+                  ),
+                )
+              else
+                const SliverPadding(
+                  padding: EdgeInsets.only(bottom: 80),
+                ),
+            ],
+          );
+        },
+      ),
+      ),
     );
   }
 
@@ -373,113 +525,6 @@ class PremiumHubScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFeatureGrid(
-    BuildContext context,
-    GoalProvider goalProvider,
-    RecurringProvider recurringProvider,
-    NumberFormat fmt,
-    bool isDark,
-  ) {
-    final goalBadge = goalProvider.goals.isEmpty
-        ? null
-        : '${goalProvider.goals.length} goal${goalProvider.goals.length > 1 ? 's' : ''} · '
-              '${fmt.format(goalProvider.goals.fold(0.0, (s, g) => s + g.currentAmount))} saved';
-
-    final billBadge = recurringProvider.recurring.isEmpty
-        ? null
-        : '${recurringProvider.recurring.length} tracked';
-
-    final features = [
-      (
-        Icons.flag_rounded,
-        'Savings Goals',
-        'Set targets & top up',
-        AppTheme.accentPurple,
-        goalBadge,
-        () => _push(context, const GoalsScreen()),
-      ),
-      (
-        Icons.repeat_rounded,
-        'Bills & Subscriptions',
-        'Upcoming payments',
-        AppTheme.accentTeal,
-        billBadge,
-        () => _push(context, const RecurringBillsScreen()),
-      ),
-      (
-        Icons.insights_rounded,
-        'Cash Flow',
-        'Safe-to-spend & runway',
-        const Color(0xFF8B5CF6),
-        null,
-        () => _push(context, const CashflowScreen()),
-      ),
-      (
-        Icons.calendar_view_week_rounded,
-        'Weekly Planner',
-        'Daily spend tracker',
-        AppTheme.accentTeal,
-        null,
-        () => _push(context, const WeeklyPlannerScreen()),
-      ),
-      (
-        Icons.pause_circle_rounded,
-        'Focus Mode',
-        'Pause impulse spending',
-        const Color(0xFFf59e0b),
-        null,
-        () => _push(context, const SpendPauseScreen()),
-      ),
-      (
-        Icons.receipt_long_rounded,
-        'Tax Buckets',
-        '80C, 80D, HRA & more',
-        const Color(0xFF10b981),
-        null,
-        () => _push(context, const TaxBucketsScreen()),
-      ),
-      (
-        Icons.auto_awesome_rounded,
-        'AI Copilot',
-        'Ask your finances anything',
-        const Color(0xFFec4899),
-        null,
-        () => _push(context, const AiCopilotScreen()),
-      ),
-      (
-        Icons.notifications_active_rounded,
-        'Alerts Centre',
-        'Budget & anomaly alerts',
-        AppTheme.expenseRed,
-        null,
-        () => _push(context, const AlertsScreen()),
-      ),
-    ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.1,
-      ),
-      itemCount: features.length,
-      itemBuilder: (_, i) {
-        final f = features[i];
-        return FeatureCard(
-          icon: f.$1,
-          title: f.$2,
-          subtitle: f.$3,
-          accentColor: f.$4,
-          badge: f.$5,
-          onTap: f.$6,
-        );
-      },
-    );
-  }
-
   Widget _buildInsightCard(BuildContext context, String insight, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -513,3 +558,4 @@ class PremiumHubScreen extends StatelessWidget {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 }
+

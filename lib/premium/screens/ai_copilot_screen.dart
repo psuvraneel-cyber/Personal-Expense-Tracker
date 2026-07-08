@@ -3,6 +3,8 @@ import 'package:pet/config/app_env.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pet/premium/widgets/premium_gate.dart';
+
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/category.dart';
@@ -169,23 +171,27 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          if (_showSuggestions && _messages.isEmpty)
-            _buildSuggestions(isDark),
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                return _buildMessage(context, _messages[index], isDark);
-              },
+      body: PremiumGate(
+        title: 'Unlock AI Financial Copilot',
+        subtitle: 'Get personalized insights and answers about your spending habits.',
+        child: Column(
+          children: [
+            if (_showSuggestions && _messages.isEmpty)
+              _buildSuggestions(isDark),
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                itemCount: _messages.length,
+                itemBuilder: (context, index) {
+                  return _buildMessage(context, _messages[index], isDark);
+                },
+              ),
             ),
-          ),
-          if (_isSending) _buildTypingIndicator(isDark),
-          _buildInputBar(isDark),
-        ],
+            if (_isSending) _buildTypingIndicator(isDark),
+            _buildInputBar(isDark),
+          ],
+        ),
       ),
     );
   }
@@ -359,39 +365,53 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
         ),
       ),
       child: SafeArea(
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                minLines: 1,
-                maxLines: 4,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: 'Ask about your spending…',
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    minLines: 1,
+                    maxLines: 4,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: 'Ask about your spending…',
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    onSubmitted: (_) => _isSending ? null : _send(),
                   ),
                 ),
-                onSubmitted: (_) => _isSending ? null : _send(),
-              ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: _isSending ? null : AppTheme.heroGradient,
+                    color: _isSending
+                        ? (isDark
+                              ? Colors.white.withAlpha(20)
+                              : Colors.black.withAlpha(10))
+                        : null,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    onPressed: _isSending ? null : _send,
+                    icon: const Icon(Icons.send_rounded, color: Colors.white),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                gradient: _isSending ? null : AppTheme.heroGradient,
-                color: _isSending
-                    ? (isDark
-                          ? Colors.white.withAlpha(20)
-                          : Colors.black.withAlpha(10))
-                    : null,
-                shape: BoxShape.circle,
+            const SizedBox(height: 8),
+            const Text(
+              'AI Copilot can make mistakes. Consider verifying important information.',
+              style: TextStyle(
+                fontSize: 10,
+                color: AppTheme.textTertiary,
               ),
-              child: IconButton(
-                onPressed: _isSending ? null : _send,
-                icon: const Icon(Icons.send_rounded, color: Colors.white),
-              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

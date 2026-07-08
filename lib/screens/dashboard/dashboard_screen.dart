@@ -24,6 +24,10 @@ import 'package:pet/services/spend_health_service.dart';
 import 'package:pet/screens/sms_transactions/sms_transactions_screen.dart';
 import 'package:pet/screens/sms_transactions/sms_permission_screen.dart';
 import 'package:pet/screens/calculator/calculator_screen.dart';
+import 'package:pet/data/models/transaction.dart';
+import 'package:pet/premium/models/saving_goal.dart';
+import 'package:pet/premium/models/recurring_payment.dart';
+import 'package:pet/data/models/budget.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 
@@ -65,6 +69,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     decimalDigits: 0,
   );
 
+  // Memoization cache for SpendHealthService
+  List<TransactionRecord>? _lastTxns;
+  List<SavingGoal>? _lastGoals;
+  List<RecurringPayment>? _lastBills;
+  List<Budget>? _lastBudgets;
+  SpendHealthResult? _cachedHealth;
+
   @override
   void initState() {
     super.initState();
@@ -105,6 +116,35 @@ class _DashboardScreenState extends State<DashboardScreen>
     return 'Good Evening';
   }
 
+  void _updateHealthCache(
+    TransactionProvider txnProvider,
+    GoalProvider goalProvider,
+    RecurringProvider recurringProvider,
+    BudgetProvider budgetProvider,
+    double totalBudget,
+  ) {
+    bool txnsChanged = !identical(_lastTxns, txnProvider.allTransactions);
+    bool goalsChanged = !identical(_lastGoals, goalProvider.goals);
+    bool billsChanged = !identical(_lastBills, recurringProvider.recurring);
+    bool budgetsChanged = !identical(_lastBudgets, budgetProvider.budgets);
+
+    if (txnsChanged || goalsChanged || billsChanged || budgetsChanged || _cachedHealth == null) {
+      _lastTxns = txnProvider.allTransactions;
+      _lastGoals = goalProvider.goals;
+      _lastBills = recurringProvider.recurring;
+      _lastBudgets = budgetProvider.budgets;
+
+      _cachedHealth = SpendHealthService.instance.calculate(
+        transactions: _lastTxns!,
+        categoryBudgets: {
+          for (final b in _lastBudgets!) b.categoryId: b.amount,
+        },
+        goals: _lastGoals!,
+        budgetSpent: budgetProvider.spentAmounts,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -141,16 +181,16 @@ class _DashboardScreenState extends State<DashboardScreen>
           context,
           listen: false,
         );
-        final healthResult = SpendHealthService.instance.calculate(
-          transactions: txnProvider.allTransactions,
-          categoryBudgets: {
-            for (final b in budgetProvider.budgets) b.categoryId: b.amount,
-          },
-          totalBudget: totalBudget,
-          goals: goalProvider.goals,
-          bills: recurringProvider.recurring,
-          budgetSpent: budgetProvider.spentAmounts,
+        
+        _updateHealthCache(
+          txnProvider, 
+          goalProvider, 
+          recurringProvider, 
+          budgetProvider, 
+          totalBudget
         );
+        
+        final healthResult = _cachedHealth!;
 
         // Generate AI insight from health data
         String? aiInsight;
@@ -203,9 +243,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                             onTap: () => Navigator.push(
                               context,
                               PageRouteBuilder(
-                                pageBuilder: (_, a, __) =>
+                                pageBuilder: (_, a, _) =>
                                     const CalculatorScreen(),
-                                transitionsBuilder: (_, a, __, child) =>
+                                transitionsBuilder: (_, a, _, child) =>
                                     SlideTransition(
                                       position:
                                           Tween(
@@ -475,7 +515,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       tween: Tween(begin: 0, end: percent * 100),
                       duration: const Duration(milliseconds: 1000),
                       curve: Curves.easeOutCubic,
-                      builder: (_, value, __) => Text(
+                      builder: (_, value, _) => Text(
                         '${value.toInt()}%',
                         style: AppTypography.displaySmall(color: ringColor),
                       ),

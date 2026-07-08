@@ -122,6 +122,7 @@ class SmsTransactionParser {
       normalizedBody,
       sender,
       intent.direction?.name ?? 'debit',
+      smsTimestamp: timestamp,
     );
     allReasons.addAll(entities.reasons);
 

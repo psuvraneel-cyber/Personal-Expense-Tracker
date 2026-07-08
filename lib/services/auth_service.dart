@@ -25,11 +25,18 @@ class AuthService {
   /// Google profile photo URL.
   static String? get photoUrl => _service.photoUrl;
 
+  /// Whether the user is currently signed in as a local guest.
+  static bool get isLocalGuest => _service.isLocalGuest;
+
   // ── Actions ────────────────────────────────────────────────────────
 
   /// Sign in with Google (replaces email/password).
   static Future<UserCredential?> signInWithGoogle() =>
       _service.signInWithGoogle();
+
+  /// Sign in as a guest.
+  static Future<bool> signInAsGuest(String username) =>
+      _service.signInAsGuest(username);
 
   /// Sign out the current user and clear the session.
   static Future<void> signOut() => _service.signOut();

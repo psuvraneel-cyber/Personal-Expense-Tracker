@@ -33,8 +33,9 @@ class ClassificationRuleEngine {
   static Future<ClassifiedTransaction?> classify(
     String smsBody,
     String sender,
-    DateTime smsTimestamp,
-  ) async {
+    DateTime smsTimestamp, {
+    bool logUnknown = true,
+  }) async {
     // Run both parsers and get consensus result
     final consensus = SelfConsistencyChecker.check(
       body: smsBody,
@@ -70,7 +71,9 @@ class ClassificationRuleEngine {
     }
 
     // Log unknown format for diagnostics
-    await _logUnknownFormat(smsBody, sender, smsTimestamp);
+    if (logUnknown) {
+      await _logUnknownFormat(smsBody, sender, smsTimestamp);
+    }
     return null;
   }
 

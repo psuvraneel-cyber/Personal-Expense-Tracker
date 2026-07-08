@@ -32,13 +32,22 @@ class FirebaseAuthService {
 
   FirebaseAuthService._internal();
 
+  bool _isLocalGuest = false;
+  String? _localGuestName;
+
+  bool get isLocalGuest => _isLocalGuest;
+
   // ── Getters ─────────────────────────────────────────────────────────
 
   User? get currentUser => _firebaseAuth.currentUser;
-  String? get currentUserId => currentUser?.uid;
-  bool get isLoggedIn => currentUser != null;
-  String? get userName => currentUser?.displayName;
-  String? get userEmail => currentUser?.email;
+  String? get currentUserId => _isLocalGuest ? 'guest_user' : currentUser?.uid;
+  bool get isLoggedIn => currentUser != null || _isLocalGuest;
+  String? get userName => _localGuestName ?? currentUser?.displayName;
+  String? get userEmail {
+    if (_isLocalGuest) return 'guest@pet.local';
+    if (currentUser?.isAnonymous == true) return 'guest@pet.local';
+    return currentUser?.email;
+  }
   String? get photoUrl => currentUser?.photoURL;
 
   /// True on Web, Android, and iOS — false on desktop (Windows/Linux/macOS).
@@ -59,6 +68,14 @@ class FirebaseAuthService {
   /// explicitly be called to restore the Google-side session; Firebase Auth
   /// alone may not have enough to reconstruct the credential on cold start.
   Future<bool> tryRestoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('isLocalGuest') == true) {
+      _isLocalGuest = true;
+      _localGuestName = prefs.getString('userName') ?? 'Guest';
+      AppLogger.debug('[AUTH] Local guest session restored: $_localGuestName');
+      return true;
+    }
+
     if (kIsWeb) return _firebaseAuth.currentUser != null;
     if (!isGoogleSignInSupported) return false;
 
@@ -106,11 +123,72 @@ class FirebaseAuthService {
       );
     }
     try {
-      return kIsWeb
+      final result = kIsWeb
           ? await _signInWithPopup()
           : await _signInWithGoogleMobile();
+      
+      if (result != null) {
+        _isLocalGuest = false;
+        _localGuestName = null;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('isLocalGuest');
+      }
+      return result;
     } on FirebaseAuthException catch (e) {
       throw _friendlyAuthError(e);
+    }
+  }
+
+  /// Sign in as a Guest.
+  /// Attempts Firebase Anonymous Auth first; falls back to local mode on failure.
+  Future<bool> signInAsGuest(String username) async {
+    try {
+      final credential = await _firebaseAuth.signInAnonymously();
+      await credential.user?.updateDisplayName(username);
+      _isLocalGuest = false;
+      _localGuestName = null;
+      await _cacheUserInfo(name: username, email: 'guest@pet.local');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('isLocalGuest');
+      return true;
+    } catch (e) {
+      AppLogger.debug('[AUTH] Anonymous sign-in failed, falling back to local guest: $e');
+      _isLocalGuest = true;
+      _localGuestName = username;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isLocalGuest', true);
+      await prefs.setString('userName', username);
+      await prefs.setString('userEmail', 'guest@pet.local');
+      return true;
+    }
+  }
+
+  /// Re-authenticate the current user with Google.
+  /// Needed before sensitive operations like account deletion.
+  Future<bool> reauthenticateGoogle() async {
+    try {
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider()
+          ..addScope('email')
+          ..addScope('profile');
+        await _firebaseAuth.currentUser?.reauthenticateWithPopup(provider);
+        return true;
+      } else {
+        final googleUser = await _getOrCreateGoogleSignIn().signIn();
+        if (googleUser == null) return false;
+
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+
+        await _firebaseAuth.currentUser?.reauthenticateWithCredential(credential);
+        return true;
+      }
+    } catch (e) {
+      AppLogger.debug('[AUTH] Re-auth failed: $e');
+      return false;
     }
   }
 
@@ -119,9 +197,12 @@ class FirebaseAuthService {
       await _mobileGoogleSignIn?.signOut();
     }
     await _firebaseAuth.signOut();
+    _isLocalGuest = false;
+    _localGuestName = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('userName');
     await prefs.remove('userEmail');
+    await prefs.remove('isLocalGuest');
   }
 
   Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();

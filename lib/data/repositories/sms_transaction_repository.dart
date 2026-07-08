@@ -265,6 +265,24 @@ class SmsTransactionRepository {
     return (result.first['total'] as num?)?.toDouble() ?? 0.0;
   }
 
+  /// Remove any duplicate rows that share the same smsHash.
+  ///
+  /// Keeps the oldest entry (lowest rowid) for each hash. This is a
+  /// one-time cleanup for data inserted before the in-batch dedup fix.
+  /// Safe to call on every cold start — it is a no-op if there are no dupes.
+  Future<int> deduplicateExisting() async {
+    final db = await _dbHelper.database;
+    final result = await db.rawDelete('''
+      DELETE FROM sms_transactions
+      WHERE rowid NOT IN (
+        SELECT MAX(rowid)
+        FROM sms_transactions
+        GROUP BY rawSmsBody
+      )
+    ''');
+    return result;
+  }
+
   /// Get the count of all stored SMS transactions.
   Future<int> getCount() async {
     final db = await _dbHelper.database;

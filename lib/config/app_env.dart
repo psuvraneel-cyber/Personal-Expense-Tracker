@@ -21,4 +21,9 @@ class AppEnv {
     'GROQ_MODEL',
     defaultValue: 'llama-3.3-70b-versatile',
   );
+
+  // ── RevenueCat (Premium/IAP) ───────────────────────────────────────────────
+  static const revenueCatGoogleApiKey = String.fromEnvironment(
+    'REVENUECAT_GOOGLE_API_KEY',
+  );
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Directory;
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:pet/services/platform_stub.dart'
@@ -12,14 +13,27 @@ class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
 
+  static Completer<Database>? _dbCompleter;
+
   factory DatabaseHelper() => _instance;
 
   DatabaseHelper._internal();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
+    
+    if (_dbCompleter == null) {
+      _dbCompleter = Completer<Database>();
+      try {
+        _database = await _initDatabase();
+        _dbCompleter!.complete(_database);
+      } catch (e) {
+        _dbCompleter!.completeError(e);
+        _dbCompleter = null;
+        rethrow;
+      }
+    }
+    return _dbCompleter!.future;
   }
 
   Future<Database> _initDatabase() async {
@@ -36,9 +50,13 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 10,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+      onOpen: (db) async {
+        // Enable foreign key constraint enforcement for every connection.
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
     );
   }
 
@@ -81,7 +99,8 @@ class DatabaseHelper {
         merchantName TEXT,
         taxCategory TEXT,
         source TEXT DEFAULT 'manual',
-        accountId TEXT
+        accountId TEXT,
+        updatedAt TEXT
       )
     ''');
 
@@ -172,24 +191,47 @@ class DatabaseHelper {
     }
     if (oldVersion < 7) {
       // Add emoji column to saving_goals (added when emoji picker was introduced)
-      try {
+      final goalCols = await db.rawQuery('PRAGMA table_info(saving_goals)');
+      final hasEmoji = goalCols.any((c) => c['name'] == 'emoji');
+      if (!hasEmoji) {
         await db.execute('ALTER TABLE saving_goals ADD COLUMN emoji TEXT');
-      } catch (_) {
-        // Column may already exist on fresh installs — safe to ignore
       }
     }
     if (oldVersion < 8) {
-      try {
+      final smsCols = await db.rawQuery('PRAGMA table_info(sms_transactions)');
+      final hasApprox = smsCols.any((c) => c['name'] == 'timestamp_is_approximate');
+      if (!hasApprox) {
         await db.execute(
           'ALTER TABLE sms_transactions ADD COLUMN timestamp_is_approximate INTEGER DEFAULT 0',
         );
-      } catch (_) {}
+      }
       // Flag legacy transactions with exact midnight timestamps as approximate
       await db.execute('''
         UPDATE sms_transactions 
         SET timestamp_is_approximate = 1 
         WHERE timestamp LIKE '%T00:00:00.000%' OR timestamp LIKE '%T00:00:00%'
       ''');
+    }
+    if (oldVersion < 9) {
+      final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
+      final hasUpdatedAt = txnCols.any((c) => c['name'] == 'updatedAt');
+      if (!hasUpdatedAt) {
+        await db.execute(
+          'ALTER TABLE transactions ADD COLUMN updatedAt TEXT',
+        );
+      }
+    }
+    if (oldVersion < 10) {
+      // Performance indexes for common query patterns
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_txn_category ON transactions(categoryId)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_txn_type ON transactions(type)',
+      );
     }
   }
 
@@ -388,5 +430,6 @@ class DatabaseHelper {
     final db = await database;
     db.close();
     _database = null;
+    _dbCompleter = null;
   }
 }

@@ -29,10 +29,13 @@ class NativeSmsMessage {
   bool get isSent => type == 2;
 
   factory NativeSmsMessage.fromMap(Map<dynamic, dynamic> map) {
-    // Try date_sent first (server time), fallback to date (receive time)
-    final int dateSent = (map['date_sent'] as num?)?.toInt() ?? 0;
+    // Prioritize `date` (device receipt time) over `date_sent` (SMSC time).
+    // SMSC times are notoriously buggy on some Indian carrier networks and can
+    // cause 12-hour timezone offsets (e.g. 10:25 AM instead of 10:25 PM) and
+    // hash mismatches between live broadcasts and ContentResolver scans.
     final int dateReceived = (map['date'] as num?)?.toInt() ?? 0;
-    final int finalDateMillis = dateSent > 0 ? dateSent : dateReceived;
+    final int dateSent = (map['date_sent'] as num?)?.toInt() ?? 0;
+    final int finalDateMillis = dateReceived > 0 ? dateReceived : dateSent;
 
     return NativeSmsMessage(
       address: map['address'] as String? ?? '',

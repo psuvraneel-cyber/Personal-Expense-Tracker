@@ -19,6 +19,12 @@ class SavingGoal {
     this.emoji,
   });
 
+  /// The progress of the goal, clamped between 0.0 and 1.0 (100%).
+  double get progressPercent {
+    if (targetAmount <= 0) return 0.0;
+    return (currentAmount / targetAmount).clamp(0.0, 1.0);
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

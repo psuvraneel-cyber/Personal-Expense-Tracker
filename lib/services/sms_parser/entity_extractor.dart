@@ -563,8 +563,16 @@ class EntityExtractor {
     'dec': 12,
   };
 
-  /// Extract date from SMS body.
-  static DateTime? extractDate(String body, List<String> reasons) {
+  /// Extract date from SMS body, preserving the time from [smsTime].
+  ///
+  /// SMS bodies contain only the date (e.g., '21-05-2026') without time.
+  /// The OS-level SMS timestamp [smsTime] has the accurate reception time,
+  /// so we copy its hour/minute/second onto the extracted date.
+  static DateTime? extractDate(
+    String body,
+    List<String> reasons, {
+    required DateTime smsTimestamp,
+  }) {
     // ISO format (yyyy-mm-dd)
     final isoMatch = _dateIso.firstMatch(body);
     if (isoMatch != null) {
@@ -572,6 +580,7 @@ class EntityExtractor {
         int.parse(isoMatch.group(1)!),
         int.parse(isoMatch.group(2)!),
         int.parse(isoMatch.group(3)!),
+        smsTimestamp,
       );
       if (dt != null) {
         reasons.add(
@@ -588,6 +597,7 @@ class EntityExtractor {
         int.parse(colonMatch.group(1)!),
         int.parse(colonMatch.group(2)!),
         int.parse(colonMatch.group(3)!),
+        smsTimestamp,
       );
       if (dt != null) {
         reasons.add(
@@ -606,7 +616,7 @@ class EntityExtractor {
       var year = int.parse(monthMatch.group(3)!);
       if (year < 100) year += 2000;
       if (month != null) {
-        final dt = _safeDate(year, month, day);
+        final dt = _safeDate(year, month, day, smsTimestamp);
         if (dt != null) {
           reasons.add(
             'Date extracted (month name): ${dt.toIso8601String().split("T")[0]}',
@@ -626,7 +636,7 @@ class EntityExtractor {
 
       // Indian format: dd-mm-yyyy
       if (a <= 31 && b <= 12) {
-        final dt = _safeDate(c, b, a);
+        final dt = _safeDate(c, b, a, smsTimestamp);
         if (dt != null) {
           reasons.add(
             'Date extracted (dd-mm-yyyy): ${dt.toIso8601String().split("T")[0]}',
@@ -639,10 +649,17 @@ class EntityExtractor {
     return null;
   }
 
-  static DateTime? _safeDate(int year, int month, int day) {
+  /// Build a DateTime from extracted date components, preserving the time
+  /// from [smsTime]. The date from the SMS body is authoritative for the
+  /// calendar day, but the OS timestamp's time is the most accurate
+  /// source for hour/minute/second.
+  static DateTime? _safeDate(int year, int month, int day, DateTime smsTime) {
     try {
       if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-      final dt = DateTime(year, month, day);
+      final dt = DateTime(
+        year, month, day,
+        smsTime.hour, smsTime.minute, smsTime.second,
+      );
       final now = DateTime.now();
       if (dt.isAfter(now.add(const Duration(days: 730)))) return null;
       if (dt.isBefore(now.subtract(const Duration(days: 3650)))) return null;
@@ -658,11 +675,15 @@ class EntityExtractor {
   // ═══════════════════════════════════════════════════════════════════
 
   /// Extract all entities from an SMS body.
+  ///
+  /// [smsTimestamp] is the OS-level timestamp of the SMS, used to preserve
+  /// the time component when extracting a date from the SMS body.
   static ExtractedEntities extractAll(
     String body,
     String sender,
-    String txnType,
-  ) {
+    String txnType, {
+    required DateTime smsTimestamp,
+  }) {
     final reasons = <String>[];
 
     final bank = detectBank(body, sender, reasons);
@@ -670,7 +691,7 @@ class EntityExtractor {
     final ref = extractReferenceId(body, reasons);
     final merchant = extractMerchant(body, upiId, txnType, reasons);
     final account = extractAccountTail(body, reasons);
-    final date = extractDate(body, reasons);
+    final date = extractDate(body, reasons, smsTimestamp: smsTimestamp);
 
     return ExtractedEntities(
       bankName: bank,

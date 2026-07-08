@@ -198,7 +198,9 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  initialValue: _taxCategory,
+                  initialValue: TaxCategoryService.defaults.any((e) => e.id == _taxCategory) 
+                      ? _taxCategory 
+                      : null,
                   decoration: const InputDecoration(
                     hintText: 'Select tax category',
                   ),

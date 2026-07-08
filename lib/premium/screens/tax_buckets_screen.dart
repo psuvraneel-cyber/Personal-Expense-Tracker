@@ -3,17 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/data/models/enums.dart';
 import 'package:pet/providers/transaction_provider.dart';
+import 'package:pet/premium/providers/tax_provider.dart';
 import 'package:pet/premium/widgets/premium_gate.dart';
-
-// Indian IT section limits in INR
-const _sectionLimits = {
-  '80C': 150000.0,
-  '80D': 25000.0,
-  'HRA': 100000.0,
-  'LTA': 20000.0,
-  '80E': 150000.0,
-};
 
 const _sectionColors = {
   '80C': AppTheme.accentPurple,
@@ -65,6 +58,103 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     super.dispose();
   }
 
+  void _showEditLimitsSheet(BuildContext context) {
+    final taxProvider = context.read<TaxProvider>();
+    final limits = taxProvider.limits;
+    final controllers = <String, TextEditingController>{};
+    for (final key in limits.keys) {
+      if (key == '80E') continue; // Not editable
+      controllers[key] = TextEditingController(
+        text: limits[key]?.toInt().toString(),
+      );
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 24,
+            right: 24,
+            top: 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Edit Tax Limits',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      taxProvider.resetToDefaults();
+                      Navigator.pop(context);
+                    },
+                    child: const Text(
+                      'Reset',
+                      style: TextStyle(color: AppTheme.expenseRed),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...controllers.entries.map((e) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: TextField(
+                    controller: e.value,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: ' Limit',
+                      prefixText: '₹ ',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    for (final entry in controllers.entries) {
+                      final val = double.tryParse(entry.value.text);
+                      if (val != null) {
+                        taxProvider.setLimit(entry.key, val);
+                      }
+                    }
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: AppTheme.primaryLight,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Save Limits'),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
@@ -73,43 +163,44 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     return Scaffold(
       backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10b981).withAlpha(isDark ? 40 : 25),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.receipt_long_rounded,
-                color: Color(0xFF10b981),
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Text('Tax Buckets'),
-          ],
-        ),
+        title: const Text('Tax Buckets'),
         backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit Limits',
+            onPressed: () => _showEditLimitsSheet(context),
+          ),
+        ],
       ),
       body: PremiumGate(
         title: 'Tax Buckets',
         subtitle: 'Track deductible expenses by IT section.',
-        child: Consumer<TransactionProvider>(
-          builder: (context, provider, _) {
-            // Aggregate by tax category
+        child: Consumer2<TransactionProvider, TaxProvider>(
+          builder: (context, provider, taxProvider, _) {
+            final sectionLimits = taxProvider.limits;
+            final now = DateTime.now();
+            final startYear = now.month < 4 ? now.year - 1 : now.year;
+            final fyStart = DateTime(startYear, 4, 1);
+            final fyEndExclusive = DateTime(startYear + 1, 4, 1);
+
             final totals = <String, double>{};
             for (final txn in provider.allTransactions) {
               if (txn.taxCategory == null) continue;
+              if (txn.type != TransactionType.expense) continue;
+              if (txn.date.isBefore(fyStart) ||
+                  !txn.date.isBefore(fyEndExclusive))
+                continue;
               totals[txn.taxCategory!] =
                   (totals[txn.taxCategory!] ?? 0) + txn.amount;
             }
 
-            // Compute total deductions and estimated tax saved (30% flat)
             final totalDeductions = totals.values.fold(0.0, (s, v) => s + v);
-            final estimatedSaved = totalDeductions * 0.30;
-            final totalLimit = _sectionLimits.values.fold(0.0, (s, v) => s + v);
+            final estimatedSaved =
+                totalDeductions * 0.20; // Conservative estimate
+            final totalLimit = sectionLimits.values
+                .where((v) => v.isFinite)
+                .fold(0.0, (s, v) => s + v);
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
@@ -119,6 +210,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   estimatedSaved,
                   totalLimit,
                   totals,
+                  sectionLimits,
                   formatter,
                   isDark,
                 ),
@@ -156,7 +248,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   ],
                 ),
                 const SizedBox(height: 12),
-                ..._sectionLimits.entries.toList().asMap().entries.map((outer) {
+                ...sectionLimits.entries.toList().asMap().entries.map((outer) {
                   final i = outer.key;
                   final entry = outer.value;
                   final sectionId = entry.key;
@@ -202,6 +294,36 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                     ),
                   );
                 }),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningYellow.withAlpha(isDark ? 18 : 12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.warningYellow.withAlpha(isDark ? 40 : 25),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('⚠️ ', style: TextStyle(fontSize: 14)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Indicative limits only. Actual deductions depend on your income, age, and tax regime. Consult a Chartered Accountant for accurate advice.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark
+                                ? AppTheme.textTertiary
+                                : AppTheme.textSecondaryLight,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             );
           },
@@ -215,6 +337,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     double saved,
     double totalLimit,
     Map<String, double> totals,
+    Map<String, double> limits,
     NumberFormat formatter,
     bool isDark,
   ) {
@@ -225,10 +348,10 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [const Color(0xFF7B3FE4), AppTheme.accentTeal],
+          colors: [Color(0xFF7B3FE4), AppTheme.accentTeal],
         ),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
@@ -277,7 +400,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                         children: [
                           const Text('💰 ', style: TextStyle(fontSize: 12)),
                           Text(
-                            'Est. tax saved: ${formatter.format(saved)} @ 30%',
+                            'Est. tax saved: ',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -291,15 +414,14 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                 ),
               ),
               const SizedBox(width: 16),
-              // Mini donut chart
               AnimatedBuilder(
                 animation: _animCtrl,
-                builder: (_, __) => SizedBox(
+                builder: (_, _) => SizedBox(
                   width: 80,
                   height: 80,
                   child: CustomPaint(
                     painter: _DonutPainter(
-                      sections: _sectionLimits.entries.map((e) {
+                      sections: limits.entries.map((e) {
                         final color =
                             _sectionColors[e.key] ?? AppTheme.accentPurple;
                         final claimed = totals[e.key] ?? 0;
@@ -319,7 +441,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
           const SizedBox(height: 16),
           AnimatedBuilder(
             animation: _animCtrl,
-            builder: (_, __) => Column(
+            builder: (_, _) => Column(
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -335,14 +457,14 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '${(overallProgress * 100).round()}% of total limit used',
+                      '% of total limit used',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 11,
                       ),
                     ),
                     Text(
-                      'Limit: ${formatter.format(totalLimit)}',
+                      'Limit: ',
                       style: const TextStyle(
                         color: Colors.white60,
                         fontSize: 11,
@@ -402,7 +524,6 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
         children: [
           Row(
             children: [
-              // Emoji icon
               Container(
                 width: 44,
                 height: 44,
@@ -461,7 +582,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${(progress * 100).round()}%',
+                    '%',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -484,7 +605,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
           const SizedBox(height: 14),
           AnimatedBuilder(
             animation: _animCtrl,
-            builder: (_, __) => ClipRRect(
+            builder: (_, _) => ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: LinearProgressIndicator(
                 value: progress * _animCtrl.value,
@@ -524,7 +645,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                 ),
               ),
               Text(
-                '${formatter.format(remaining)} remaining',
+                limit.isFinite ? ' remaining' : 'No Limit',
                 style: const TextStyle(
                   fontSize: 11,
                   color: AppTheme.textTertiary,
@@ -538,12 +659,10 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
   }
 }
 
-// ── Mini donut chart painter ──────────────────────────────────────────────────
-
 class _DonutSection {
   final Color color;
-  final double value; // weight / size of slice
-  final double filled; // 0..1 how much is filled
+  final double value;
+  final double filled;
 
   const _DonutSection({
     required this.color,
@@ -570,7 +689,6 @@ class _DonutPainter extends CustomPainter {
     for (final section in sections) {
       final sweep = 2 * pi * (section.value / total);
 
-      // Track (dim)
       final trackPaint = Paint()
         ..color = section.color.withAlpha(40)
         ..style = PaintingStyle.stroke
@@ -584,7 +702,6 @@ class _DonutPainter extends CustomPainter {
         trackPaint,
       );
 
-      // Filled portion
       if (section.filled > 0) {
         final fillPaint = Paint()
           ..color = section.color

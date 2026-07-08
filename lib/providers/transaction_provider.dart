@@ -217,15 +217,18 @@ class TransactionProvider extends ChangeNotifier {
               );
             });
           }
-          // Insert remote rows that are not yet in local.
+          final txnsToInsert = <TransactionRecord>[];
           for (final r in remoteList) {
             if (!localIds.contains(r.id)) {
-              await _repository.insertTransaction(r).catchError((Object e) {
-                debugPrint(
-                  '[TransactionProvider] Failed to insert remote row ${r.id} into SQLite: $e',
-                );
-              });
+              txnsToInsert.add(r);
             }
+          }
+          if (txnsToInsert.isNotEmpty) {
+            await _repository.insertTransactionsBatch(txnsToInsert).catchError((Object e) {
+              debugPrint(
+                '[TransactionProvider] batch insert remote rows failed: $e',
+              );
+            });
           }
 
           _syncStatus = SyncStatus.synced;
@@ -522,17 +525,17 @@ class TransactionProvider extends ChangeNotifier {
       }
 
       final localIds = _transactions.map((t) => t.id).toSet();
-      int restored = 0;
+      final txnsToInsert = <TransactionRecord>[];
 
       for (final remoteTxn in remoteTransactions) {
         if (!localIds.contains(remoteTxn.id)) {
-          await _repository.insertTransaction(remoteTxn);
-          restored++;
+          txnsToInsert.add(remoteTxn);
         }
       }
 
-      if (restored > 0) {
-        debugPrint('[Sync] Restored $restored transactions from Firestore');
+      if (txnsToInsert.isNotEmpty) {
+        await _repository.insertTransactionsBatch(txnsToInsert);
+        debugPrint('[Sync] Restored ${txnsToInsert.length} transactions from Firestore');
         _transactions = await _repository.getAllTransactions();
         _invalidateAggregates();
         _applyFiltersAndSort();

@@ -1,6 +1,7 @@
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 /// Wraps [FlutterLocalNotificationsPlugin] with:
 ///  • Android 13+ runtime permission request
@@ -98,6 +99,54 @@ class NotificationService {
       return;
     }
     await _showInternal(id: id, title: title, body: body);
+  }
+
+  /// Schedules a notification at a specific date and time.
+  static Future<void> scheduleNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+  }) async {
+    if (!_isInitialized) {
+      return; // Cannot queue scheduled notifications simply, ignore for now or init first
+    }
+    try {
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          channelDescription: _channelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+        macOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      );
+      
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tz.TZDateTime.from(scheduledDate, tz.local),
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      AppLogger.debug('[NotificationService] schedule failed (id=$id): $e');
+    }
   }
 
   /// Derives a collision-safe 32-bit int ID from an arbitrary [String] key

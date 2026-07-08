@@ -191,82 +191,51 @@ class SmsService {
     }
   }
 
-  /// Process messages from the native reader and store parsed transactions.
   Future<int> _processMessages(List<NativeSmsMessage> messages) async {
-    final List<SmsTransaction> parsed = [];
-    int classifiedCount = 0;
-    int skippedCount = 0;
-    int duplicateCount = 0;
-
     AppLogger.debug(
-      '[PET-SMS] Processing ${messages.length} messages from native reader',
+      '[PET-SMS] Processing ${messages.length} messages from native reader (dispatching to isolate)',
     );
 
-    for (final msg in messages) {
-      final body = msg.body;
-      final sender = msg.address;
-      final timestamp = msg.dateTime;
+    // Run the CPU-heavy classification inside an isolate
+    final parsed = await compute(_parseMessagesIsolate, _IsolateData(messages));
 
-      if (body.isEmpty) {
-        skippedCount++;
-        continue;
-      }
+    AppLogger.debug(
+      '[PET-SMS] Isolate returned ${parsed.length} parsed transactions',
+    );
 
-      // Use the classification engine
-      final classified = await ClassificationRuleEngine.classify(
-        body,
-        sender,
-        timestamp,
-      );
-      if (classified == null) {
-        skippedCount++;
-        continue;
-      }
+    final List<SmsTransaction> newTxns = [];
+    int duplicateCount = 0;
 
-      classifiedCount++;
-
-      final hash = SmsTransaction.generateHash(body, timestamp);
-      final exists = await _repository.existsByHash(hash);
+    for (final txn in parsed) {
+      // DB dedup: skip if already persisted from a previous scan.
+      final exists = await _repository.existsByHash(txn.smsHash);
       if (exists) {
         duplicateCount++;
         continue;
       }
 
-      // Use rule-assigned category if available, else infer from parsed data
-      final category =
-          classified.category ?? _inferCategoryFromClassified(classified);
-      final normalizedMerchant = MerchantNormalizer.normalize(
-        classified.merchantName,
-      );
+      // Cross-source dedup: check if a notification already captured this
+      if (txn.referenceId != null) {
+        final refDup = await _repository.existsByReferenceAndAmount(
+          txn.referenceId!,
+          txn.amount,
+          txn.timestamp,
+        );
+        if (refDup) {
+          duplicateCount++;
+          continue;
+        }
+      }
 
-      parsed.add(
-        SmsTransaction(
-          id: _uuid.v4(),
-          amount: classified.amount,
-          merchantName: normalizedMerchant,
-          bankName: classified.bankName,
-          transactionType: classified.transactionType,
-          transactionSubType: classified.transactionSubType,
-          timestamp: classified.parsedDate,
-          rawSmsBody: redactSensitiveData(body),
-          smsSender: sender,
-          smsHash: hash,
-          category: category,
-          referenceId: classified.referenceId,
-          upiId: classified.upiId,
-          confidence: classified.confidence,
-          source: 'sms',
-        ),
-      );
+      newTxns.add(txn);
     }
 
     AppLogger.debug(
-      '[PET-SMS] Native: Classified $classifiedCount, '
-      'skipped $skippedCount, duplicates $duplicateCount, '
-      'new ${parsed.length}',
+      '[PET-SMS] Main Thread: Skipped $duplicateCount duplicates, '
+      'new ${newTxns.length}',
     );
 
-    final insertedCount = await _repository.insertBatch(parsed);
+    final insertedCount = await _repository.insertBatch(newTxns);
     AppLogger.debug('[PET-SMS] Inserted $insertedCount new transactions');
 
     // Update the last-processed watermark for incremental scans
@@ -310,83 +279,17 @@ class SmsService {
         return 0;
       }
 
-      final List<SmsTransaction> parsed = [];
-      int classifiedCount = 0;
-      int skippedCount = 0;
-      int duplicateCount = 0;
-
-      for (final msg in messages) {
-        final body = msg.body;
-        final sender = msg.address ?? '';
-        final timestamp = msg.date != null
-            ? DateTime.fromMillisecondsSinceEpoch(msg.date!)
-            : DateTime.now();
-
-        if (body == null || body.isEmpty) {
-          skippedCount++;
-          continue;
-        }
-
-        // Use two-tier classification engine
-        final classified = await ClassificationRuleEngine.classify(
-          body,
-          sender,
-          timestamp,
+      // Map telephony messages to NativeSmsMessage so we can use the same
+      // isolate-backed processing pipeline
+      final nativeMessages = messages.map((m) {
+        return NativeSmsMessage(
+          address: m.address ?? '',
+          body: m.body ?? '',
+          dateMillis: m.date ?? DateTime.now().millisecondsSinceEpoch,
         );
-        if (classified == null) {
-          skippedCount++;
-          continue;
-        }
+      }).toList();
 
-        classifiedCount++;
-
-        // Generate deduplication hash
-        final hash = SmsTransaction.generateHash(body, timestamp);
-
-        // Check if already stored
-        final exists = await _repository.existsByHash(hash);
-        if (exists) {
-          duplicateCount++;
-          continue;
-        }
-
-        final category =
-            classified.category ?? _inferCategoryFromClassified(classified);
-        final normalizedMerchant = MerchantNormalizer.normalize(
-          classified.merchantName,
-        );
-
-        parsed.add(
-          SmsTransaction(
-            id: _uuid.v4(),
-            amount: classified.amount,
-            merchantName: normalizedMerchant,
-            bankName: classified.bankName,
-            transactionType: classified.transactionType,
-            transactionSubType: classified.transactionSubType,
-            timestamp: classified.parsedDate,
-            rawSmsBody: redactSensitiveData(body),
-            smsSender: sender,
-            smsHash: hash,
-            category: category,
-            referenceId: classified.referenceId,
-            upiId: classified.upiId,
-            confidence: classified.confidence,
-            source: 'sms',
-          ),
-        );
-      }
-
-      AppLogger.debug(
-        '[PET-SMS] Telephony: Classified $classifiedCount, '
-        'skipped $skippedCount, duplicates $duplicateCount, '
-        'new ${parsed.length}',
-      );
-
-      // Batch insert (duplicates are automatically skipped)
-      final insertedCount = await _repository.insertBatch(parsed);
-      AppLogger.debug('[PET-SMS] Inserted $insertedCount new transactions');
-      return insertedCount;
+      return await _processMessages(nativeMessages);
     } catch (e) {
       AppLogger.debug('[PET-SMS] Error scanning inbox: $e');
       return 0;
@@ -437,7 +340,7 @@ class SmsService {
         }
 
         final category =
-            classified.category ?? _inferCategoryFromClassified(classified);
+            classified.category ?? inferCategoryFromClassified(classified);
         final normalizedMerchant = MerchantNormalizer.normalize(
           classified.merchantName,
         );
@@ -505,7 +408,7 @@ class SmsService {
         }
 
         final category =
-            classified.category ?? _inferCategoryFromClassified(classified);
+            classified.category ?? inferCategoryFromClassified(classified);
         final normalizedMerchant = MerchantNormalizer.normalize(
           classified.merchantName,
         );
@@ -603,7 +506,7 @@ class SmsService {
     if (exists) return;
 
     final category =
-        classified.category ?? _inferCategoryFromClassified(classified);
+        classified.category ?? inferCategoryFromClassified(classified);
     final normalizedMerchant = MerchantNormalizer.normalize(
       classified.merchantName,
     );
@@ -636,7 +539,7 @@ class SmsService {
     }
   }
 
-  bool _matchesAny(String text, List<String> keywords) {
+  static bool _matchesAny(String text, List<String> keywords) {
     for (final keyword in keywords) {
       if (text.contains(keyword)) return true;
     }
@@ -668,7 +571,7 @@ class SmsService {
 
   /// Infer category from a ClassifiedTransaction (used when no rule-assigned
   /// category is available, i.e., the hardcoded parser handled the SMS).
-  String _inferCategoryFromClassified(ClassifiedTransaction classified) {
+  static String inferCategoryFromClassified(ClassifiedTransaction classified) {
     final merchant = MerchantNormalizer.normalize(
       classified.merchantName,
     ).toLowerCase();
@@ -820,4 +723,69 @@ class SmsService {
 
     return 'Uncategorized';
   }
+}
+
+// ─── Isolate Workers ────────────────────────────────────────────────────────
+
+/// Data payload for the isolate.
+class _IsolateData {
+  final List<NativeSmsMessage> messages;
+  const _IsolateData(this.messages);
+}
+
+/// Top-level isolate function for parsing a batch of SMS messages.
+Future<List<SmsTransaction>> _parseMessagesIsolate(_IsolateData data) async {
+  final parsed = <SmsTransaction>[];
+  final seenHashes = <String>{};
+  final uuid = const Uuid();
+
+  for (final msg in data.messages) {
+    final body = msg.body;
+    final sender = msg.address;
+    final timestamp = msg.dateTime;
+
+    if (body.isEmpty) continue;
+
+    final classified = await ClassificationRuleEngine.classify(
+      body,
+      sender,
+      timestamp,
+      logUnknown: false, // Don't hit sqflite inside the isolate
+    );
+
+    if (classified == null) continue;
+
+    final hash = SmsTransaction.generateHash(body, timestamp);
+
+    // In-batch dedup
+    if (seenHashes.contains(hash)) {
+      continue;
+    }
+    seenHashes.add(hash);
+
+    final category = classified.category ?? SmsService.inferCategoryFromClassified(classified);
+    final normalizedMerchant = MerchantNormalizer.normalize(classified.merchantName);
+
+    parsed.add(
+      SmsTransaction(
+        id: uuid.v4(),
+        amount: classified.amount,
+        merchantName: normalizedMerchant,
+        bankName: classified.bankName,
+        transactionType: classified.transactionType,
+        transactionSubType: classified.transactionSubType,
+        timestamp: classified.parsedDate,
+        rawSmsBody: SmsService.redactSensitiveData(body),
+        smsSender: sender,
+        smsHash: hash,
+        category: category,
+        referenceId: classified.referenceId,
+        upiId: classified.upiId,
+        confidence: classified.confidence,
+        source: 'sms',
+      ),
+    );
+  }
+
+  return parsed;
 }

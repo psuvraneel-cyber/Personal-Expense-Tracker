@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/firestore_sync_service.dart';
+import 'package:pet/screens/auth/guest_username_screen.dart';
 
 /// Google Sign-In screen shown to unauthenticated users.
 class GoogleSignInScreen extends StatefulWidget {
@@ -279,6 +280,49 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
                                 ),
                               ],
                             ),
+                    ),
+                  ),
+
+                  // Guest Sign-In button
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: OutlinedButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const GuestUsernameScreen(),
+                                ),
+                              );
+                            },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: isDark ? Colors.white : AppTheme.primaryDark,
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.3)
+                              : AppTheme.primaryDark.withValues(alpha: 0.3),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.person_outline, size: 22, color: isDark ? Colors.white : AppTheme.primaryDark),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Sign in as Guest',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 

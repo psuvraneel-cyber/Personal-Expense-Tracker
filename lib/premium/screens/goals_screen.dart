@@ -203,7 +203,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                   children: [
                     AnimatedBuilder(
                       animation: _animCtrl,
-                      builder: (_, __) {
+                      builder: (_, _) {
                         return CustomPaint(
                           size: const Size(72, 72),
                           painter: _ArcPainter(
@@ -216,7 +216,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${(progress * 100).round()}%',
+                          '${(progress * 100).round().clamp(0, 100)}%',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -239,7 +239,7 @@ class _GoalsScreenState extends State<GoalsScreen>
             borderRadius: BorderRadius.circular(8),
             child: AnimatedBuilder(
               animation: _animCtrl,
-              builder: (_, __) => LinearProgressIndicator(
+              builder: (_, _) => LinearProgressIndicator(
                 value: (progress * _animCtrl.value).clamp(0, 1),
                 minHeight: 8,
                 backgroundColor: Colors.white.withAlpha(30),
@@ -558,7 +558,7 @@ class _GoalsScreenState extends State<GoalsScreen>
             // Animated progress bar
             AnimatedBuilder(
               animation: _animCtrl,
-              builder: (_, __) => ClipRRect(
+              builder: (_, _) => ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: (progress * _animCtrl.value).clamp(0, 1),
@@ -577,7 +577,7 @@ class _GoalsScreenState extends State<GoalsScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${(progress * 100).round()}% complete',
+                  '${(progress * 100).round().clamp(0, 100)}% complete',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,

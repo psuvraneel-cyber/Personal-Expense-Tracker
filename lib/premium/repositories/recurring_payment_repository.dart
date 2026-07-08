@@ -29,4 +29,31 @@ class RecurringPaymentRepository {
     final db = await _dbHelper.database;
     await db.delete('recurring_payments', where: 'id = ?', whereArgs: [id]);
   }
+
+  /// Atomically replaces all records: clears the table and re-inserts
+  /// [manuals] and [detected] within a single SQL transaction.
+  /// If any insert fails, the entire operation rolls back — no data loss.
+  Future<void> replaceAll(
+    List<RecurringPayment> manuals,
+    List<RecurringPayment> detected,
+  ) async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      await txn.delete('recurring_payments');
+      for (final manual in manuals) {
+        await txn.insert(
+          'recurring_payments',
+          manual.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final payment in detected) {
+        await txn.insert(
+          'recurring_payments',
+          payment.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
 }

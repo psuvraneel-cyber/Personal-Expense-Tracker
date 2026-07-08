@@ -117,34 +117,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       );
                     },
                   ),
-                  _buildSettingTile(
-                    context,
-                    isDark: isDark,
-                    icon: Icons.lock_open_rounded,
-                    iconColor: AppTheme.accentTeal,
-                    title: 'Premium Access (dev toggle)',
-                    subtitle: premium.isPremium ? 'Enabled' : 'Disabled',
-                    trailing: Switch(
-                      value: premium.isPremium,
-                      onChanged: (value) => premium.setPremium(value),
-                      activeThumbColor: AppTheme.accentTeal,
-                    ),
-                  ),
-                  _buildSettingTile(
-                    context,
-                    isDark: isDark,
-                    icon: Icons.science_rounded,
-                    iconColor: AppTheme.warningYellow,
-                    title: 'Experimental Features',
-                    subtitle: premium.experimentalEnabled
-                        ? 'Enabled'
-                        : 'Disabled',
-                    trailing: Switch(
-                      value: premium.experimentalEnabled,
-                      onChanged: (value) => premium.setExperimental(value),
-                      activeThumbColor: AppTheme.warningYellow,
-                    ),
-                  ),
                 ],
               );
             },
@@ -1158,12 +1130,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final transactionProvider = context.read<TransactionProvider>();
       final categoryProvider = context.read<CategoryProvider>();
       final budgetProvider = context.read<BudgetProvider>();
+      final premiumProvider = context.read<PremiumProvider>();
 
       // Clear all provider state BEFORE signing out so no stale data
       // remains in memory or SQLite when a different account signs in.
       await transactionProvider.clearData();
       await categoryProvider.clearData();
       await budgetProvider.clearData();
+      await premiumProvider.clearData();
 
       await AuthService.signOut();
 

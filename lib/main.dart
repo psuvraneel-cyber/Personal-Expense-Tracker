@@ -22,6 +22,7 @@ import 'package:pet/premium/providers/goal_provider.dart';
 import 'package:pet/premium/providers/alert_provider.dart';
 import 'package:pet/premium/providers/linked_account_provider.dart';
 import 'package:pet/premium/providers/family_provider.dart';
+import 'package:pet/premium/providers/tax_provider.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/services/firebase_auth_service.dart';
@@ -31,8 +32,11 @@ import 'package:pet/services/haptic_service.dart';
 import 'package:pet/services/biometric_service.dart';
 import 'package:pet/screens/biometric/biometric_lock_screen.dart';
 
+import 'package:timezone/data/latest.dart' as tz;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  tz.initializeTimeZones();
 
   // Prevent Google Fonts from downloading at runtime — use bundled fonts only
   GoogleFonts.config.allowRuntimeFetching = false;
@@ -131,7 +135,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _themeMode = ValueNotifier<ThemeMode>(widget.themeMode);
-    _lastUid = FirebaseAuth.instance.currentUser?.uid;
+    _lastUid = FirebaseAuthService().currentUserId;
 
     // Centralized auth-state listener — drives data reload / clear.
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
@@ -148,8 +152,9 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
   }
 
   void _onAuthStateChanged(User? user) {
+    final currentUserId = FirebaseAuthService().currentUserId;
     AppLogger.debug(
-      '[MAIN] _onAuthStateChanged → user=${user?.uid ?? "null"} '
+      '[MAIN] _onAuthStateChanged → uid=$currentUserId '
       '_lastUid=$_lastUid',
     );
     final ctx = _navigatorKey.currentContext;
@@ -158,17 +163,17 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       return;
     }
 
-    if (user == null && _lastUid != null) {
+    if (currentUserId == null && _lastUid != null) {
       AppLogger.debug('[MAIN] Real sign-out detected — clearing data');
       ctx.read<TransactionProvider>().clearData();
       ctx.read<CategoryProvider>().clearData();
       ctx.read<BudgetProvider>().clearData();
       _lastUid = null;
-    } else if (user != null && user.uid != _lastUid) {
+    } else if (currentUserId != null && currentUserId != _lastUid) {
       AppLogger.debug(
-        '[MAIN] New user signed in (${user.uid}) — reloading data',
+        '[MAIN] New user signed in ($currentUserId) — reloading data',
       );
-      _lastUid = user.uid;
+      _lastUid = currentUserId;
       ctx.read<CategoryProvider>().loadCategories();
       ctx.read<TransactionProvider>().loadTransactions();
       ctx.read<BudgetProvider>().loadBudgets();
@@ -277,6 +282,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(
           create: (_) => DashboardConfigProvider()..load(),
         ),
+        ChangeNotifierProvider(create: (_) => TaxProvider()),
         Provider(
           create: (_) => AccountDeletionService(dbHelper: DatabaseHelper()),
         ),

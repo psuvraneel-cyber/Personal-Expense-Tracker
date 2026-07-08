@@ -13,18 +13,27 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) return web;
+    FirebaseOptions options;
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return android;
+        options = android;
+        break;
       case TargetPlatform.iOS:
-        return ios;
+        options = ios;
+        break;
       case TargetPlatform.windows:
-        return windows;
+        options = windows;
+        break;
       default:
         throw UnsupportedError(
           'DefaultFirebaseOptions are not supported for this platform.',
         );
     }
+    
+    if (options.apiKey.contains('REPLACE_WITH')) {
+      throw UnsupportedError('Firebase is not configured for this platform.');
+    }
+    return options;
   }
 
   /// Web client ID (type-3 OAuth client from google-services.json).

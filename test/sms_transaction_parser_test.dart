@@ -820,7 +820,7 @@ void main() {
   group('Entity Extraction — Date', () {
     test('dd-mm-yy format', () {
       final reasons = <String>[];
-      final dt = EntityExtractor.extractDate('on 13-02-26', reasons);
+      final dt = EntityExtractor.extractDate('on 13-02-26', reasons, smsTimestamp: DateTime(2026, 2, 13, 14, 30));
       expect(dt?.day, 13);
       expect(dt?.month, 2);
       expect(dt?.year, 2026);
@@ -828,7 +828,7 @@ void main() {
 
     test('dd/mm/yyyy format', () {
       final reasons = <String>[];
-      final dt = EntityExtractor.extractDate('on 14/02/2026', reasons);
+      final dt = EntityExtractor.extractDate('on 14/02/2026', reasons, smsTimestamp: DateTime(2026, 2, 14, 10, 0));
       expect(dt?.day, 14);
       expect(dt?.month, 2);
       expect(dt?.year, 2026);
@@ -836,7 +836,7 @@ void main() {
 
     test('ddMonyy format (13Feb26)', () {
       final reasons = <String>[];
-      final dt = EntityExtractor.extractDate('on 13Feb26 by transfer', reasons);
+      final dt = EntityExtractor.extractDate('on 13Feb26 by transfer', reasons, smsTimestamp: DateTime(2026, 2, 13, 9, 15));
       expect(dt?.day, 13);
       expect(dt?.month, 2);
       expect(dt?.year, 2026);
@@ -844,7 +844,7 @@ void main() {
 
     test('dd-Mon-yyyy format', () {
       final reasons = <String>[];
-      final dt = EntityExtractor.extractDate('on 13-Feb-2026 for UPI', reasons);
+      final dt = EntityExtractor.extractDate('on 13-Feb-2026 for UPI', reasons, smsTimestamp: DateTime(2026, 2, 13, 21, 45));
       expect(dt?.day, 13);
       expect(dt?.month, 2);
       expect(dt?.year, 2026);

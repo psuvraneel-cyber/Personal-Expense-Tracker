@@ -4,11 +4,16 @@ class CashflowForecast {
   final double safeToSpend;
   final List<CashflowPoint> dailyPoints;
 
+  /// True when less than 7 days of transaction history are available,
+  /// meaning projections may be unreliable.
+  final bool hasInsufficientData;
+
   CashflowForecast({
     required this.startingBalance,
     required this.projectedEndingBalance,
     required this.safeToSpend,
     required this.dailyPoints,
+    this.hasInsufficientData = false,
   });
 }
 
