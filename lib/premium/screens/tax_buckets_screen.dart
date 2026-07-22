@@ -189,8 +189,9 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
               if (txn.taxCategory == null) continue;
               if (txn.type != TransactionType.expense) continue;
               if (txn.date.isBefore(fyStart) ||
-                  !txn.date.isBefore(fyEndExclusive))
+                  !txn.date.isBefore(fyEndExclusive)) {
                 continue;
+              }
               totals[txn.taxCategory!] =
                   (totals[txn.taxCategory!] ?? 0) + txn.amount;
             }
@@ -493,7 +494,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     required NumberFormat formatter,
     required bool isDark,
   }) {
-    final remaining = (limit - claimed).clamp(0, double.infinity);
+
     final isMaxed = progress >= 1.0;
 
     return Container(

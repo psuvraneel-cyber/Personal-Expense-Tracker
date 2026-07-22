@@ -23,19 +23,24 @@ class ExportService {
     List<TransactionRecord> transactions, {
     DateTime? startDate,
     DateTime? endDate,
+    Map<String, String> categoryNames = const {},
   }) async {
     final filtered = _filterByDate(transactions, startDate, endDate);
     final rows = <List<String>>[
-      ['Date', 'Type', 'Amount', 'Category', 'Payment Method', 'Note'],
+      ['Date', 'Type', 'Amount', 'Category', 'Merchant', 'Payment Method', 'Note'],
       ...filtered.map(
-        (t) => [
-          _dateFormat.format(t.date),
-          t.type.toJson(),
-          t.amount.toStringAsFixed(2),
-          t.categoryId,
-          t.paymentMethod.toJson(),
-          t.note,
-        ],
+        (t) {
+          final catName = categoryNames[t.categoryId] ?? 'Uncategorized';
+          return [
+            _dateFormat.format(t.date),
+            t.type.toJson(),
+            t.amount.toStringAsFixed(2),
+            catName,
+            t.merchantName ?? '',
+            t.paymentMethod.toJson(),
+            t.note,
+          ];
+        },
       ),
     ];
 
@@ -68,6 +73,7 @@ class ExportService {
     List<TransactionRecord> transactions, {
     DateTime? startDate,
     DateTime? endDate,
+    Map<String, String> categoryNames = const {},
   }) async {
     final filtered = _filterByDate(transactions, startDate, endDate);
 
@@ -123,17 +129,21 @@ class ExportService {
               color: PdfColor.fromInt(0xFFEDE9FE),
             ),
             cellPadding: const pw.EdgeInsets.all(6),
-            headers: ['Date', 'Type', 'Amount', 'Category', 'Payment', 'Note'],
+            headers: ['Date', 'Type', 'Amount', 'Category', 'Merchant', 'Payment', 'Note'],
             data: filtered
                 .map(
-                  (t) => [
-                    _dateFormat.format(t.date),
-                    t.type,
-                    _amountFormat.format(t.amount),
-                    t.categoryId,
-                    t.paymentMethod,
-                    t.note,
-                  ],
+                  (t) {
+                    final catName = categoryNames[t.categoryId] ?? 'Uncategorized';
+                    return [
+                      _dateFormat.format(t.date),
+                      t.type.toString().split('.').last,
+                      _amountFormat.format(t.amount),
+                      catName,
+                      t.merchantName ?? '',
+                      t.paymentMethod.toString().split('.').last,
+                      t.note,
+                    ];
+                  },
                 )
                 .toList(),
           ),
@@ -191,7 +201,7 @@ class ExportService {
     } else {
       await file.writeAsString(text!);
     }
-    AppLogger.debug('[Export] Wrote ${file.path}');
+    AppLogger.debug('[Export] Wrote temp file for sharing');
     return file;
   }
 

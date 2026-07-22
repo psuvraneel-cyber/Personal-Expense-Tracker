@@ -61,6 +61,8 @@ class FirestoreSyncService {
     return uid;
   }
 
+  String get currentUserId => _uid;
+
   CollectionReference<Map<String, dynamic>> get _txnCollection =>
       _db.collection('users').doc(_uid).collection('transactions');
 
@@ -311,5 +313,40 @@ class FirestoreSyncService {
         })
         .whereType<TransactionRecord>()
         .toList();
+  }
+
+  CollectionReference<Map<String, dynamic>> get _tombstoneCollection =>
+      _db.collection('users').doc(_uid).collection('tombstones');
+
+  Future<void> createTombstone(String transactionId) async {
+    try {
+      await _tombstoneCollection.doc(transactionId).set({
+        'id': transactionId,
+        'deletedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      AppLogger.debug('[Firestore] createTombstone error: ${e.message}');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteTombstone(String transactionId) async {
+    try {
+      await _tombstoneCollection.doc(transactionId).delete();
+    } on FirebaseException catch (e) {
+      AppLogger.debug('[Firestore] deleteTombstone error: ${e.message}');
+      rethrow;
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> tombstonesStream() {
+    if (_auth.currentUserId == null) return Stream.value([]);
+    return _tombstoneCollection
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => doc.data()).toList())
+        .handleError((Object e) {
+          AppLogger.debug('[Firestore] tombstonesStream error: $e');
+          return <Map<String, dynamic>>[];
+        });
   }
 }

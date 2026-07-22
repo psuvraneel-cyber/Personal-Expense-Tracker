@@ -164,4 +164,13 @@ class WeeklyPlannerProvider extends ChangeNotifier {
       jsonEncode(_entries.map((e) => e.toJson()).toList()),
     );
   }
+
+  void clearData() {
+    _entries = [];
+    _weekDays = [];
+    _totalWeekSpent = 0;
+    _totalWeekLimit = 0;
+    _lastTransactionsForPlanner = null;
+    notifyListeners();
+  }
 }

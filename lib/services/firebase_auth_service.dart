@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/firebase_options.dart';
+import 'package:pet/services/secure_storage_service.dart';
 
 // Conditional import: on web this resolves to a stub; on mobile/desktop it
 // resolves to the real dart:io Platform.
@@ -23,7 +24,12 @@ import 'platform_stub.dart'
 class FirebaseAuthService {
   static final FirebaseAuthService _instance = FirebaseAuthService._internal();
 
-  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  FirebaseAuth? _customFirebaseAuth;
+
+  FirebaseAuth get _firebaseAuth => _customFirebaseAuth ?? FirebaseAuth.instance;
+
+  @visibleForTesting
+  set firebaseAuth(FirebaseAuth auth) => _customFirebaseAuth = auth;
 
   /// Lazily created and only used on mobile — never instantiated on web.
   GoogleSignIn? _mobileGoogleSignIn;
@@ -69,9 +75,26 @@ class FirebaseAuthService {
   /// alone may not have enough to reconstruct the credential on cold start.
   Future<bool> tryRestoreSession() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Migrate legacy plaintext keys in SharedPreferences to secure storage if found
+    if (prefs.containsKey('userName')) {
+      final oldName = prefs.getString('userName');
+      if (oldName != null && oldName.isNotEmpty) {
+        await SecureStorageService.instance.write('userName', oldName);
+      }
+      await prefs.remove('userName');
+    }
+    if (prefs.containsKey('userEmail')) {
+      final oldEmail = prefs.getString('userEmail');
+      if (oldEmail != null && oldEmail.isNotEmpty) {
+        await SecureStorageService.instance.write('userEmail', oldEmail);
+      }
+      await prefs.remove('userEmail');
+    }
+
     if (prefs.getBool('isLocalGuest') == true) {
       _isLocalGuest = true;
-      _localGuestName = prefs.getString('userName') ?? 'Guest';
+      _localGuestName = await SecureStorageService.instance.read('userName') ?? 'Guest';
       AppLogger.debug('[AUTH] Local guest session restored: $_localGuestName');
       return true;
     }
@@ -157,8 +180,11 @@ class FirebaseAuthService {
       _localGuestName = username;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isLocalGuest', true);
-      await prefs.setString('userName', username);
-      await prefs.setString('userEmail', 'guest@pet.local');
+      await SecureStorageService.instance.write('userName', username);
+      await SecureStorageService.instance.write('userEmail', 'guest@pet.local');
+      // Clean up legacy plaintext keys in SharedPreferences
+      await prefs.remove('userName');
+      await prefs.remove('userEmail');
       return true;
     }
   }
@@ -199,6 +225,11 @@ class FirebaseAuthService {
     await _firebaseAuth.signOut();
     _isLocalGuest = false;
     _localGuestName = null;
+    
+    // Clear secure storage values
+    await SecureStorageService.instance.delete('userName');
+    await SecureStorageService.instance.delete('userEmail');
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('userName');
     await prefs.remove('userEmail');
@@ -253,9 +284,12 @@ class FirebaseAuthService {
     required String name,
     required String email,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (name.isNotEmpty) await prefs.setString('userName', name);
-    if (email.isNotEmpty) await prefs.setString('userEmail', email);
+    if (name.isNotEmpty) {
+      await SecureStorageService.instance.write('userName', name);
+    }
+    if (email.isNotEmpty) {
+      await SecureStorageService.instance.write('userEmail', email);
+    }
   }
 
   Exception _friendlyAuthError(FirebaseAuthException e) {

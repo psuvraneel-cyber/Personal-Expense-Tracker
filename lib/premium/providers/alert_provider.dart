@@ -135,4 +135,12 @@ class AlertProvider extends ChangeNotifier {
     _alerts[index] = _alerts[index].copyWith(isRead: true);
     notifyListeners();
   }
+
+  void clearData() {
+    _alerts = [];
+    _isLoading = false;
+    _lastTransactionsForAnomalies = null;
+    _lastSpentForBudgets = null;
+    notifyListeners();
+  }
 }

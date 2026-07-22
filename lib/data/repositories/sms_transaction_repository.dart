@@ -1,4 +1,4 @@
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 
@@ -277,7 +277,7 @@ class SmsTransactionRepository {
       WHERE rowid NOT IN (
         SELECT MAX(rowid)
         FROM sms_transactions
-        GROUP BY rawSmsBody
+        GROUP BY smsHash
       )
     ''');
     return result;

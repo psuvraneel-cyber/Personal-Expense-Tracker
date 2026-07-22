@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P.E.T — Play Store Readiness Audit</title>
+  <meta name="description" content="Deep codebase audit and Play Store readiness report for P.E.T — Personal Expense Tracker (Flutter/Android)." />
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React 18 via CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel standalone for in-browser JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Google Fonts — Inter for clean, modern typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+
+    /* Custom scrollbar for the tab strip */
+    .tab-scroll::-webkit-scrollbar { height: 4px; }
+    .tab-scroll::-webkit-scrollbar-track { background: transparent; }
+    .tab-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+
+    /* SVG circle animation */
+    @keyframes circle-draw {
+      from { stroke-dasharray: 0 226.19; }
+    }
+    .score-ring { animation: circle-draw 0.8s ease-out forwards; }
+
+    /* Expand/collapse transition */
+    .finding-details {
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.3s ease;
+    }
+    .finding-details.open {
+      max-height: 600px;
+      opacity: 1;
+    }
+
+    /* Tab underline animation */
+    .tab-active {
+      position: relative;
+    }
+    .tab-active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 2px;
+      background: #818cf8;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    /* ───────── Severity config ───────── */
+    const severity = {
+      fatal:  { label: "FATAL FLAW", bg: "bg-red-950",     border: "border-red-600",     text: "text-red-400",     dot: "bg-red-500",     badge: "bg-red-600 text-red-100" },
+      major:  { label: "MAJOR",      bg: "bg-amber-950",   border: "border-amber-600",   text: "text-amber-400",   dot: "bg-amber-500",   badge: "bg-amber-600 text-amber-100" },
+      minor:  { label: "MINOR",      bg: "bg-sky-950",     border: "border-sky-700",     text: "text-sky-400",     dot: "bg-sky-500",     badge: "bg-sky-600 text-sky-100" },
+      good:   { label: "STRENGTH",   bg: "bg-emerald-950", border: "border-emerald-700", text: "text-emerald-400", dot: "bg-emerald-500", badge: "bg-emerald-700 text-emerald-100" },
+    };
+
+    /* ───────── Section component ───────── */
+    const Section = ({ title, icon, children }) => (
+      <div className="mb-10">
+        <div className="flex items-center gap-3 mb-5">
+          <span className="text-2xl">{icon}</span>
+          <h2 className="text-xl font-bold text-white tracking-tight">{title}</h2>
+        </div>
+        <div className="space-y-3">{children}</div>
+      </div>
+    );
+
+    /* ───────── Finding component ───────── */
+    const Finding = ({ sev, title, detail, fix }) => {
+      const [open, setOpen] = useState(false);
+      const s = severity[sev];
+      return (
+        <div className={`rounded-lg border ${s.border} ${s.bg} overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-black/20`}>
+          <button
+            onClick={() => setOpen(!open)}
+            className="w-full flex items-start gap-3 p-4 text-left hover:brightness-110 transition-all cursor-pointer"
+            aria-expanded={open}
+          >
+            <span className={`mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${s.dot}`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <span className={`text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${s.badge}`}>
+                  {s.label}
+                </span>
+                <span className="text-sm font-semibold text-white">{title}</span>
+              </div>
+              <p className={`text-sm ${s.text} leading-snug`}>{detail}</p>
+            </div>
+            <span className={`text-slate-500 text-lg flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▼</span>
+          </button>
+          {fix && (
+            <div className={`finding-details ${open ? "open" : ""}`} style={open ? { padding: "0 1rem 1rem 1rem" } : { padding: "0 1rem" }}>
+              <div className="border-t border-white/10 pt-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">How to Fix</p>
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{fix}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ───────── Score ring ───────── */
+    const ScoreMeter = ({ score, label }) => {
+      const pct = Math.round((score / 10) * 100);
+      const color = score >= 7 ? "#22c55e" : score >= 5 ? "#f59e0b" : "#ef4444";
+      const circumference = 2 * Math.PI * 36;
+      const dash = (pct / 100) * circumference;
+      return (
+        <div className="flex flex-col items-center gap-1.5">
+          <svg width="96" height="96" viewBox="0 0 96 96" aria-label={`${label}: ${score} out of 10`}>
+            <circle cx="48" cy="48" r="36" fill="none" stroke="#1e293b" strokeWidth="8" />
+            <circle
+              className="score-ring"
+              cx="48" cy="48" r="36" fill="none"
+              stroke={color} strokeWidth="8"
+              strokeDasharray={`${dash} ${circumference}`}
+              strokeDashoffset={circumference * 0.25}
+              strokeLinecap="round"
+              style={{ transition: "stroke-dasharray 0.6s ease" }}
+            />
+            <text x="48" y="48" textAnchor="middle" dominantBaseline="central" fill={color} fontSize="22" fontWeight="bold">{score}</text>
+            <text x="48" y="68" textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="500">/10</text>
+          </svg>
+          <span className="text-xs text-slate-400 font-medium text-center leading-tight max-w-[90px]">{label}</span>
+        </div>
+      );
+    };
+
+    /* ───────── Main App ───────── */
+    function PETReview() {
+      const [activeTab, setActiveTab] = useState("overview");
+      const tabRef = useRef(null);
+
+      const tabs = [
+        { id: "overview",  label: "📊 Overview" },
+        { id: "fatal",     label: "🔴 Fatal" },
+        { id: "security",  label: "🔐 Security" },
+        { id: "policy",    label: "📋 Policy" },
+        { id: "features",  label: "🧩 Features" },
+        { id: "code",      label: "🛠 Code" },
+        { id: "ux",        label: "🎨 UX" },
+        { id: "verdict",   label: "✅ Verdict" },
+      ];
+
+      /* Scroll active tab into view on mobile */
+      useEffect(() => {
+        if (tabRef.current) {
+          const active = tabRef.current.querySelector('[data-active="true"]');
+          if (active) active.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        }
+      }, [activeTab]);
+
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-200">
+
+          {/* ─── Header ─── */}
+          <header className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border-b border-slate-800 px-6 py-8">
+            <div className="max-w-3xl mx-auto">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-3xl" role="img" aria-label="paw">🐾</span>
+                <span className="text-xs font-bold tracking-[0.25em] uppercase text-indigo-400">Play Store Readiness Report</span>
+              </div>
+              <h1 className="text-3xl font-extrabold text-white mb-1 tracking-tight">P.E.T — Personal Expense Tracker</h1>
+              <p className="text-slate-400 text-sm">Deep codebase audit · Flutter/Android · 449 source files analysed</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
+                <ScoreMeter score={5} label="Play Store Ready" />
+                <ScoreMeter score={7} label="Code Quality" />
+                <ScoreMeter score={4} label="Policy Compliance" />
+                <ScoreMeter score={8} label="Feature Depth" />
+              </div>
+
+              <div className="mt-6 p-4 rounded-xl bg-red-950/60 border border-red-800">
+                <p className="text-sm text-red-300 font-semibold leading-relaxed">
+                  ⛔ Verdict: <span className="font-bold text-red-200">Do NOT publish yet.</span>{" "}
+                  There are 4 fatal flaws and 9 major issues that will either get your app <strong>rejected by Google</strong>, <strong>expose your users' data</strong>, or generate <strong>immediate 1-star reviews</strong>.
+                </p>
+              </div>
+            </div>
+          </header>
+
+          {/* ─── Tabs ─── */}
+          <nav className="sticky top-0 z-10 bg-slate-950/95 border-b border-slate-800 backdrop-blur-md" aria-label="Report sections">
+            <div className="max-w-3xl mx-auto px-4 overflow-x-auto tab-scroll" ref={tabRef}>
+              <div className="flex gap-1 py-2 min-w-max">
+                {tabs.map(t => (
+                  <button
+                    key={t.id}
+                    data-active={activeTab === t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                      activeTab === t.id
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/40"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                    aria-current={activeTab === t.id ? "page" : undefined}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </nav>
+
+          {/* ─── Content ─── */}
+          <main className="max-w-3xl mx-auto px-4 py-8">
+
+            {/* ══ OVERVIEW ══ */}
+            {activeTab === "overview" && (
+              <div>
+                <div className="mb-8 p-5 rounded-xl bg-slate-900 border border-slate-700">
+                  <h2 className="text-base font-bold text-white mb-3">What P.E.T is (from the code)</h2>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    A Flutter app targeting <strong>Indian Android users</strong> that auto-detects UPI/bank transactions via SMS parsing,
+                    syncs to Firebase Firestore, gates advanced features behind a RevenueCat paywall (Premium tier),
+                    and offers an AI Copilot via a Cloudflare Worker proxying the Groq LLaMA 3.3 70B model.
+                    The architecture is <strong>technically ambitious and well-thought-out</strong> — offline-first SQLite,
+                    isolate-based SMS parsing, SHA-256 deduplication, biometric lock, PDF/CSV export, anomaly detection, cashflow forecasting.
+                    But several layers are either <strong>unfinished, misrepresented, or carry Play Store risk</strong>.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                  <div className="p-4 rounded-xl bg-emerald-950 border border-emerald-800">
+                    <p className="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-2">✅ Strong Points</p>
+                    <ul className="space-y-1.5 text-sm text-emerald-200">
+                      <li>• Clean analyse: "No issues found" (latest run)</li>
+                      <li>• Excellent architecture — offline-first, isolates, dedup</li>
+                      <li>• Cloudflare Worker protects Groq API key properly</li>
+                      <li>• Biometric lock, ProGuard, minify enabled</li>
+                      <li>• Fonts bundled (no runtime fetch)</li>
+                      <li>• Smart SMS parser with confidence scoring</li>
+                      <li>• RevenueCat + offline entitlement cache</li>
+                      <li>• Notification + integrity check on startup</li>
+                      <li>• <code className="text-emerald-300 bg-emerald-900/40 px-1 rounded text-xs">use_build_context_synchronously</code> caught in analysis</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 rounded-xl bg-red-950 border border-red-800">
+                    <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-2">❌ Critical Gaps</p>
+                    <ul className="space-y-1.5 text-sm text-red-200">
+                      <li>• Firebase key committed to public repo</li>
+                      <li>• Linked Accounts serves FAKE mock data to paying users</li>
+                      <li>• Receipt Scanner is a TODO stub (broken feature)</li>
+                      <li>• Privacy Policy missing RevenueCat, Cloudflare, NotifListener</li>
+                      <li>• SMS + NotifListener need Play Store declaration form</li>
+                      <li>• <code className="text-red-300 bg-red-900/40 px-1 rounded text-xs">allowBackup</code> not disabled (financial data risk)</li>
+                      <li>• CSV export shows internal UUIDs, not category names</li>
+                      <li>• Stale Supabase env vars confuse the build</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-700">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Summary by Tab</p>
+                  <div className="space-y-2 text-sm">
+                    {[
+                      ["🔴 Fatal Flaws",          "4 issues — any one can cause rejection or bans",                   "text-red-400"],
+                      ["🔐 Security",             "3 issues — exposed key, backup, no server-side rate limit",        "text-amber-400"],
+                      ["📋 Policy Compliance",     "4 issues — SMS form, Data Safety, Privacy Policy, NotifListener", "text-red-400"],
+                      ["🧩 Feature Completeness",  "3 issues — mock data, stub scanner, broken export field",         "text-amber-400"],
+                      ["🛠 Code Quality",          "3 issues — stale refs, sync warning, hardcoded URL",              "text-amber-400"],
+                      ["🎨 UX / Polish",           "3 issues — no localization, JPEG icon, empty premium screens",    "text-sky-400"],
+                    ].map(([label, desc, color]) => (
+                      <div key={label} className="flex items-start gap-3">
+                        <span className={`text-xs font-bold min-w-[160px] ${color}`}>{label}</span>
+                        <span className="text-slate-400 text-xs">{desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ FATAL FLAWS ══ */}
+            {activeTab === "fatal" && (
+              <Section title="Fatal Flaws" icon="🔴">
+                <Finding
+                  sev="fatal"
+                  title="Linked Accounts shows FAKE mock data to paying premium users"
+                  detail="MockBankIntegrationProvider is the live implementation. Paying users see 'HDFC Savings' and 'Paytm Wallet' as if they're real linked accounts — they are hardcoded fake entries. This constitutes misrepresentation of a paid feature, violating Play Store policy and consumer protection law."
+                  fix={`1. Gate the Linked Accounts screen with a clear "Coming Soon" banner instead of the PremiumGate widget.\n2. OR replace MockBankIntegrationProvider with a real aggregator (Setu, FinBox, Perfios) before shipping.\n3. Do NOT charge users for a feature backed by mock data.\n4. Update the Premium Hub listing to remove Linked Accounts from the feature list until it's real.`}
+                />
+                <Finding
+                  sev="fatal"
+                  title="SMS + NotificationListenerService require Play Store declaration forms"
+                  detail="READ_SMS, RECEIVE_SMS, and the NotificationListenerService are classified as sensitive permissions by Google. Apps using them must submit a Permissions Declaration Form explaining the use case. Without approval, your app will be rejected or removed. Notification listeners (reading all app notifications) are especially scrutinised."
+                  fix={`1. Go to Play Console → Policy → App Content → Sensitive Permissions.\n2. Fill the SMS & Call Log Permission Declaration: state that SMS is used exclusively to auto-detect Indian bank/UPI transaction alerts — this is a legitimate use case Google does approve.\n3. For NotificationListenerService: declare that it reads only financial app notifications (GPay, PhonePe, Paytm) to capture UPI transactions not delivered via SMS.\n4. Provide a demo video showing the exact user flow if Google requests one.`}
+                />
+                <Finding
+                  sev="fatal"
+                  title="Privacy Policy is critically incomplete for Play Store compliance"
+                  detail="The current Privacy Policy does not mention RevenueCat (handles payment/subscription data), Cloudflare Workers (proxies user financial summaries to Groq), or the NotificationListenerService (reads ALL device notifications). All third-party data processors must be listed. Play Store's Data Safety section must also match the policy exactly — a mismatch is grounds for removal."
+                  fix={`Add these sections to PRIVACY_POLICY.md:\n• RevenueCat: "We use RevenueCat to process in-app purchases. RevenueCat may collect purchase history and device identifiers." Link: https://www.revenuecat.com/privacy\n• Cloudflare / Groq: "When you use AI Copilot, anonymised financial summaries (no raw SMS, no personal identifiers) are sent through a Cloudflare Worker to Groq's API for generating insights."\n• Notification Access: "The app may read notification content from financial apps (Google Pay, PhonePe, Paytm) solely to detect UPI transactions. No other notification content is read or stored."\n• Also fill in the Play Store Data Safety form accurately for all data types collected.`}
+                />
+                <Finding
+                  sev="fatal"
+                  title="Receipt Scanner is a dead stub — broken UX shipped as a feature"
+                  detail="receipt_scanner_service.dart always returns null with a TODO comment. If the dashboard or add-transaction screen exposes a 'Scan Receipt' button, users will tap it and get nothing — no error, no message, nothing. This will generate 1-star reviews and support tickets."
+                  fix={`Option A (recommended): Remove the scan receipt UI entry point entirely until ML Kit is integrated. Add a TODO to pubspec and roadmap.\nOption B: Show a "Receipt Scanning — Coming Soon!" dialog when tapped so users know it's planned.\nOption C: Integrate google_mlkit_text_recognition + image_picker now — the parser logic in receipt_scanner_service.dart is already written and solid.`}
+                />
+              </Section>
+            )}
+
+            {/* ══ SECURITY ══ */}
+            {activeTab === "security" && (
+              <Section title="Security" icon="🔐">
+                <Finding
+                  sev="major"
+                  title="Firebase API key and google-services.json committed to repository"
+                  detail="firebase_options.dart contains your live Firebase API key (AIzaSyD0nFjgC…) and google-services.json exposes your project number, app ID, and OAuth client IDs. If your repo is public, anyone can find these. For the APK itself this is expected — but having them in a public git history is a credential leak."
+                  fix={`The key in the APK is fine and expected (Firebase security is enforced via Security Rules + SHA-1 fingerprint, not key secrecy). But for the repo:\n1. Add google-services.json to .gitignore (it's not currently listed there).\n2. Add firebase_options.dart to .gitignore and use a CI/CD secret to inject it at build time.\n3. Go to Firebase Console → Project Settings → Restrict your API key to your app's SHA-1 fingerprint and only the APIs you use (Identity Toolkit, Firestore).\n4. Verify Firestore Security Rules are correctly scoped to authenticated users only.`}
+                />
+                <Finding
+                  sev="major"
+                  title="allowBackup not disabled — financial data can be backed up by other apps"
+                  detail="AndroidManifest.xml does not set android:allowBackup='false'. On unrooted Android devices, this means financial transaction data in SQLite can be included in ADB backups and potentially accessed by other apps with BACKUP permission. For a financial app this is a meaningful attack surface."
+                  fix={`In android/app/src/main/AndroidManifest.xml, change the <application> tag:\n<application\n    android:allowBackup="false"\n    android:label="P.E.T"\n    ...>\nThis prevents ADB backup of app data. Firebase handles cloud backup via Firestore, so no user data is lost.`}
+                />
+                <Finding
+                  sev="major"
+                  title="No server-side rate limiting in Cloudflare Worker"
+                  detail="The Cloudflare Worker validates Firebase JWTs correctly, but has no per-user rate limiting. A malicious actor with a valid Firebase token can flood the Groq endpoint. The client-side AiRateLimiter is in Dart and can be trivially bypassed by calling the Worker URL directly."
+                  fix={`In cloudflare_worker/src/index.js, add rate limiting using Cloudflare's built-in KV or Durable Objects:\n• After validating the token, extract the UID from the decoded JWT.\n• Check a KV key "rate:{uid}:{minute}" — increment and reject if over limit (e.g. 10/min, 50/hr).\n• Cloudflare's free tier includes KV, so this costs nothing.\nAlternatively, use Cloudflare's built-in Rate Limiting rule in the dashboard (100 req/10min per IP).`}
+                />
+                <Finding
+                  sev="minor"
+                  title="SQLCipher in ProGuard rules but database is unencrypted SQLite"
+                  detail="proguard-rules.pro keeps net.sqlcipher.** classes, but sqflite (plain SQLite) is used — not SQLCipher. This suggests encryption was planned but not implemented. Financial data at rest is unencrypted on-device (though protected by Android's sandbox)."
+                  fix={`Option A: Remove the SQLCipher ProGuard rules to avoid confusion.\nOption B: Integrate sqflite_sqlcipher to encrypt the database at rest — meaningful extra protection if a device is rooted.\nFor most consumer apps, Android's app sandbox is sufficient, but an encrypted DB is a strong differentiator for a financial app.`}
+                />
+                <Finding
+                  sev="good"
+                  title="Groq API key is properly protected via Cloudflare Worker"
+                  detail="The AI key is stored as a Cloudflare Worker secret (env.GROQ_API_KEY) and never shipped in the APK. Firebase JWT verification gates access. This is the correct architecture."
+                  fix={null}
+                />
+                <Finding
+                  sev="good"
+                  title="RevenueCat key loaded via dart-define, not hardcoded"
+                  detail="AppEnv.revenueCatGoogleApiKey uses String.fromEnvironment — correct approach. No IAP keys are visible in the APK if built with --dart-define-from-file=.env."
+                  fix={null}
+                />
+              </Section>
+            )}
+
+            {/* ══ POLICY ══ */}
+            {activeTab === "policy" && (
+              <Section title="Play Store Policy Compliance" icon="📋">
+                <Finding
+                  sev="fatal"
+                  title="Sensitive permissions need a Google Permissions Declaration"
+                  detail="READ_SMS, RECEIVE_SMS, and NotificationListenerService are on Google's restricted permissions list. You must submit a Permissions Declaration Form via Play Console before submission, or the app will be rejected during review. Google can take 2-7 days to review declarations."
+                  fix={`Play Console → App Content → Sensitive App Permissions → Manage.\nFor SMS: Describe that the sole purpose is auto-detecting Indian bank/UPI transaction notifications to log expenses. Attach a demo video showing the SMS permission prompt and a transaction being auto-imported.\nFor Notification Listener: Declare it reads only UPI payment notifications from financial apps (not personal messages).\nNote: This is a documented, approved use case. Many Indian finance apps have gotten approval.`}
+                />
+                <Finding
+                  sev="fatal"
+                  title="Data Safety form must match actual data collection"
+                  detail="The Play Store Data Safety section must accurately reflect every type of data your app collects. P.E.T collects: email (Firebase Auth), financial transactions, device ID (RevenueCat), notification content, purchase history. A mismatch between declared and actual practices can result in app removal."
+                  fix={`In Play Console → App Content → Data Safety, declare:\n• Financial info: Financial transactions collected, encrypted in transit, user can delete.\n• Personal info: Email address (optional, Google Sign-In only).\n• App info and performance: Crash logs (Firebase Crashlytics if added).\n• Device or other IDs: Device ID (RevenueCat requires this for purchase tracking).\n• DO NOT check "SMS content" as stored/shared — your policy correctly says SMS is processed on-device and not transmitted.`}
+                />
+                <Finding
+                  sev="major"
+                  title="Incomplete Privacy Policy for App Store listing"
+                  detail="The Privacy Policy (PRIVACY_POLICY.md) doesn't mention RevenueCat, Cloudflare Workers, or notification access. Play Store requires the policy to be hosted at a public URL and to disclose all data processors. The policy also lists 'Groq API' in the third-party table but Groq is now accessed via Cloudflare — the flow description is inaccurate."
+                  fix={`1. Host the policy at a public URL (GitHub Pages, Notion, or your domain).\n2. Add RevenueCat, Cloudflare, and Notification Listener sections (specific fix text in the Fatal tab).\n3. Update the Groq entry: "Groq API (via Cloudflare Worker) — AI financial insights. Data is anonymised before being sent."\n4. Add a table row for RevenueCat: "In-app purchases & subscription management."\n5. Update the "last updated" date.`}
+                />
+                <Finding
+                  sev="major"
+                  title="Account deletion must be accessible in-app for Play Store compliance"
+                  detail="Since August 2023, Google requires apps with account creation to offer in-app account deletion. P.E.T has account_deletion_sheet.dart — good. But verify it: (a) is reachable without signing in again, (b) actually deletes ALL user data (Firestore + local DB), and (c) shows a clear confirmation dialog."
+                  fix={`Verify the deletion flow:\n1. Navigate: Settings → Delete Account — confirm it's accessible.\n2. account_deletion_service.dart should delete: Firestore user doc + all subcollections, local SQLite data, SharedPreferences, and sign out of Firebase + RevenueCat.\n3. Add a test path: sign in as guest → delete account → confirm no orphaned data.\nAlso consider adding the account deletion link to your Play Store listing and Privacy Policy.`}
+                />
+              </Section>
+            )}
+
+            {/* ══ FEATURES ══ */}
+            {activeTab === "features" && (
+              <Section title="Feature Completeness" icon="🧩">
+                <Finding
+                  sev="fatal"
+                  title="Linked Accounts and Family View are non-functional premium features"
+                  detail="linked_accounts_screen.dart uses MockBankIntegrationProvider with hardcoded fake account data. family_screen.dart is a skeleton that shows member cards but has no real data sync. These are gated behind the premium paywall — users are paying for features that don't work."
+                  fix={`Short-term (before launch):\n• Remove Linked Accounts from the Premium Hub feature list and purchase screen bullet points.\n• Change the Family View to show a "Coming Soon — currently in development" placeholder instead of the PremiumGate.\n• Update your store listing description to NOT mention these features.\n\nLong-term:\n• Linked Accounts: Integrate a real Indian account aggregator (Setu AA, FinBox, or Perfios via Account Aggregator framework).\n• Family View: Implement Firestore-based shared budget collections with member invite links.`}
+                />
+                <Finding
+                  sev="fatal"
+                  title="CSV export writes categoryId (UUID), not category name"
+                  detail="In export_service.dart: the CSV row includes t.categoryId — which is an internal UUID like 'a1b2c3d4'. Users opening their exported CSV in Excel will see a column full of meaningless IDs instead of 'Food & Dining', 'Transport', etc. This makes the export functionally useless."
+                  fix={`The export method needs a category lookup map. Change the signature to:\nFuture<void> exportToCsv(\n  List<TransactionRecord> transactions,\n  Map<String, String> categoryNames,  // id → display name\n  ...\n)\nThen replace t.categoryId with: categoryNames[t.categoryId] ?? t.categoryId\nPass the category map from TransactionProvider or CategoryProvider at the call site.`}
+                />
+                <Finding
+                  sev="major"
+                  title="Receipt Scanner UI (if exposed) leads to a silent no-op"
+                  detail="ReceiptScannerService.scanReceipt() always returns null. If the add_edit_transaction_screen.dart or dashboard exposes a camera/scan button, tapping it silently does nothing. No error. No feedback. Just... nothing."
+                  fix={`Search for 'receiptScanner' or 'scanReceipt' call sites in the UI.\nIf found: show a SnackBar or dialog: 'Receipt scanning coming soon — we're working on it!'\nIf not exposed: you're safe for now. Just make sure you don't accidentally ship a visible scan button.`}
+                />
+                <Finding
+                  sev="minor"
+                  title="Tax Buckets feature is minimal — only static category labels"
+                  detail="TaxCategoryService.defaults is just a hardcoded list of 5 tax categories (80C, 80D, HRA, etc.) with no amounts, no calculation, no actual tax logic. If the premium screen makes it look like the app calculates tax liability, users will be disappointed."
+                  fix={`Either:\nA) Clearly label it as 'Tax Tagging' — a tool to tag transactions for tax-time categorisation, NOT a tax calculator. Update the Premium Hub feature description accordingly.\nB) Add an 80C/80D limit tracker that sums tagged transactions and shows progress toward deduction limits (₹1.5L for 80C, ₹25,000 for 80D, etc.). This would make it genuinely useful.`}
+                />
+                <Finding
+                  sev="good"
+                  title="SMS parser is sophisticated and production-ready"
+                  detail="Multi-layer pipeline: intent detection, amount extraction, entity extraction, confidence scoring, self-consistency check, SHA-256 dedup, isolate-based processing. Test files with 44K+ chars of test cases. This is genuinely impressive for a personal project."
+                  fix={null}
+                />
+                <Finding
+                  sev="good"
+                  title="AI Copilot architecture is secure and thoughtful"
+                  detail="JWT-verified Cloudflare Worker, on-device rate limiting, history trimming to control token usage, financial context injected into system prompt. The max 10 recent transactions (down from 30) shows cost-awareness."
+                  fix={null}
+                />
+              </Section>
+            )}
+
+            {/* ══ CODE ══ */}
+            {activeTab === "code" && (
+              <Section title="Code Quality & Architecture" icon="🛠">
+                <Finding
+                  sev="major"
+                  title="Stale Supabase references scattered across the codebase"
+                  detail="AndroidManifest.xml comment says 'required for Supabase auth & API calls' but the app uses Firebase. app_env.dart defines supabaseUrl and supabaseAnonKey which are never used anywhere. README setup instructions tell developers to add SUPABASE_URL to .env. These dead references will confuse any future contributor and cause confusion during Play Store review if Google inspects the app."
+                  fix={`1. AndroidManifest.xml: Change the comment to 'required for Firebase and Groq API calls'.\n2. app_env.dart: Delete the supabaseUrl and supabaseAnonKey constants.\n3. README.md: Remove SUPABASE_URL and SUPABASE_ANON_KEY from the .env setup section. Replace with REVENUECAT_GOOGLE_API_KEY.\n4. Search the entire codebase for 'supabase' (case-insensitive) and clean up any remaining references.`}
+                />
+                <Finding
+                  sev="major"
+                  title="use_build_context_synchronously warning in account_deletion_sheet.dart:128"
+                  detail="Using BuildContext across async gaps (await calls) can cause 'widget not mounted' crashes, especially on slower devices where the user navigates away mid-deletion. This is particularly dangerous in a destructive operation like account deletion."
+                  fix={`In account_deletion_sheet.dart around line 128:\nBefore using context after any await, add a mounted check:\n  await _deleteAccount();\n  if (!mounted) return;\n  Navigator.of(context).pop();\n\nOr use a local variable: final navigator = Navigator.of(context); before the await, then navigator.pop() after.`}
+                />
+                <Finding
+                  sev="major"
+                  title="Groq Worker URL is hardcoded in ai_copilot_service.dart"
+                  detail="static const _baseUrl = 'https://pet-ai-copilot.pet-app.workers.dev' is hardcoded. If you ever change the Worker URL, rename the project, or migrate to a custom domain, you must recompile and republish the app. Users on older versions will have broken AI features with no fallback message."
+                  fix={`1. Move the URL to AppEnv:\n   static const aiCopilotUrl = String.fromEnvironment('AI_COPILOT_URL', defaultValue: 'https://pet-ai-copilot.pet-app.workers.dev');\n2. Reference it as AppEnv.aiCopilotUrl in ai_copilot_service.dart.\n3. Add it to your .env file and CI build command.\nThis allows URL changes without a code change.`}
+                />
+                <Finding
+                  sev="minor"
+                  title="desktop.ini and analyze_output*.txt files committed to repo"
+                  detail="desktop.ini is a Windows folder metadata file with no value in a Flutter project. analyze_output*.txt files (analyze.txt, analyze2.txt, analyze_output.txt, etc.) are developer scratch files. They bloat the repomix output and could expose intermediate compiler errors to anyone reading the source."
+                  fix={`Add to root .gitignore:\ndesktop.ini\nanalyze*.txt\nanalyze*.json\n*.txt (only if you don't have other important .txt files)\nThen: git rm --cached desktop.ini analyze*.txt\nThese are already excluded from the APK but should be out of version control.`}
+                />
+                <Finding
+                  sev="minor"
+                  title="telephony package (^0.2.0) is outdated and potentially problematic"
+                  detail="The telephony package hasn't been updated since 2022 and has known issues with Android 13+ and some OEM ROM changes. The app already uses a NativeSmsReader native plugin for more reliable reading — the telephony package may be redundant."
+                  fix={`1. Check if telephony is still needed alongside NativeSmsReader and SmsReaderPlugin (Kotlin native code).\n2. If NativeSmsReader handles all real-device SMS reading, remove the telephony package from pubspec.yaml.\n3. If telephony is still needed for the background handler, consider pinning to a specific version or forking the plugin.`}
+                />
+                <Finding
+                  sev="good"
+                  title="Final dart analyze is clean — 'No issues found'"
+                  detail="analyze_final.txt confirms a clean static analysis pass. Earlier analyze.txt files with AppLogger errors were from intermediate states before imports were added. The codebase is compile-clean."
+                  fix={null}
+                />
+                <Finding
+                  sev="good"
+                  title="ProGuard + minification properly configured for release"
+                  detail="build.gradle.kts sets isMinifyEnabled=true, isShrinkResources=true with proguard-android-optimize.txt. Release signing via key.properties is implemented. This is production-ready build configuration."
+                  fix={null}
+                />
+              </Section>
+            )}
+
+            {/* ══ UX ══ */}
+            {activeTab === "ux" && (
+              <Section title="UX & Polish" icon="🎨">
+                <Finding
+                  sev="major"
+                  title="App icon is a JPEG — Play Store prefers PNG with transparency"
+                  detail="assets/app_icon.jpeg is used as the launcher icon. flutter_launcher_icons will convert it, but JPEG has no transparency support — meaning your adaptive icon foreground layer can't have a transparent background, which looks bad on Android's adaptive icon shapes (circle, squircle, etc.). The icon will appear as a square JPEG thumbnail."
+                  fix={`1. Create a PNG version of your icon at 1024×1024 with a transparent background (foreground element only, no background).\n2. Update pubspec.yaml: image_path: "assets/app_icon.png"\n3. Set adaptive_icon_foreground to the transparent PNG and adaptive_icon_background to your brand color (#1A1A2E is already set — that's fine).\n4. Run: flutter pub run flutter_launcher_icons`}
+                />
+                <Finding
+                  sev="major"
+                  title="No localization — significant missed opportunity for Indian market"
+                  detail="The app targets Indian users (UPI, INR ₹, Indian bank SMS formats) but is English-only. Hindi alone covers 500M+ users. With no l10n infrastructure (no intl ARB files, no Localizations delegate), adding languages later will require significant refactoring."
+                  fix={`Short-term: Add the flutter_localizations dependency and scaffold the AppLocalizations structure now (even with only English strings). This makes future translation trivial.\nMedium-term: Add Hindi (hi) as a second language. Key UI strings (Add Expense, Budget, Categories) are a small set — a native Hindi speaker can translate in an afternoon.\nLong-term: Bengali, Tamil, Telugu cover most of the remaining market.`}
+                />
+                <Finding
+                  sev="major"
+                  title="Family View and Linked Accounts are skeleton screens with no user value"
+                  detail="family_screen.dart (2622 chars including boilerplate) shows member cards with no real data. linked_accounts_screen.dart (1711 chars) shows a loading spinner that resolves to mock HDFC/Paytm entries. Premium users who tap these features will feel cheated."
+                  fix={`Until these are real: replace the PremiumGate children with a premium-styled 'Coming Soon' card that explains what the feature WILL do, with an optional email field for a waitlist. This turns a disappointment into engagement.`}
+                />
+                <Finding
+                  sev="minor"
+                  title="Onboarding flow is 3 steps but skips SMS permission request"
+                  detail="onboarding_screen.dart Step 1 tells users about SMS auto-detection with a badge 'Grant SMS Permission' — but tapping 'Next' doesn't actually trigger the permission request. The permission is only requested later in sms_permission_screen.dart. Users who skip the dedicated SMS screen never get the app's core value proposition."
+                  fix={`On Step 1 of onboarding, call SmsService().requestPermissions() when the user taps 'Next' (not 'Skip'). If denied, show a brief explanation and let them continue. This ensures at least one clean permission request during the most contextual moment.`}
+                />
+                <Finding
+                  sev="minor"
+                  title="WorkManager background SMS sync unreliable on aggressive OEM ROMs"
+                  detail="WorkManager is used for background SMS reconciliation. Huawei, Xiaomi, Oppo, Vivo (popular in India) aggressively kill background services. Users on these devices will miss transactions if the app is killed."
+                  fix={`1. Add a reconciliation sweep on every app foreground (app resume) in addition to WorkManager. This is already partially done via ReconciliationService's 7-day watermark — ensure it runs on every cold start.\n2. Consider documenting this in the onboarding: 'For best results on Xiaomi/MIUI, add P.E.T to battery saver whitelist.' Many Indian finance apps include this guidance.\n3. Show a 'Last synced X minutes ago' indicator on the SMS transactions screen so users know if background sync has been working.`}
+                />
+                <Finding
+                  sev="good"
+                  title="Biometric lock implementation is solid and Play Store compliant"
+                  detail="BiometricService correctly sets biometricOnly: false (allowing PIN fallback per Play Store guidelines), has configurable timeout, and marks activity on user interaction. The lock screen is a real screen, not a dialog overlay that can be bypassed."
+                  fix={null}
+                />
+              </Section>
+            )}
+
+            {/* ══ VERDICT ══ */}
+            {activeTab === "verdict" && (
+              <div>
+                <div className="p-5 rounded-xl bg-red-950 border border-red-700 mb-6">
+                  <p className="text-lg font-bold text-red-200 mb-2">⛔ Don't publish as-is.</p>
+                  <p className="text-sm text-red-300 leading-relaxed">
+                    P.E.T has genuinely impressive technical depth — but 4 fatal issues will get it either <strong>rejected by Google</strong>, <strong>removed after publication</strong>, or trigger <strong>immediate refund requests</strong> from premium users. The good news: most fixes are 1-3 hours of work each.
+                  </p>
+                </div>
+
+                <div className="mb-6">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Recommended Fix Priority</p>
+                  <div className="space-y-3">
+                    {[
+                      { phase: "Week 1 — Blockers", color: "bg-red-600", items: [
+                        "Fix CSV export — replace categoryId with category name",
+                        "Disable allowBackup in AndroidManifest",
+                        "Fix the use_build_context_synchronously crash risk",
+                        "Remove or gate Receipt Scanner UI if any button exists",
+                      ]},
+                      { phase: "Week 2 — Policy", color: "bg-amber-600", items: [
+                        "Update Privacy Policy — add RevenueCat, Cloudflare, Notification Listener",
+                        "Host Privacy Policy at a public URL",
+                        "Submit Permissions Declaration Form in Play Console",
+                        "Fill Data Safety form accurately",
+                        "Remove mock data from Linked Accounts; replace with Coming Soon",
+                      ]},
+                      { phase: "Week 3 — Hardening", color: "bg-sky-600", items: [
+                        "Clean up Supabase stale references everywhere",
+                        "Move AI Copilot URL to AppEnv / dart-define",
+                        "Convert app icon from JPEG to PNG with transparent background",
+                        "Add server-side rate limiting to Cloudflare Worker",
+                        "Add google-services.json to .gitignore",
+                      ]},
+                      { phase: "Post-Launch (v1.1)", color: "bg-emerald-700", items: [
+                        "Hindi localization",
+                        "Receipt Scanner — integrate ML Kit (code already scaffolded)",
+                        "Real bank integration (Account Aggregator framework)",
+                        "SQLCipher database encryption",
+                        "OEM battery saver guidance in onboarding",
+                      ]},
+                    ].map(({ phase, color, items }) => (
+                      <div key={phase} className="rounded-xl bg-slate-900 border border-slate-700 overflow-hidden">
+                        <div className={`px-4 py-2 ${color}`}>
+                          <p className="text-sm font-bold text-white">{phase}</p>
+                        </div>
+                        <ul className="p-4 space-y-2">
+                          {items.map(item => (
+                            <li key={item} className="flex items-start gap-2 text-sm text-slate-300">
+                              <span className="text-slate-500 mt-0.5 flex-shrink-0">→</span>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-5 rounded-xl bg-emerald-950 border border-emerald-700">
+                  <p className="text-sm font-bold text-emerald-300 mb-2">🏁 Once Weeks 1 & 2 are done:</p>
+                  <p className="text-sm text-emerald-200 leading-relaxed">
+                    You'll have a legitimate, Play Store-compliant personal finance app with genuinely sophisticated tech under the hood. The SMS parser, offline-first architecture, AI Copilot proxy, and biometric lock put this ahead of most indie finance apps in the Indian market. After the policy and data fixes, P.E.T is worth publishing — and worth charging for.
+                  </p>
+                </div>
+              </div>
+            )}
+
+          </main>
+
+          {/* ─── Footer ─── */}
+          <footer className="border-t border-slate-800 px-6 py-4 text-center">
+            <p className="text-xs text-slate-600">P.E.T Play Store Audit · 449 files · Flutter/Android · July 2026</p>
+          </footer>
+        </div>
+      );
+    }
+
+    /* ─── Mount ─── */
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<PETReview />);
+  </script>
+</body>
+</html>

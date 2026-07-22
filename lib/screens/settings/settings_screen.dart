@@ -485,6 +485,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (_) => const AccountDeletionSheet(),
     );
@@ -1028,6 +1030,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
+    // Require biometric authentication before export if App Lock is enabled
+    if (BiometricService.instance.isEnabled) {
+      final authenticated = await BiometricService.instance.authenticate(
+        reason: 'Verify identity to export transactions',
+      );
+      if (!authenticated) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Authentication failed. Export cancelled.')),
+          );
+        }
+        return;
+      }
+    }
+
+    if (!context.mounted) return;
+    final categoryProvider = context.read<CategoryProvider>();
+    final categoryNames = {
+      for (final cat in categoryProvider.categories) cat.id: cat.name
+    };
+
     // Quick date range picker using the current financial year
     final now = DateTime.now();
     final fyStart = now.month >= 4
@@ -1041,12 +1064,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           allTxns,
           startDate: fyStart,
           endDate: fyEnd,
+          categoryNames: categoryNames,
         );
       } else {
         await ExportService.instance.exportToPdf(
           allTxns,
           startDate: fyStart,
           endDate: fyEnd,
+          categoryNames: categoryNames,
         );
       }
     } catch (e) {

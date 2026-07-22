@@ -97,6 +97,11 @@ void main() async {
       'light' => ThemeMode.light,
       _ => ThemeMode.system,
     };
+
+    final deletionInProgress = prefs.getBool('deletion_in_progress') ?? false;
+    if (deletionInProgress) {
+      AccountDeletionService.isDeletionInProgress = true;
+    }
   } catch (e, stack) {
     AppLogger.debug('SharedPreferences failed: $e');
     AppLogger.debug('SharedPreferences stack: $stack');
@@ -152,6 +157,10 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
   }
 
   void _onAuthStateChanged(User? user) {
+    if (AccountDeletionService.isDeletionInProgress) {
+      AppLogger.debug('[MAIN] Account deletion in progress — ignoring auth change');
+      return;
+    }
     final currentUserId = FirebaseAuthService().currentUserId;
     AppLogger.debug(
       '[MAIN] _onAuthStateChanged → uid=$currentUserId '
@@ -168,6 +177,15 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<TransactionProvider>().clearData();
       ctx.read<CategoryProvider>().clearData();
       ctx.read<BudgetProvider>().clearData();
+      ctx.read<SmsTransactionProvider>().clearData();
+      ctx.read<PremiumProvider>().clearData();
+      ctx.read<GoalProvider>().clearData();
+      ctx.read<AlertProvider>().clearData();
+      ctx.read<LinkedAccountProvider>().clearData();
+      ctx.read<FamilyProvider>().clearData();
+      ctx.read<TaxProvider>().clearData();
+      ctx.read<WeeklyPlannerProvider>().clearData();
+      ctx.read<DashboardConfigProvider>().clearData();
       _lastUid = null;
     } else if (currentUserId != null && currentUserId != _lastUid) {
       AppLogger.debug(
@@ -192,6 +210,18 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (AccountDeletionService.isDeletionInProgress) {
+      AppLogger.debug('[MAIN] Account deletion in progress — ignoring lifecycle resume');
+      return;
+    }
+    if (state == AppLifecycleState.resumed) {
+      try {
+        _navigatorKey.currentContext?.read<TransactionProvider>().triggerSyncQueue();
+      } catch (e) {
+        AppLogger.debug('[MAIN] Failed to trigger sync queue on resume: $e');
+      }
+    }
+
     if (!BiometricService.instance.isEnabled) return;
 
     if (state == AppLifecycleState.paused ||

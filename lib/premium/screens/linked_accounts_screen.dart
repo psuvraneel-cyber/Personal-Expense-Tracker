@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:pet/premium/providers/linked_account_provider.dart';
 import 'package:pet/premium/widgets/premium_gate.dart';
@@ -33,11 +34,13 @@ class LinkedAccountsScreen extends StatelessWidget {
                     ),
                   );
                 }),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: provider.connectMockAccount,
-                  child: const Text('Connect mock account'),
-                ),
+                if (kDebugMode) ...[
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: provider.connectMockAccount,
+                    child: const Text('Connect mock account'),
+                  ),
+                ],
               ],
             );
           },

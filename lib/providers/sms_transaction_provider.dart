@@ -417,4 +417,11 @@ class SmsTransactionProvider extends ChangeNotifier {
       'lastFailureTimestamp': prefs.getInt('pet_sms_last_failure'),
     };
   }
+
+  void clearData() {
+    _transactions = [];
+    _uncertainTransactions = [];
+    _invalidateComputedCache();
+    notifyListeners();
+  }
 }

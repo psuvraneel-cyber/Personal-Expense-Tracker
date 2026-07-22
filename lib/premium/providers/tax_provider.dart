@@ -57,4 +57,9 @@ class TaxProvider extends ChangeNotifier {
       await prefs.remove('tax_limit_$key');
     }
   }
+
+  void clearData() {
+    _limits = Map.from(defaultLimits);
+    notifyListeners();
+  }
 }

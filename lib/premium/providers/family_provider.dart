@@ -40,4 +40,10 @@ class FamilyProvider extends ChangeNotifier {
     _members.removeWhere((m) => m.id == id);
     notifyListeners();
   }
+
+  void clearData() {
+    _members = [];
+    _isLoading = false;
+    notifyListeners();
+  }
 }

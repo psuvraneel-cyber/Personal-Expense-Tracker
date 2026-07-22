@@ -5,6 +5,7 @@ import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/unknown_format_log.dart';
 import 'package:pet/data/repositories/classification_repository.dart';
 import 'package:pet/services/sms_parser/self_consistency_checker.dart';
+import 'package:pet/services/sms_service.dart';
 import 'package:uuid/uuid.dart';
 
 /// SMS classification engine that wraps the [SelfConsistencyChecker].
@@ -134,7 +135,7 @@ class ClassificationRuleEngine {
 
     final log = UnknownFormatLog(
       id: _uuid.v4(),
-      smsBody: smsBody,
+      smsBody: SmsService.redactSensitiveData(smsBody),
       smsSender: sender,
       timestamp: timestamp,
       rejectionReason: reason,

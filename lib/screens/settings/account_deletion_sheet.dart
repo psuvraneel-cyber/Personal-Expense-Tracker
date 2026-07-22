@@ -245,13 +245,14 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
   // ── Step 3: Deleting Progress ──────────────────────────────────────────
   Widget _buildDeletingStep() {
     final stepLabels = {
-      DeletionStep.clearingLocalData: 'Removing local data...',
       DeletionStep.deletingCloudTransactions: 'Deleting cloud transactions...',
       DeletionStep.deletingCloudBudgets: 'Deleting cloud budgets...',
       DeletionStep.deletingCloudCategories: 'Deleting cloud categories...',
+      DeletionStep.deletingCloudTombstones: 'Deleting cloud deletion tombstones...',
       DeletionStep.deletingCloudPremiumData: 'Deleting premium data...',
       DeletionStep.deletingUserProfile: 'Deleting user profile...',
       DeletionStep.deletingAuthAccount: 'Removing account...',
+      DeletionStep.clearingLocalData: 'Removing local data...',
       DeletionStep.clearingPreferences: 'Clearing preferences...',
       DeletionStep.complete: 'Done!',
     };
@@ -335,6 +336,12 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
   }
 
   Future<void> _executeDelete() async {
+    final targetUid = FirebaseAuth.instance.currentUser?.uid;
+    if (targetUid == null) {
+      if (mounted) setState(() => _errorMessage = 'No authenticated user');
+      return;
+    }
+
     setState(() {
       _step = 3;
       _isDeleting = true;
@@ -355,35 +362,48 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
         }
       },
       onError: (e) {
-        if (mounted) setState(() => _errorMessage = 'Deletion failed: $e');
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Deletion failed: $e';
+            _isDeleting = false;
+          });
+        }
       },
     );
 
     try {
-      await service.deleteAccount();
+      await service.deleteAccount(targetUid: targetUid);
     } catch (e) {
       // Handle synchronous or unexpected errors that didn't go through the stream
-      if (mounted) setState(() => _errorMessage = 'Deletion failed: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Deletion failed: $e';
+          _isDeleting = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: SafeArea(
-        child: _step == 0
-            ? _buildInfoStep()
-            : _step == 1
-            ? _buildReAuthStep()
-            : _step == 2
-            ? _buildConfirmStep()
-            : _step == 3
-            ? _buildDeletingStep()
-            : _buildDoneStep(),
+    return PopScope(
+      canPop: !_isDeleting,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: _step == 0
+              ? _buildInfoStep()
+              : _step == 1
+              ? _buildReAuthStep()
+              : _step == 2
+              ? _buildConfirmStep()
+              : _step == 3
+              ? _buildDeletingStep()
+              : _buildDoneStep(),
+        ),
       ),
     );
   }

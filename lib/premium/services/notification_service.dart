@@ -140,7 +140,7 @@ class NotificationService {
         body,
         tz.TZDateTime.from(scheduledDate, tz.local),
         details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: await _resolveScheduleMode(),
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
@@ -163,6 +163,31 @@ class NotificationService {
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
+
+  /// Returns the strongest scheduling mode the device currently allows.
+  ///
+  /// On Android 12+ (API 31+), `SCHEDULE_EXACT_ALARM` is a revocable
+  /// special-access permission. If the user or OEM revokes it,
+  /// `AndroidScheduleMode.exactAllowWhileIdle` throws an exception.
+  ///
+  /// This method checks at runtime:
+  /// - If the plugin confirms exact alarms are permitted → exact scheduling.
+  /// - Otherwise → inexact scheduling; the OS may delay the notification by
+  ///   a few minutes but will never crash or silently drop it.
+  static Future<AndroidScheduleMode> _resolveScheduleMode() async {
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    if (androidPlugin != null) {
+      final canSchedule = await androidPlugin.canScheduleExactNotifications();
+      if (canSchedule == false) {
+        AppLogger.debug('[NotificationService] Exact alarm permission not '
+            'granted — falling back to inexact scheduling.');
+        return AndroidScheduleMode.inexact;
+      }
+    }
+    return AndroidScheduleMode.exactAllowWhileIdle;
+  }
 
   static Future<void> _showInternal({
     required int id,

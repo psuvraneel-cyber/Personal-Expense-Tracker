@@ -8,6 +8,8 @@ class LinkedAccountProvider extends ChangeNotifier {
   final LinkedAccountRepository _repository = LinkedAccountRepository();
   final BankIntegrationProvider _provider = MockBankIntegrationProvider();
 
+  bool isTesting = false;
+
   List<LinkedAccount> _accounts = [];
   bool _isLoading = false;
 
@@ -20,7 +22,7 @@ class LinkedAccountProvider extends ChangeNotifier {
     notifyListeners();
 
     _accounts = await _repository.getAll();
-    if (_accounts.isEmpty) {
+    if (_accounts.isEmpty && isTesting) {
       _accounts = await _provider.listLinkedAccounts();
       for (final account in _accounts) {
         await _repository.upsert(account);
@@ -32,6 +34,9 @@ class LinkedAccountProvider extends ChangeNotifier {
   }
 
   Future<void> connectMockAccount() async {
+    if (!isTesting) {
+      throw UnsupportedError('Mock bank connection is disabled in production.');
+    }
     await _provider.connectAccount();
     final refreshed = await _provider.listLinkedAccounts();
     for (final account in refreshed) {
@@ -45,6 +50,12 @@ class LinkedAccountProvider extends ChangeNotifier {
     await _provider.disconnectAccount(id);
     await _repository.delete(id);
     _accounts.removeWhere((a) => a.id == id);
+    notifyListeners();
+  }
+
+  void clearData() {
+    _accounts = [];
+    _isLoading = false;
     notifyListeners();
   }
 }

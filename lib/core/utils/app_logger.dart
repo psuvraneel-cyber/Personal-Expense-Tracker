@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 /// and optional context labels.
 ///
 /// Replaces raw `debugPrint` calls with structured, filterable output.
-/// In release builds, [debugPrint] is a no-op, so there's zero overhead.
+/// All output is gated on [kDebugMode] and is a **complete no-op** in
+/// profile and release builds — nothing reaches logcat or the console.
 ///
 /// Usage:
 /// ```dart
@@ -32,6 +33,7 @@ class AppLogger {
     StackTrace? stack,
     String? label,
   }) {
+    if (!kDebugMode) return;
     _log('ERROR', message, label: label);
     if (error != null) {
       debugPrint('  ↳ $error');
@@ -47,6 +49,8 @@ class AppLogger {
   }
 
   static void _log(String level, String message, {String? label}) {
+    // Completely silent in profile and release builds.
+    if (!kDebugMode) return;
     final prefix = label != null ? '[$label] ' : '';
     debugPrint('[$level] $prefix$message');
   }

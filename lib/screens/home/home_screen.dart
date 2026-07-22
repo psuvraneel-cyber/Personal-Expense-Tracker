@@ -5,12 +5,14 @@ import 'package:pet/screens/transactions/transactions_screen.dart';
 import 'package:pet/screens/transactions/add_edit_transaction_screen.dart';
 import 'package:pet/screens/budget/budget_screen.dart';
 import 'package:pet/screens/settings/settings_screen.dart';
+import 'package:pet/screens/settings/account_deletion_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
   final bool isDarkMode;
   final ValueChanged<ThemeMode>? onThemeModeChanged;
   final ThemeMode? themeMode;
+  final bool showDeletionImmediately;
 
   const HomeScreen({
     super.key,
@@ -18,6 +20,7 @@ class HomeScreen extends StatefulWidget {
     required this.isDarkMode,
     this.onThemeModeChanged,
     this.themeMode,
+    this.showDeletionImmediately = false,
   });
 
   @override
@@ -31,6 +34,23 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _dashboard = DashboardScreen();
   static const _transactions = TransactionsScreen();
   static const _budget = BudgetScreen();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showDeletionImmediately) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          isDismissible: false,
+          enableDrag: false,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const AccountDeletionSheet(),
+        );
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

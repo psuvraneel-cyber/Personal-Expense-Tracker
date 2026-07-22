@@ -1,13 +1,15 @@
 import 'dart:async';
-import 'dart:io' show Directory;
+import 'dart:io' show Directory, File;
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:pet/services/platform_stub.dart'
     if (dart.library.io) 'package:pet/services/platform_native.dart'
     as platform;
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart' hide databaseFactory;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactory, databaseFactoryFfi, sqfliteFfiInit;
 import 'package:pet/core/constants/categories.dart';
+import 'package:pet/services/secure_storage_service.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -18,6 +20,15 @@ class DatabaseHelper {
   factory DatabaseHelper() => _instance;
 
   DatabaseHelper._internal();
+
+  static void setTestDatabase(Database? db) {
+    _database = db;
+    if (db != null) {
+      _dbCompleter = Completer<Database>()..complete(db);
+    } else {
+      _dbCompleter = null;
+    }
+  }
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -36,6 +47,48 @@ class DatabaseHelper {
     return _dbCompleter!.future;
   }
 
+  /// Check if SQLCipher is supported at runtime.
+  Future<bool> isSqlCipherSupported() async {
+    try {
+      final db = await openDatabase(inMemoryDatabasePath);
+      final result = await db.rawQuery('PRAGMA cipher_version');
+      await db.close();
+      return result.isNotEmpty && result.first['cipher_version'] != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _isDatabasePlaintext(String path) async {
+    try {
+      final db = await openDatabase(path);
+      await db.rawQuery('PRAGMA user_version');
+      await db.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _encryptDatabaseInPlace(String path, String password) async {
+    final tempPath = '$path.tmp';
+    final db = await openDatabase(path);
+    final escapedTempPath = tempPath.replaceAll("'", "''");
+    final escapedPassword = password.replaceAll("'", "''");
+    
+    await db.execute("ATTACH DATABASE '$escapedTempPath' AS encrypted KEY '$escapedPassword'");
+    await db.execute("SELECT sqlcipher_export('encrypted')");
+    await db.execute("DETACH DATABASE encrypted");
+    await db.close();
+    
+    final file = File(path);
+    final tempFile = File(tempPath);
+    if (await file.exists()) {
+      await file.delete();
+    }
+    await tempFile.rename(path);
+  }
+
   Future<Database> _initDatabase() async {
     // Use FFI for Windows/Linux/macOS desktop (not needed on web or mobile)
     if (!kIsWeb &&
@@ -48,16 +101,45 @@ class DatabaseHelper {
         await getApplicationDocumentsDirectory();
     final String path = join(documentsDirectory.path, 'pet_tracker.db');
 
-    return await openDatabase(
-      path,
-      version: 10,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-      onOpen: (db) async {
-        // Enable foreign key constraint enforcement for every connection.
-        await db.execute('PRAGMA foreign_keys = ON');
-      },
-    );
+    final cipherSupported = await isSqlCipherSupported();
+    if (cipherSupported) {
+      final File dbFile = File(path);
+      if (await dbFile.exists() && await _isDatabasePlaintext(path)) {
+        debugPrint('[DB] ⚠️ Plaintext database detected. Migrating to encrypted database...');
+        try {
+          final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
+          await _encryptDatabaseInPlace(path, password);
+          debugPrint('[DB] ✅ Migration to encrypted database complete.');
+        } catch (e) {
+          debugPrint('[DB] ❌ Encryption migration failed: $e');
+        }
+      }
+
+      final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
+      return await openDatabase(
+        path,
+        version: 11,
+        password: password,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+        onOpen: (db) async {
+          // Enable foreign key constraint enforcement for every connection.
+          await db.execute('PRAGMA foreign_keys = ON');
+        },
+      );
+    } else {
+      debugPrint('[DB] SQLCipher is not supported on this platform. Opening in plaintext.');
+      return await openDatabase(
+        path,
+        version: 11,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+        onOpen: (db) async {
+          // Enable foreign key constraint enforcement for every connection.
+          await db.execute('PRAGMA foreign_keys = ON');
+        },
+      );
+    }
   }
 
   /// Run SQLite integrity check on startup.
@@ -140,6 +222,9 @@ class DatabaseHelper {
 
     // Create premium feature tables
     await _createPremiumTables(db);
+
+    // Create sync queue table
+    await _createSyncQueueTable(db);
 
     // Seed default categories
     await _seedDefaultCategories(db);
@@ -232,6 +317,17 @@ class DatabaseHelper {
       await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_txn_type ON transactions(type)',
       );
+    }
+    if (oldVersion < 11) {
+      // Create transaction sync queue table
+      await _createSyncQueueTable(db);
+
+      // Backfill legacy transactions where updatedAt is null or empty
+      await db.execute('''
+        UPDATE transactions 
+        SET updatedAt = date 
+        WHERE updatedAt IS NULL OR updatedAt = ''
+      ''');
     }
   }
 
@@ -424,6 +520,22 @@ class DatabaseHelper {
     for (final category in defaults) {
       await db.insert('categories', category.toMap());
     }
+  }
+
+  Future<void> _createSyncQueueTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS transaction_sync_queue (
+        id TEXT PRIMARY KEY,
+        transactionId TEXT NOT NULL,
+        action TEXT NOT NULL,
+        payload TEXT,
+        timestamp INTEGER NOT NULL,
+        userId TEXT NOT NULL,
+        retryCount INTEGER DEFAULT 0,
+        lastAttemptAt INTEGER DEFAULT 0,
+        lastError TEXT
+      )
+    ''');
   }
 
   Future<void> close() async {

@@ -13,6 +13,7 @@ import 'package:pet/premium/services/ai_copilot_service.dart';
 import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/budget_provider.dart';
+import 'package:pet/services/sms_service.dart';
 
 const _suggestions = [
   'Where am I overspending this month?',
@@ -90,8 +91,10 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       final catName = catById(t.categoryId)?.name ?? t.categoryId;
       final date = DateFormat('d MMM').format(t.date);
       final sign = t.type == TransactionType.income ? '+' : '-';
-      final note = t.note.isNotEmpty ? ' (${t.note})' : '';
-      return '$date: $sign₹${t.amount.toStringAsFixed(0)} — $catName via ${t.paymentMethod.displayName}$note';
+      final rawNote = t.note.isNotEmpty ? ' (${t.note})' : '';
+      final note = SmsService.redactSensitiveData(rawNote);
+      final merchant = t.merchantName != null ? ' at ${SmsService.redactSensitiveData(t.merchantName!)}' : '';
+      return '$date: $sign₹${t.amount.toStringAsFixed(0)}$merchant — $catName via ${t.paymentMethod.displayName}$note';
     }).toList();
 
     return FinancialContext(
@@ -474,6 +477,18 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
             CopilotMessage(
               role: 'assistant',
               content: '🚦 $e',
+              createdAt: DateTime.now(),
+            ),
+          );
+        });
+      }
+    } on ClientErrorException catch (e) {
+      if (mounted) {
+        setState(() {
+          _messages.add(
+            CopilotMessage(
+              role: 'assistant',
+              content: '⚠️ ${e.message}',
               createdAt: DateTime.now(),
             ),
           );

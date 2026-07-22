@@ -4,15 +4,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/data/database/database_helper.dart';
+import 'package:pet/premium/services/premium_entitlement_service.dart';
 
 enum DeletionStep {
-  clearingLocalData,
   deletingCloudTransactions,
   deletingCloudBudgets,
   deletingCloudCategories,
+  deletingCloudTombstones,
   deletingCloudPremiumData,
   deletingUserProfile,
   deletingAuthAccount,
+  clearingLocalData,
   clearingPreferences,
   complete,
 }
@@ -21,6 +23,9 @@ class AccountDeletionService {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
   final DatabaseHelper _dbHelper;
+
+  static bool isDeletionInProgress = false;
+  bool isTesting = false;
 
   AccountDeletionService({
     FirebaseFirestore? firestore,
@@ -47,28 +52,49 @@ class AccountDeletionService {
 
   /// Execute the full account deletion sequence.
   /// Must be called AFTER successful re-authentication.
-  Future<void> deleteAccount() async {
+  Future<void> deleteAccount({required String targetUid}) async {
     final user = _auth.currentUser;
-    if (user == null) throw StateError('No authenticated user');
+
+    // Resumable deletion: if user is already deleted from Firebase Auth,
+    // skip directly to local cleanup.
+    if (user == null) {
+      if (isDeletionInProgress) {
+        AppLogger.debug('[AccountDeletion] User is null but deletion is in progress — running local cleanup');
+        await _runLocalCleanup(targetUid);
+        return;
+      } else {
+        throw StateError('No authenticated user');
+      }
+    }
 
     final uid = user.uid;
+    if (uid != targetUid) {
+      throw StateError('UID mismatch: expected $targetUid but got $uid');
+    }
+
+    // Set deletion progress state
+    isDeletionInProgress = true;
+    if (!isTesting) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('deletion_in_progress', true);
+    }
 
     try {
-      // ── Step 1: Clear local SQLite data
-      _progressController.add(DeletionStep.clearingLocalData);
-      await _clearLocalDatabase();
-
-      // ── Step 2: Delete Firestore transactions
+      // ── Step 1: Delete Firestore transactions
       _progressController.add(DeletionStep.deletingCloudTransactions);
       await _deleteFirestoreCollection(uid, 'transactions');
 
-      // ── Step 3: Delete Firestore budgets
+      // ── Step 2: Delete Firestore budgets
       _progressController.add(DeletionStep.deletingCloudBudgets);
       await _deleteFirestoreCollection(uid, 'budgets');
 
-      // ── Step 4: Delete Firestore categories
+      // ── Step 3: Delete Firestore categories
       _progressController.add(DeletionStep.deletingCloudCategories);
       await _deleteFirestoreCollection(uid, 'categories');
+
+      // ── Step 4: Delete Firestore tombstones
+      _progressController.add(DeletionStep.deletingCloudTombstones);
+      await _deleteFirestoreCollection(uid, 'tombstones');
 
       // ── Step 5: Delete premium data collections
       _progressController.add(DeletionStep.deletingCloudPremiumData);
@@ -93,11 +119,8 @@ class AccountDeletionService {
       _progressController.add(DeletionStep.deletingAuthAccount);
       await user.delete();
 
-      // ── Step 8: Clear SharedPreferences
-      _progressController.add(DeletionStep.clearingPreferences);
-      await _clearPreferences();
-
-      _progressController.add(DeletionStep.complete);
+      // ── Run Local Cleanup Steps
+      await _runLocalCleanup(uid);
     } catch (e, stack) {
       if (!_progressController.isClosed) {
         _progressController.addError(e, stack);
@@ -105,6 +128,51 @@ class AccountDeletionService {
       AppLogger.debug('[AccountDeletion] FAILED: $e\n$stack');
       rethrow;
     }
+  }
+
+  Future<void> _runLocalCleanup(String uid) async {
+    // ── Step 8: Clear local SQLite data (scoped queue actions)
+    _progressController.add(DeletionStep.clearingLocalData);
+    try {
+      await _clearLocalDatabase(uid);
+    } catch (e) {
+      AppLogger.debug('[AccountDeletion] Local SQLite cleanup failed: $e');
+    }
+
+    // ── Step 9: Clear SharedPreferences
+    _progressController.add(DeletionStep.clearingPreferences);
+    AppLogger.debug('[AccountDeletion] calling _clearPreferences');
+    try {
+      await _clearPreferences();
+      AppLogger.debug('[AccountDeletion] _clearPreferences returned');
+    } catch (e) {
+      AppLogger.debug('[AccountDeletion] Local SharedPreferences cleanup failed: $e');
+    }
+
+    // ── Step 10: RevenueCat logout
+    AppLogger.debug('[AccountDeletion] Step 10: isTesting = $isTesting');
+    if (!isTesting) {
+      try {
+        await PremiumEntitlementService.logOut();
+      } catch (e) {
+        AppLogger.debug('[AccountDeletion] RevenueCat logout failed: $e');
+      }
+    }
+
+    // Set deletion-in-progress to false
+    isDeletionInProgress = false;
+    AppLogger.debug('[AccountDeletion] Resetting progress state: isTesting = $isTesting');
+    if (!isTesting) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('deletion_in_progress', false);
+      } catch (e) {
+        AppLogger.debug('[AccountDeletion] Resetting deletion_in_progress failed: $e');
+      }
+    }
+
+    AppLogger.debug('[AccountDeletion] Step complete!');
+    _progressController.add(DeletionStep.complete);
   }
 
   /// Delete all documents in a Firestore subcollection in batches of 500
@@ -130,7 +198,7 @@ class AccountDeletionService {
   }
 
   /// Wipe all user data from every SQLite table
-  Future<void> _clearLocalDatabase() async {
+  Future<void> _clearLocalDatabase(String uid) async {
     final db = await _dbHelper.database;
 
     // Tables to wipe — ordered to respect foreign key constraints
@@ -152,6 +220,14 @@ class AccountDeletionService {
     ];
 
     await db.transaction((txn) async {
+      // Scoped deletion: only clear queue entries belonging to this UID
+      try {
+        await txn.delete('transaction_sync_queue', where: 'userId = ?', whereArgs: [uid]);
+        AppLogger.debug('[AccountDeletion] Scoped transaction_sync_queue cleared for $uid');
+      } catch (e) {
+        AppLogger.debug('[AccountDeletion] Could not clear sync queue: $e');
+      }
+
       for (final table in tablesToClear) {
         try {
           await txn.delete(table);
@@ -166,6 +242,8 @@ class AccountDeletionService {
 
   /// Clear all SharedPreferences
   Future<void> _clearPreferences() async {
+    AppLogger.debug('[AccountDeletion] _clearPreferences entered, isTesting=$isTesting');
+    if (isTesting) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
   }

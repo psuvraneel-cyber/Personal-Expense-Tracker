@@ -104,11 +104,12 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
                 onPressed: provider.isScanning
                     ? null
                     : () async {
+                        final messenger = ScaffoldMessenger.of(context);
                         final count = await provider.scanInbox(
                           lookbackDays: 90,
                         );
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger.showSnackBar(
                           SnackBar(
                             content: Text(
                               count > 0

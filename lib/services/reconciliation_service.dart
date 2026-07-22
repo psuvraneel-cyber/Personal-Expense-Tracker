@@ -15,6 +15,7 @@ import 'package:pet/data/repositories/sms_transaction_repository.dart';
 import 'package:pet/services/classification_rule_engine.dart';
 import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/services/sms_service.dart';
+import 'package:pet/services/account_deletion_service.dart';
 
 /// ─────────────────────────────────────────────────────────────────────
 /// ReconciliationService — On-launch sweep that detects missed
@@ -66,7 +67,7 @@ class ReconciliationService {
   static const String _kLastRunKey = 'pet_reconciliation_last_run';
 
   /// Maximum lookback window in days (safety net).
-  static const int _kMaxLookbackDays = 7;
+  static const int _kMaxLookbackDays = 30;
 
   /// Minimum interval between reconciliation runs (minutes).
   /// Prevents redundant work if the user rapidly opens/closes the app.
@@ -97,6 +98,10 @@ class ReconciliationService {
   /// This method never throws. All exceptions are caught and logged.
   Future<int> reconcile() async {
     if (kIsWeb || !platform.isAndroid) return 0;
+    if (AccountDeletionService.isDeletionInProgress) {
+      AppLogger.debug('[Reconciliation] Account deletion in progress — skipping');
+      return 0;
+    }
     if (_isRunning) {
       AppLogger.debug('[Reconciliation] Already running — skipping');
       return 0;

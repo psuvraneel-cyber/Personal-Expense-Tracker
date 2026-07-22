@@ -9,6 +9,8 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import io.flutter.plugin.common.EventChannel
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Optional NotificationListenerService for capturing UPI app notifications.
@@ -115,6 +117,26 @@ class TransactionNotificationListener : NotificationListenerService() {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         }
+
+        /**
+         * Save notification data to SharedPreferences cache when the app is in background or closed.
+         */
+        fun saveNotificationToCache(context: Context, data: Map<String, Any?>) {
+            try {
+                val prefs = context.getSharedPreferences("pet_notification_cache", Context.MODE_PRIVATE)
+                val cachedString = prefs.getString("pending_notifications", "[]") ?: "[]"
+                val jsonArray = JSONArray(cachedString)
+                val jsonObject = JSONObject()
+                for ((key, value) in data) {
+                    jsonObject.put(key, value)
+                }
+                jsonArray.put(jsonObject)
+                prefs.edit().putString("pending_notifications", jsonArray.toString()).apply()
+                Log.d(TAG, "Cached notification. Total cached: ${jsonArray.length()}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to cache notification: ${e.message}")
+            }
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -167,9 +189,16 @@ class TransactionNotificationListener : NotificationListenerService() {
         )
 
         try {
-            eventSink?.success(data)
+            val sink = eventSink
+            if (sink != null) {
+                sink.success(data)
+            } else {
+                Log.d(TAG, "eventSink is null, caching notification")
+                saveNotificationToCache(applicationContext ?: this, data)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error forwarding notification: ${e.message}")
+            saveNotificationToCache(applicationContext ?: this, data)
         }
     }
 

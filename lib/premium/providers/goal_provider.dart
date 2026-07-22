@@ -79,4 +79,10 @@ class GoalProvider extends ChangeNotifier {
     _goals.removeWhere((g) => g.id == id);
     notifyListeners();
   }
+
+  void clearData() {
+    _goals = [];
+    _isLoading = false;
+    notifyListeners();
+  }
 }

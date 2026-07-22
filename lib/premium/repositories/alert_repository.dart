@@ -1,4 +1,4 @@
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/premium/models/budget_alert.dart';
 

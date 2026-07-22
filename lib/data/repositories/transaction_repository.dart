@@ -1,4 +1,4 @@
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/models/transaction.dart';
 
@@ -246,5 +246,81 @@ class TransactionRepository {
       batch.delete('transactions', where: 'id = ?', whereArgs: [id]);
     }
     await batch.commit(noResult: true);
+  }
+
+  // ── Sync Queue Methods ───────────────────────────────────────────────
+
+  Future<void> enqueueSyncAction(
+    String id,
+    String transactionId,
+    String action,
+    String? payload,
+    String userId,
+  ) async {
+    final db = await _dbHelper.database;
+    await db.insert(
+      'transaction_sync_queue',
+      {
+        'id': id,
+        'transactionId': transactionId,
+        'action': action,
+        'payload': payload,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'userId': userId,
+        'retryCount': 0,
+        'lastAttemptAt': 0,
+        'lastError': null,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingSyncActions(String userId) async {
+    final db = await _dbHelper.database;
+    return await db.query(
+      'transaction_sync_queue',
+      where: 'userId = ?',
+      whereArgs: [userId],
+      orderBy: 'timestamp ASC',
+    );
+  }
+
+  Future<void> deleteSyncAction(String id) async {
+    final db = await _dbHelper.database;
+    await db.delete(
+      'transaction_sync_queue',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> incrementSyncRetry(String id, String error) async {
+    final db = await _dbHelper.database;
+    await db.rawUpdate(
+      'UPDATE transaction_sync_queue SET retryCount = retryCount + 1, lastAttemptAt = ?, lastError = ? WHERE id = ?',
+      [DateTime.now().millisecondsSinceEpoch, error, id],
+    );
+  }
+
+  Future<void> migrateGuestSyncActions(
+    String guestUserId,
+    String authenticatedUserId,
+  ) async {
+    final db = await _dbHelper.database;
+    await db.update(
+      'transaction_sync_queue',
+      {'userId': authenticatedUserId},
+      where: 'userId = ?',
+      whereArgs: [guestUserId],
+    );
+  }
+
+  Future<void> clearSyncQueueForUser(String userId) async {
+    final db = await _dbHelper.database;
+    await db.delete(
+      'transaction_sync_queue',
+      where: 'userId = ?',
+      whereArgs: [userId],
+    );
   }
 }

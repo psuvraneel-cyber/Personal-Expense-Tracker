@@ -14,6 +14,9 @@ import 'package:pet/screens/onboarding/onboarding_screen.dart';
 import 'package:pet/utils/retry_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/services/firebase_auth_service.dart';
+import 'package:pet/services/account_deletion_service.dart';
+import 'package:pet/data/database/database_helper.dart';
+import 'package:pet/premium/services/premium_entitlement_service.dart';
 
 class SplashScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -76,7 +79,7 @@ class _SplashScreenState extends State<SplashScreen>
     _particles = List.generate(20, (_) => _Particle.random(rng));
 
     // ── Auth Gate ──
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) async {
       final isLoggedIn = FirebaseAuthService().isLoggedIn;
       
       AppLogger.debug(
@@ -87,6 +90,20 @@ class _SplashScreenState extends State<SplashScreen>
         '_hasNavigated=$_hasNavigated',
       );
       if (!mounted) return;
+
+      if (AccountDeletionService.isDeletionInProgress) {
+        if (!_hasNavigated) {
+          _hasNavigated = true;
+          if (user == null) {
+            await _clearLocalDataOnStartup();
+            AccountDeletionService.isDeletionInProgress = false;
+            _navigateToAuth();
+          } else {
+            _navigateToHome(showDeletionImmediately: true);
+          }
+        }
+        return;
+      }
 
       if (_authResolved == null) {
         AppLogger.debug(
@@ -212,28 +229,68 @@ class _SplashScreenState extends State<SplashScreen>
 
   // ── Navigation (unchanged) ─────────────────────────────────────────────
 
-  void _navigateToHome() async {
-    if (_hasNavigated) return;
+  Future<void> _clearLocalDataOnStartup() async {
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
+    const tablesToClear = [
+      'user_feedback',
+      'unknown_format_logs',
+      'classification_rules',
+      'sms_transactions',
+      'tax_categories',
+      'linked_accounts',
+      'family_members',
+      'alerts',
+      'recurring_payments',
+      'saving_goals',
+      'transactions',
+      'budgets',
+      'categories',
+      'ce',
+    ];
+    await db.transaction((txn) async {
+      try {
+        await txn.delete('transaction_sync_queue');
+      } catch (_) {}
+      for (final table in tablesToClear) {
+        try {
+          await txn.delete(table);
+        } catch (_) {}
+      }
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    
+    try {
+      await PremiumEntitlementService.logOut();
+    } catch (_) {}
+  }
+
+  void _navigateToHome({bool showDeletionImmediately = false}) async {
+    if (_hasNavigated && !showDeletionImmediately) return;
     _hasNavigated = true;
 
-    try {
-      final txnProvider = context.read<TransactionProvider>();
-      await retryWithBackoff(
-        () => txnProvider.syncFromFirestore().timeout(
-          const Duration(seconds: 30),
-          onTimeout: () {
-            throw TimeoutException('syncFromFirestore timed out after 30s');
-          },
-        ),
-        maxAttempts: 3,
-        onRetry: (attempt, error) => AppLogger.debug(
-          '[Sync] Attempt $attempt failed: $error — retrying…',
-        ),
-      );
-    } catch (e) {
-      AppLogger.debug(
-        '[Sync] All sync attempts failed, proceeding with local data: $e',
-      );
+    if (!showDeletionImmediately) {
+      try {
+        final txnProvider = context.read<TransactionProvider>();
+        await retryWithBackoff(
+          () => txnProvider.syncFromFirestore().timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw TimeoutException('syncFromFirestore timed out after 30s');
+            },
+          ),
+          maxAttempts: 3,
+          onRetry: (attempt, error) => AppLogger.debug(
+            '[Sync] Attempt $attempt failed: $error — retrying…',
+          ),
+        );
+      } catch (e) {
+        AppLogger.debug(
+          '[Sync] All sync attempts failed, proceeding with local data: $e',
+        );
+      }
     }
 
     if (!mounted) return;
@@ -243,7 +300,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
-    if (!onboardingDone) {
+    if (!onboardingDone && !showDeletionImmediately) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
@@ -256,6 +313,7 @@ class _SplashScreenState extends State<SplashScreen>
                         isDarkMode: widget.isDarkMode,
                         onThemeModeChanged: widget.onThemeModeChanged,
                         themeMode: widget.themeMode,
+                        showDeletionImmediately: showDeletionImmediately,
                       ),
                     ),
                   );
@@ -275,6 +333,7 @@ class _SplashScreenState extends State<SplashScreen>
             isDarkMode: widget.isDarkMode,
             onThemeModeChanged: widget.onThemeModeChanged,
             themeMode: widget.themeMode,
+            showDeletionImmediately: showDeletionImmediately,
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);

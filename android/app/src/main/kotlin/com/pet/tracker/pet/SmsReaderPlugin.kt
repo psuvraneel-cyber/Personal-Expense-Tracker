@@ -14,6 +14,9 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONArray
+import org.json.JSONObject
+import android.util.Log
 
 /**
  * Native Android plugin that reads SMS directly from the system content provider
@@ -111,6 +114,33 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                 notificationEventSink = events
                 TransactionNotificationListener.eventSink = events
+
+                // Process cached notifications on startup
+                val context = applicationContext
+                if (context != null && events != null) {
+                    try {
+                        val prefs = context.getSharedPreferences("pet_notification_cache", Context.MODE_PRIVATE)
+                        val cachedString = prefs.getString("pending_notifications", "[]") ?: "[]"
+                        val jsonArray = JSONArray(cachedString)
+                        if (jsonArray.length() > 0) {
+                            Log.d("SmsReaderPlugin", "Processing ${jsonArray.length()} cached notifications")
+                            for (i in 0 until jsonArray.length()) {
+                                val jsonObject = jsonArray.getJSONObject(i)
+                                val data = mutableMapOf<String, Any?>()
+                                val keys = jsonObject.keys()
+                                while (keys.hasNext()) {
+                                    val key = keys.next()
+                                    data[key] = jsonObject.get(key)
+                                }
+                                events.success(data)
+                            }
+                            // Clear the cache
+                            prefs.edit().putString("pending_notifications", "[]").apply()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("SmsReaderPlugin", "Error processing cached notifications: ${e.message}")
+                    }
+                }
             }
             override fun onCancel(arguments: Any?) {
                 notificationEventSink = null

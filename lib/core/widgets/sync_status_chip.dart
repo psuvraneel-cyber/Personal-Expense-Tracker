@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
 
-/// A small chip shown in the app bar that reflects the current Firestore
-/// sync state: syncing (spinner), synced (green dot + time), or error (red).
+/// A small chip shown in the app bar/header that reflects the current Firestore
+/// sync state: syncing, error (offline/unavailable), never synced, or synced relative time.
 class SyncStatusChip extends StatelessWidget {
   const SyncStatusChip({super.key});
 
@@ -31,60 +31,80 @@ class SyncStatusChip extends StatelessWidget {
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    switch (status) {
-      case SyncStatus.syncing:
-        return _Chip(
-          key: const ValueKey('syncing'),
-          icon: SizedBox(
-            width: 10,
-            height: 10,
-            child: CircularProgressIndicator(
-              strokeWidth: 1.5,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                isDark ? AppTheme.accentTeal : AppTheme.accentTeal,
-              ),
+    if (status == SyncStatus.syncing) {
+      return _Chip(
+        key: const ValueKey('syncing'),
+        icon: SizedBox(
+          width: 10,
+          height: 10,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isDark ? AppTheme.accentTeal : AppTheme.accentTeal,
             ),
           ),
-          label: 'Syncing…',
-          color: AppTheme.accentTeal,
-          isDark: isDark,
-        );
-
-      case SyncStatus.synced:
-        final timeStr = lastSyncAt != null
-            ? DateFormat('hh:mm a').format(lastSyncAt)
-            : '';
-        return _Chip(
-          key: const ValueKey('synced'),
-          icon: Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: AppTheme.incomeGreen,
-              shape: BoxShape.circle,
-            ),
-          ),
-          label: 'Synced${timeStr.isNotEmpty ? ' · $timeStr' : ''}',
-          color: AppTheme.incomeGreen,
-          isDark: isDark,
-        );
-
-      case SyncStatus.error:
-        return _Chip(
-          key: const ValueKey('error'),
-          icon: const Icon(
-            Icons.cloud_off,
-            size: 10,
-            color: AppTheme.expenseRed,
-          ),
-          label: 'Sync error',
-          color: AppTheme.expenseRed,
-          isDark: isDark,
-        );
-
-      case SyncStatus.idle:
-        return const SizedBox.shrink(key: ValueKey('idle'));
+        ),
+        label: 'Syncing…',
+        color: AppTheme.accentTeal,
+        isDark: isDark,
+      );
     }
+
+    if (status == SyncStatus.error) {
+      return _Chip(
+        key: const ValueKey('error'),
+        icon: const Icon(
+          Icons.cloud_off,
+          size: 10,
+          color: AppTheme.expenseRed,
+        ),
+        label: 'Sync unavailable',
+        color: AppTheme.expenseRed,
+        isDark: isDark,
+      );
+    }
+
+    if (lastSyncAt == null) {
+      return _Chip(
+        key: const ValueKey('never'),
+        icon: Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white38 : Colors.black38,
+            shape: BoxShape.circle,
+          ),
+        ),
+        label: 'Never synced',
+        color: isDark ? Colors.white60 : Colors.black54,
+        isDark: isDark,
+      );
+    }
+
+    final diff = DateTime.now().difference(lastSyncAt);
+    String label;
+    if (diff.inSeconds < 60) {
+      label = 'Synced just now';
+    } else if (diff.inMinutes < 60) {
+      label = 'Synced ${diff.inMinutes}m ago';
+    } else {
+      label = 'Last synced: ${DateFormat('hh:mm a').format(lastSyncAt)}';
+    }
+
+    return _Chip(
+      key: ValueKey('synced_${lastSyncAt.millisecondsSinceEpoch}'),
+      icon: Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          color: AppTheme.incomeGreen,
+          shape: BoxShape.circle,
+        ),
+      ),
+      label: label,
+      color: AppTheme.incomeGreen,
+      isDark: isDark,
+    );
   }
 }
 

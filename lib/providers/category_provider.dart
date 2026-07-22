@@ -6,6 +6,7 @@ import 'package:pet/data/models/category.dart';
 import 'package:pet/data/repositories/category_repository.dart';
 import 'package:pet/core/constants/categories.dart';
 import 'package:pet/services/firestore_sync_service.dart';
+import 'package:pet/services/account_deletion_service.dart';
 import 'package:uuid/uuid.dart';
 
 class CategoryProvider extends ChangeNotifier {
@@ -60,6 +61,10 @@ class CategoryProvider extends ChangeNotifier {
 
   /// Subscribes to Firestore custom categories and merges them on top of defaults.
   void _subscribeToFirestoreCustomCategories() {
+    if (AccountDeletionService.isDeletionInProgress) {
+      debugPrint('[Category] Skip subscribe — account deletion in progress');
+      return;
+    }
     _firestoreSubscription?.cancel();
     try {
       _firestoreSubscription = _firestoreSync.categoriesStream().listen(

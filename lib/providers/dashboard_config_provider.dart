@@ -87,4 +87,10 @@ class DashboardConfigProvider extends ChangeNotifier {
       await prefs.setStringList(_kHidden, _hidden.toList());
     } catch (_) {}
   }
+
+  void clearData() {
+    _order = List.from(defaultOrder);
+    _hidden = {};
+    notifyListeners();
+  }
 }

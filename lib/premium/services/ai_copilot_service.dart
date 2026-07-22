@@ -48,12 +48,21 @@ class RateLimitException implements Exception {
   String toString() => message;
 }
 
+/// Exception thrown when the server returns a 4xx error.
+class ClientErrorException implements Exception {
+  final int statusCode;
+  final String message;
+  const ClientErrorException(this.statusCode, this.message);
+  @override
+  String toString() => message;
+}
+
 class AiCopilotService {
   AiCopilotService({required this.model});
 
   final String model;
 
-  // IMPORTANT: Replace with your actual Cloudflare Worker URL
+  /// Production Cloudflare Worker that proxies requests to Groq.
   static const _baseUrl = 'https://pet-ai-copilot.pet-app.workers.dev';
 
   /// Max response tokens — keeps replies concise and saves quota.
@@ -113,6 +122,8 @@ class AiCopilotService {
     String reply;
     try {
       reply = await _callApi(messages);
+    } on ClientErrorException {
+      rethrow;
     } on Exception {
       // Retry once after a brief pause — then surface the error.
       await Future.delayed(const Duration(seconds: 2));
@@ -168,6 +179,17 @@ class AiCopilotService {
           }),
         )
         .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode >= 400 && response.statusCode < 500) {
+      String errMsg = response.body;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['error'] != null) {
+          errMsg = decoded['error'].toString();
+        }
+      } catch (_) {}
+      throw ClientErrorException(response.statusCode, errMsg);
+    }
 
     if (response.statusCode != 200) {
       throw Exception('Server error ${response.statusCode}: ${response.body}');

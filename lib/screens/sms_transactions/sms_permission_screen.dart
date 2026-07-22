@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:pet/screens/sms_transactions/sms_transactions_screen.dart';
@@ -67,14 +68,42 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
         MaterialPageRoute(builder: (_) => const SmsTransactionsScreen()),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'SMS permission denied. You can enable it from Settings.',
+      final isPermanentlyDenied = await Permission.sms.isPermanentlyDenied;
+      if (isPermanentlyDenied && mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Permission Required'),
+            content: const Text(
+              'SMS permission is permanently denied. Please enable it in system settings to use auto-detect features.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  openAppSettings();
+                },
+                child: const Text('Open Settings'),
+              ),
+            ],
           ),
-          backgroundColor: AppTheme.expenseRed,
-        ),
-      );
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'SMS permission denied. You can enable it from Settings.',
+              ),
+              backgroundColor: AppTheme.expenseRed,
+            ),
+          );
+        }
+      }
     }
 
     setState(() => _isRequesting = false);

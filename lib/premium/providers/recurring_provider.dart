@@ -158,4 +158,11 @@ class RecurringProvider extends ChangeNotifier {
       }
     }
   }
+
+  void clearData() {
+    _recurring = [];
+    _isLoading = false;
+    _lastSmsForRecurring = null;
+    notifyListeners();
+  }
 }

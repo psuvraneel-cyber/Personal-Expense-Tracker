@@ -424,7 +424,6 @@ void main() {
         timestamp: DateTime(2026, 2, 13),
       );
 
-      print('Case 24 Reasons: ${r.reasons}');
       expect(r.isTransaction, isTrue);
       expect(r.direction, TransactionDirection.credit);
       expect(r.amount, 50.0);
