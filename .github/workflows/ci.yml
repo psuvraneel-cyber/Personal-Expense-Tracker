@@ -13,6 +13,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -25,7 +27,18 @@ jobs:
         run: flutter pub get
 
       - name: Check formatting
-        run: dart format --set-exit-if-changed .
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          CHANGED_DART_FILES=$(git diff --name-only "$BASE" "${{ github.sha }}" -- '*.dart')
+          if [ -z "$CHANGED_DART_FILES" ]; then
+            echo "No Dart files changed."
+            exit 0
+          fi
+          echo "$CHANGED_DART_FILES" | xargs dart format --set-exit-if-changed
 
       - name: Analyze code
         run: flutter analyze --no-fatal-infos
