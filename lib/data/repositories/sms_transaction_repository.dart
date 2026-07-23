@@ -5,7 +5,10 @@ import 'package:pet/data/models/sms_transaction.dart';
 /// Repository for SMS-parsed transactions.
 /// All data is stored locally on-device via sqflite.
 class SmsTransactionRepository {
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final DatabaseHelper _dbHelper;
+
+  SmsTransactionRepository({DatabaseHelper? dbHelper})
+      : _dbHelper = dbHelper ?? DatabaseHelper();
 
   /// Get all SMS transactions, ordered by timestamp descending.
   Future<List<SmsTransaction>> getAllSmsTransactions() async {
@@ -154,31 +157,44 @@ class SmsTransactionRepository {
   /// Proximity-based deduplication check.
   ///
   /// Returns true if a transaction with the same amount and sender exists
-  /// within [windowMinutes] of the given timestamp. Used when no
-  /// reference ID is available, to prevent duplicates from slightly
-  /// different SMS timestamps (e.g., network delays, SMS retry).
+  /// within [windowSeconds] (default 30 seconds) of the given timestamp,
+  /// and matching merchant if provided. Used when no reference ID is
+  /// available, to prevent duplicates from slightly different SMS timestamps
+  /// (e.g., network delays, SMS retry).
   ///
-  /// The window is intentionally tight (default 2 minutes) to avoid
-  /// false positives on recurring payments.
+  /// The window is intentionally tight (default 30 seconds) to avoid
+  /// false positives on recurring payments or rapid consecutive purchases.
   Future<bool> existsByAmountTimestampProximity({
     required double amount,
     required DateTime timestamp,
     required String sender,
-    int windowMinutes = 2,
+    int windowSeconds = 30,
+    String? merchantName,
   }) async {
     final db = await _dbHelper.database;
-    final windowStart = timestamp.subtract(Duration(minutes: windowMinutes));
-    final windowEnd = timestamp.add(Duration(minutes: windowMinutes));
+    final windowStart = timestamp.subtract(Duration(seconds: windowSeconds));
+    final windowEnd = timestamp.add(Duration(seconds: windowSeconds));
+
+    String where =
+        'amount = ? AND smsSender = ? AND timestamp >= ? AND timestamp <= ?';
+    List<dynamic> whereArgs = [
+      amount,
+      sender,
+      windowStart.toIso8601String(),
+      windowEnd.toIso8601String(),
+    ];
+
+    if (merchantName != null &&
+        merchantName.isNotEmpty &&
+        merchantName != 'Unknown') {
+      where += ' AND merchantName = ?';
+      whereArgs.add(merchantName);
+    }
+
     final result = await db.query(
       'sms_transactions',
-      where:
-          'amount = ? AND smsSender = ? AND timestamp >= ? AND timestamp <= ?',
-      whereArgs: [
-        amount,
-        sender,
-        windowStart.toIso8601String(),
-        windowEnd.toIso8601String(),
-      ],
+      where: where,
+      whereArgs: whereArgs,
       limit: 1,
     );
     return result.isNotEmpty;

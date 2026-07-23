@@ -48,6 +48,10 @@ class SmsTransaction {
   /// Generate a unique SHA-256 hash from SMS body + timestamp for duplicate prevention.
   /// Two SMS messages with the same body and timestamp will produce the same hash,
   /// preventing duplicate entries if the same SMS is processed twice.
+  ///
+  /// NOTE: OS SMS timestamps are typically second-precision. In rare cases where a carrier
+  /// re-delivers the exact same SMS >1s apart, a different hash could theoretically be generated.
+  /// This second-precision timestamp limitation is a known and accepted tradeoff.
   static String generateHash(String smsBody, DateTime timestamp) {
     final normalizedBody = smsBody.trim().replaceAll(RegExp(r'\s+'), ' ');
     final input = '$normalizedBody|${timestamp.millisecondsSinceEpoch}';

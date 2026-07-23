@@ -51,8 +51,6 @@ class NativeSmsMessage {
 ///
 /// This approach works regardless of which app is set as the default SMS
 /// application, because the system content provider stores ALL SMS.
-///
-/// Falls back to the `telephony` package if the native channel is unavailable.
 class NativeSmsReader {
   static const MethodChannel _methodChannel = MethodChannel(
     'com.pet.tracker/sms_reader',
@@ -272,6 +270,47 @@ class NativeSmsReader {
     } catch (e) {
       AppLogger.debug('[NativeSmsReader] Error in getSmsSinceTimestamp: $e');
       return [];
+    }
+  }
+
+  // ─── OEM & Battery Optimization Utilities ───────────────────────
+
+  static const List<String> aggressiveOems = [
+    'xiaomi',
+    'redmi',
+    'poco',
+    'oppo',
+    'vivo',
+    'realme',
+  ];
+
+  /// Get device manufacturer name (e.g., "Xiaomi", "OPPO", "Vivo", "Realme").
+  Future<String> getDeviceManufacturer() async {
+    if (!isSupported) return 'unknown';
+    try {
+      final String manufacturer =
+          await _methodChannel.invokeMethod('getDeviceManufacturer');
+      return manufacturer;
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
+  /// Check if the current device is from an OEM known for aggressive process killing.
+  Future<bool> isAggressiveOem() async {
+    final manufacturer = (await getDeviceManufacturer()).toLowerCase();
+    return aggressiveOems.any((oem) => manufacturer.contains(oem));
+  }
+
+  /// Open battery optimization settings to allow user to whitelist P.E.T.
+  Future<bool> openBatteryOptimizationSettings() async {
+    if (!isSupported) return false;
+    try {
+      final bool success =
+          await _methodChannel.invokeMethod('openBatteryOptimizationSettings');
+      return success;
+    } catch (_) {
+      return false;
     }
   }
 }

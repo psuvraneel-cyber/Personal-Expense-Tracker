@@ -115,13 +115,19 @@ class FirestoreSyncService {
 
   // ── Transaction Read / Stream Operations ─────────────────────────────
 
-  /// Real-time stream of all transactions for the current user.
-  Stream<List<TransactionRecord>> transactionsStream({int limit = 1000}) {
+  /// Real-time stream of transactions for the current user.
+  ///
+  /// For real-time UI streaming, [limit] controls the maximum doc snapshot limit
+  /// (defaults to 1000). Pass null or a higher value for uncapped stream length.
+  Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) {
     if (_auth.currentUserId == null) return Stream.value([]);
 
-    return _txnCollection
-        .orderBy('date', descending: true)
-        .limit(limit)
+    var query = _txnCollection.orderBy('date', descending: true);
+    if (limit != null && limit > 0) {
+      query = query.limit(limit);
+    }
+
+    return query
         .snapshots()
         .map(_docsToTransactions)
         .handleError((Object e) {
@@ -130,26 +136,50 @@ class FirestoreSyncService {
         });
   }
 
-  /// One-time fetch of ALL transactions for the current user.
-  Future<List<TransactionRecord>> fetchAllTransactions({int limit = 1000}) async {
+  /// One-time fetch of ALL transactions for the current user using cursor-based pagination.
+  ///
+  /// Uses Firestore `startAfterDocument()` pagination in pages of [batchSize] (default 1000)
+  /// until all records are retrieved, eliminating silent truncation for users with >1,000 records.
+  Future<List<TransactionRecord>> fetchAllTransactions({
+    int batchSize = 1000,
+  }) async {
     if (_auth.currentUserId == null) {
       AppLogger.debug(
         '[Firestore] fetchAllTransactions: user not authenticated',
       );
       return [];
     }
+    final allTxns = <TransactionRecord>[];
+    DocumentSnapshot? lastDoc;
+
     try {
-      final snap = await _txnCollection.orderBy('date', descending: true).limit(limit).get();
-      AppLogger.debug(
-        '[Firestore] fetchAllTransactions: got ${snap.docs.length} docs',
-      );
-      return _docsToTransactions(snap);
+      while (true) {
+        var query = _txnCollection
+            .orderBy('date', descending: true)
+            .limit(batchSize);
+
+        if (lastDoc != null) {
+          query = query.startAfterDocument(lastDoc);
+        }
+
+        final snap = await query.get();
+        if (snap.docs.isEmpty) break;
+
+        allTxns.addAll(_docsToTransactions(snap));
+        AppLogger.debug(
+          '[Firestore] fetchAllTransactions page: got ${snap.docs.length} docs (total: ${allTxns.length})',
+        );
+
+        if (snap.docs.length < batchSize) break; // Reached last page
+        lastDoc = snap.docs.last;
+      }
+      return allTxns;
     } on FirebaseException catch (e) {
       AppLogger.debug('[Firestore] fetchAllTransactions error: ${e.message}');
-      return [];
+      return allTxns;
     } catch (e) {
       AppLogger.debug('[Firestore] fetchAllTransactions unexpected error: $e');
-      return [];
+      return allTxns;
     }
   }
 

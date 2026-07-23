@@ -7,7 +7,6 @@ import 'package:pet/services/platform_stub.dart'
 
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:telephony/telephony.dart';
 import 'package:uuid/uuid.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/data/repositories/sms_transaction_repository.dart';
@@ -15,21 +14,9 @@ import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/services/classification_rule_engine.dart';
 import 'package:pet/premium/services/merchant_normalizer.dart';
 
-/// Top-level background handler for incoming SMS (required by Telephony).
-/// This function runs even when the app is terminated.
-///
-/// SECURITY: All processing is on-device. No SMS data leaves the device.
-@pragma('vm:entry-point')
-void backgroundMessageHandler(SmsMessage message) async {
-  // In background mode we cannot access the full Flutter engine easily,
-  // so we log the SMS for processing on next app launch.
-  // The WorkManager periodic task will pick it up.
-  AppLogger.debug('[PET-SMS] Background SMS from: ${message.address}');
-}
-
 /// Service for reading, listening to, and parsing bank SMS messages.
 ///
-/// Android only. Uses the `telephony` package for SMS access.
+/// Android only. Uses native `NativeSmsReader` ContentResolver and EventChannel.
 /// All SMS parsing is performed entirely on-device.
 class SmsService {
   static final SmsService _instance = SmsService._internal();
@@ -38,8 +25,6 @@ class SmsService {
 
   /// SharedPreferences key for incremental scan watermark.
   static const String _kLastProcessedTimestamp = 'pet_last_sms_timestamp';
-
-  final Telephony _telephony = Telephony.instance;
   final NativeSmsReader _nativeReader = NativeSmsReader();
   final SmsTransactionRepository _repository = SmsTransactionRepository();
   final Uuid _uuid = const Uuid();
@@ -57,13 +42,12 @@ class SmsService {
   /// Request SMS permissions (READ_SMS and RECEIVE_SMS).
   /// Returns `true` if permissions are granted.
   ///
-  /// Uses permission_handler directly for reliability — the telephony
-  /// package's permission request can fail after default SMS app changes.
+  /// Uses permission_handler directly for reliability.
   Future<bool> requestPermissions() async {
     if (!isSupported) return false;
 
     // Request both permissions using permission_handler (independent of
-    // the telephony package and default SMS app settings).
+    // default SMS app settings).
     final statuses = await [Permission.sms, Permission.phone].request();
 
     final smsGranted = statuses[Permission.sms]?.isGranted ?? false;
@@ -93,8 +77,7 @@ class SmsService {
   ///
   /// Uses the native ContentResolver to read SMS directly from the system
   /// content provider. Reads both inbox AND sent SMS for comprehensive
-  /// UPI transaction coverage. Falls back to the telephony package if
-  /// the native channel fails.
+  /// UPI transaction coverage.
   Future<int> scanInbox({int lookbackDays = 90}) async {
     if (!isSupported) {
       AppLogger.debug('[PET-SMS] scanInbox: Not supported on this platform');
@@ -140,27 +123,13 @@ class SmsService {
         return count;
       }
 
-      // LAST RESORT: Use telephony package
-      AppLogger.debug(
-        '[PET-SMS] Native reader empty, falling back to telephony package',
-      );
-      final count = await _scanInboxViaTelephony(lookbackDays: lookbackDays);
-      AppLogger.debug(
-        '[PET-SMS] Telephony fallback processed $count transactions',
-      );
-      return count;
+      AppLogger.debug('[PET-SMS] No SMS found in native scan');
+      return 0;
     } catch (e, stack) {
       AppLogger.debug('[PET-SMS] Native reader error: $e');
       AppLogger.debug('[PET-SMS] Stack trace: $stack');
-      try {
-        AppLogger.debug('[PET-SMS] Attempting telephony fallback after error');
-        return _scanInboxViaTelephony(lookbackDays: lookbackDays);
-      } catch (e2) {
-        AppLogger.debug('[PET-SMS] Fallback telephony also failed: $e2');
-        // Both paths failed — persist failure timestamp for UI feedback
-        await _persistDetectionFailure();
-        return 0;
-      }
+      await _persistDetectionFailure();
+      return 0;
     }
   }
 
@@ -253,58 +222,13 @@ class SmsService {
     return insertedCount;
   }
 
-  Future<int> _scanInboxViaTelephony({int lookbackDays = 90}) async {
-    try {
-      AppLogger.debug('[PET-SMS] Telephony: Starting inbox scan');
-
-      final List<SmsMessage> messages = await _telephony.getInboxSms(
-        columns: [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
-        filter: SmsFilter.where(SmsColumn.DATE).greaterThan(
-          DateTime.now()
-              .subtract(Duration(days: lookbackDays))
-              .millisecondsSinceEpoch
-              .toString(),
-        ),
-        sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
-      );
-
-      AppLogger.debug(
-        '[PET-SMS] Telephony: Found ${messages.length} SMS in inbox',
-      );
-
-      if (messages.isEmpty) {
-        AppLogger.debug(
-          '[PET-SMS] Telephony: No SMS found in the last $lookbackDays days',
-        );
-        return 0;
-      }
-
-      // Map telephony messages to NativeSmsMessage so we can use the same
-      // isolate-backed processing pipeline
-      final nativeMessages = messages.map((m) {
-        return NativeSmsMessage(
-          address: m.address ?? '',
-          body: m.body ?? '',
-          dateMillis: m.date ?? DateTime.now().millisecondsSinceEpoch,
-        );
-      }).toList();
-
-      return await _processMessages(nativeMessages);
-    } catch (e) {
-      AppLogger.debug('[PET-SMS] Error scanning inbox: $e');
-      return 0;
-    }
-  }
-
   // ─── Live Listener ────────────────────────────────────────────────
 
   /// Start listening for incoming SMS messages.
   /// Parses and stores transactions in real-time.
   ///
-  /// Uses BOTH the native EventChannel listener AND the telephony package
-  /// listener for maximum reliability. The native listener uses its own
-  /// BroadcastReceiver (independent of default SMS app), while the telephony
-  /// listener provides a fallback.
+  /// Uses the native EventChannel listener (default-SMS-app independent)
+  /// and the notification listener for maximum reliability.
   void startListening({Function(SmsTransaction)? onNewTransaction}) {
     if (!isSupported || _isListening) return;
 
@@ -445,24 +369,9 @@ class SmsService {
       },
     );
 
-    // FALLBACK: Also keep the telephony listener as backup
-    try {
-      _telephony.listenIncomingSms(
-        onNewMessage: (SmsMessage message) async {
-          await _processIncomingMessage(message, onNewTransaction);
-        },
-        onBackgroundMessage: backgroundMessageHandler,
-        listenInBackground: true,
-      );
-    } catch (e) {
-      AppLogger.debug(
-        '[PET-SMS] Telephony listener setup failed (non-fatal): $e',
-      );
-    }
-
     _isListening = true;
     AppLogger.debug(
-      '[PET-SMS] Started listening for incoming SMS (native + fallback)',
+      '[PET-SMS] Started listening for incoming SMS via native reader',
     );
   }
 
@@ -479,66 +388,6 @@ class SmsService {
 
   // ─── Internal Processing ──────────────────────────────────────────
 
-  Future<void> _processIncomingMessage(
-    SmsMessage message,
-    Function(SmsTransaction)? callback,
-  ) async {
-    final body = message.body;
-    final sender = message.address ?? '';
-    final timestamp = message.date != null
-        ? DateTime.fromMillisecondsSinceEpoch(message.date!)
-        : DateTime.now();
-
-    if (body == null || body.isEmpty) return;
-
-    // Use two-tier classification engine
-    final classified = await ClassificationRuleEngine.classify(
-      body,
-      sender,
-      timestamp,
-    );
-    if (classified == null) return;
-
-    final hash = SmsTransaction.generateHash(body, timestamp);
-
-    // Duplicate check
-    final exists = await _repository.existsByHash(hash);
-    if (exists) return;
-
-    final category =
-        classified.category ?? inferCategoryFromClassified(classified);
-    final normalizedMerchant = MerchantNormalizer.normalize(
-      classified.merchantName,
-    );
-
-    final transaction = SmsTransaction(
-      id: _uuid.v4(),
-      amount: classified.amount,
-      merchantName: normalizedMerchant,
-      bankName: classified.bankName,
-      transactionType: classified.transactionType,
-      transactionSubType: classified.transactionSubType,
-      timestamp: classified.parsedDate,
-      rawSmsBody: redactSensitiveData(body),
-      smsSender: sender,
-      smsHash: hash,
-      category: category,
-      referenceId: classified.referenceId,
-      upiId: classified.upiId,
-      confidence: classified.confidence,
-      source: 'sms',
-    );
-
-    final inserted = await _repository.insertSmsTransaction(transaction);
-    if (inserted) {
-      AppLogger.debug(
-        '[PET-SMS] New transaction (${classified.classifiedBy.name}): '
-        '${transaction.amount} ${transaction.transactionType} at ${transaction.merchantName}',
-      );
-      callback?.call(transaction);
-    }
-  }
-
   static bool _matchesAny(String text, List<String> keywords) {
     for (final keyword in keywords) {
       if (text.contains(keyword)) return true;
@@ -547,25 +396,61 @@ class SmsService {
   }
 
   /// Redact sensitive data from SMS body before DB storage.
-  /// Replaces account numbers with XX**** and phone numbers with ***.
+  /// Replaces account numbers and phone numbers with XX**** (keeping last 4 digits).
   /// Keeps the redacted version for display; dedup uses hash of original.
   static String redactSensitiveData(String body) {
     var redacted = body;
-    // Redact full account numbers (keep last 4 digits)
-    redacted = redacted.replaceAllMapped(RegExp(r'\b(\d{4,})\d{4}\b'), (m) {
-      final full = m.group(0)!;
-      if (full.length >= 8) {
-        return 'XX****${full.substring(full.length - 4)}';
+
+    // 1. Redact account and card numbers preceded by account/card context keywords.
+    final accountContextPattern = RegExp(
+      r'(?:\b(?:a/c|account|acct|card|a/c\s+no|account\s+no|card\s+no|a/c\s+ending|card\s+ending)\b\.?\s*:?\s*)(?:[a-zA-Z]*\s*)?(\d{4,})(\d{4})\b',
+      caseSensitive: false,
+    );
+    redacted = redacted.replaceAllMapped(accountContextPattern, (m) {
+      final fullMatch = m.group(0)!;
+      final prefixDigits = m.group(1)!;
+      final last4 = m.group(2)!;
+      final totalDigits = prefixDigits.length + 4;
+      if (totalDigits >= 8) {
+        final firstDigitIdx = fullMatch.indexOf(RegExp(r'\d'));
+        final prefixText = fullMatch.substring(0, firstDigitIdx);
+        return '${prefixText}XX****$last4';
       }
-      return full;
+      return fullMatch;
     });
-    // Redact phone numbers (+91XXXXXXXXXX or 10-digit)
-    redacted = redacted.replaceAllMapped(RegExp(r'(?:\+91|0)?(\d{10})\b'), (m) {
-      final digits = m.group(1)!;
-      // Don't redact if it looks like a UPI ref (usually 12+ digits)
-      // or an amount — only phone numbers
-      return '***${digits.substring(7)}';
+
+    // 2. Redact standalone 13-16 digit account/card numbers (not preceded by Ref/Txn/UPI keywords).
+    final longAccountPattern = RegExp(r'(?<!\d)(\d{9,12})(\d{4})(?!\d)');
+    redacted = redacted.replaceAllMapped(longAccountPattern, (m) {
+      final startIdx = m.start;
+      final precedingText = redacted.substring(0, startIdx).toLowerCase();
+      // Skip if preceded by reference ID keywords
+      if (RegExp(r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$', caseSensitive: false).hasMatch(precedingText)) {
+        return m.group(0)!;
+      }
+      final last4 = m.group(2)!;
+      return 'XX****$last4';
     });
+
+    // 3. Redact 10-digit Indian phone numbers (+91XXXXXXXXXX, 0XXXXXXXXXX, or 10-digit starting with 6-9).
+    // Enforces strict digit boundaries (?<!\d) and (?!\d) so 12-digit UPI ref numbers are NEVER matched.
+    final phonePattern = RegExp(
+      r'(?<!\d)(?:\+91[\s-]?)?([6-9]\d{5})(\d{4})(?!\d)',
+    );
+    redacted = redacted.replaceAllMapped(phonePattern, (m) {
+      final startIdx = m.start;
+      final precedingText = redacted.substring(0, startIdx).toLowerCase();
+      // Do not redact if preceded by currency or reference ID keywords
+      if (RegExp(r'(?:rs\.?|inr\.?|₹)\s*$', caseSensitive: false).hasMatch(precedingText)) {
+        return m.group(0)!;
+      }
+      if (RegExp(r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$', caseSensitive: false).hasMatch(precedingText)) {
+        return m.group(0)!;
+      }
+      final last4 = m.group(2)!;
+      return 'XX****$last4';
+    });
+
     return redacted;
   }
 

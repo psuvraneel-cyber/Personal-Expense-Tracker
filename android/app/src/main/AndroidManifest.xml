@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Internet permission (required for Supabase auth & API calls) -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -7,6 +8,10 @@
     <!-- SMS Permissions for auto-detecting UPI transactions (Android only) -->
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
+    <!-- Foreground Service permissions for Android 14+ (API 34+) WorkManager background sync -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- Required for posting local notifications on Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -47,17 +52,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- SMS Broadcast Receiver for background SMS listening -->
-        <receiver
-            android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.BROADCAST_SMS">
-            <intent-filter>
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-            </intent-filter>
-        </receiver>
-
         <!-- NotificationListenerService for capturing UPI app transaction notifications
              (Google Pay, PhonePe, Paytm, etc.) that don't arrive via SMS.
              Requires explicit user consent via system settings toggle. -->
@@ -69,6 +63,12 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- WorkManager Foreground Service Override for Android 14+ (API 34/35) -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

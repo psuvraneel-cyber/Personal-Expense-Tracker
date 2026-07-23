@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/services/native_sms_reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 3-step onboarding flow for first-time users.
@@ -22,8 +23,28 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
+  bool _isAggressiveOem = false;
+  String _manufacturer = '';
 
-  static const _totalSteps = 3;
+  int get _totalSteps => _isAggressiveOem ? 4 : 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOem();
+  }
+
+  Future<void> _checkOem() async {
+    final reader = NativeSmsReader();
+    final isAggressive = await reader.isAggressiveOem();
+    final m = await reader.getDeviceManufacturer();
+    if (mounted && isAggressive) {
+      setState(() {
+        _isAggressiveOem = true;
+        _manufacturer = m.toUpperCase();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -106,6 +127,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     badge: 'Fully Customisable',
                     badgeIcon: Icons.palette_outlined,
                   ),
+                  if (_isAggressiveOem) _buildOemStep(),
                 ],
               ),
             ),
@@ -242,6 +264,74 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOemStep() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  AppTheme.expenseRed.withAlpha(40),
+                  AppTheme.expenseRed.withAlpha(10),
+                ],
+              ),
+            ),
+            child: const Icon(
+              Icons.battery_saver_rounded,
+              size: 56,
+              color: Colors.amber,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'Background Sync Whitelist',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Your device ($_manufacturer) aggressively restricts background apps. '
+            'To ensure P.E.T auto-detects all transactions without missing any SMS, '
+            'please disable battery saver restrictions for P.E.T.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: AppTheme.textSecondary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () async {
+              await NativeSmsReader().openBatteryOptimizationSettings();
+            },
+            icon: const Icon(Icons.settings_outlined),
+            label: const Text('Open Battery Settings'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
         ],

@@ -26,6 +26,7 @@ class SmsTransactionProvider extends ChangeNotifier {
   bool _notificationAccessGranted = false;
   int _lastScanCount = 0;
   int _lastReconciliationCount = 0;
+  DateTime? _lastSyncTimestamp;
 
   // Cached computed values
   List<SmsTransaction>? _cachedDebits;
@@ -51,6 +52,7 @@ class SmsTransactionProvider extends ChangeNotifier {
   bool get notificationAccessGranted => _notificationAccessGranted;
   int get lastScanCount => _lastScanCount;
   int get lastReconciliationCount => _lastReconciliationCount;
+  DateTime? get lastSyncTimestamp => _lastSyncTimestamp;
 
   /// Make UI supported on all non-web platforms for testing and visualization
   bool get isSupported => !kIsWeb;
@@ -152,6 +154,7 @@ class SmsTransactionProvider extends ChangeNotifier {
           )
           .toList();
       _invalidateComputedCache();
+      _lastSyncTimestamp = await _reconciliationService.getLastSyncTimestamp();
     } catch (e) {
       AppLogger.debug('[PET-SMS] Error loading SMS transactions: $e');
     }

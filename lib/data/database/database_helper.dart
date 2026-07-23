@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Directory, File;
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:meta/meta.dart';
 import 'package:pet/services/platform_stub.dart'
     if (dart.library.io) 'package:pet/services/platform_native.dart'
     as platform;
@@ -10,6 +11,7 @@ import 'package:sqflite_sqlcipher/sqflite.dart' hide databaseFactory;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactory, databaseFactoryFfi, sqfliteFfiInit;
 import 'package:pet/core/constants/categories.dart';
 import 'package:pet/services/secure_storage_service.dart';
+import 'package:pet/services/sms_service.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -73,6 +75,9 @@ class DatabaseHelper {
   Future<void> _encryptDatabaseInPlace(String path, String password) async {
     final tempPath = '$path.tmp';
     final db = await openDatabase(path);
+    // Note: SQLite ATTACH DATABASE statement does not support parameterized query syntax (?)
+    // for path and key arguments. Manual single-quote escaping (replaceAll("'", "''")) is the
+    // deliberate, correct mitigation to safely construct this ATTACH command.
     final escapedTempPath = tempPath.replaceAll("'", "''");
     final escapedPassword = password.replaceAll("'", "''");
     
@@ -118,7 +123,7 @@ class DatabaseHelper {
       final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
       return await openDatabase(
         path,
-        version: 11,
+        version: 12,
         password: password,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -131,7 +136,7 @@ class DatabaseHelper {
       debugPrint('[DB] SQLCipher is not supported on this platform. Opening in plaintext.');
       return await openDatabase(
         path,
-        version: 11,
+        version: 12,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
         onOpen: (db) async {
@@ -163,6 +168,11 @@ class DatabaseHelper {
       debugPrint('[DB] Integrity check error: $e');
       return false;
     }
+  }
+
+  @visibleForTesting
+  Future<void> onCreateForTesting(Database db, int version) async {
+    await _onCreate(db, version);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -329,6 +339,9 @@ class DatabaseHelper {
         WHERE updatedAt IS NULL OR updatedAt = ''
       ''');
     }
+    if (oldVersion < 12) {
+      await _migrateUnknownFormatLogsV12(db);
+    }
   }
 
   Future<void> _createPremiumTables(Database db) async {
@@ -486,7 +499,8 @@ class DatabaseHelper {
         resolvedRuleId TEXT,
         occurrenceCount INTEGER DEFAULT 1,
         bodyHash TEXT NOT NULL,
-        userNote TEXT
+        userNote TEXT,
+        created_at INTEGER
       )
     ''');
 
@@ -534,6 +548,69 @@ class DatabaseHelper {
         retryCount INTEGER DEFAULT 0,
         lastAttemptAt INTEGER DEFAULT 0,
         lastError TEXT
+      )
+    ''');
+  }
+
+  /// Migration v12: Add created_at column to unknown_format_logs, redact existing rows,
+  /// enforce 30-day TTL and 500-row cap.
+  Future<void> _migrateUnknownFormatLogsV12(Database db) async {
+    // 1. Ensure created_at column exists
+    final columns = await db.rawQuery('PRAGMA table_info(unknown_format_logs)');
+    final hasCreatedAt = columns.any((c) => c['name'] == 'created_at');
+    if (!hasCreatedAt) {
+      await db.execute(
+        'ALTER TABLE unknown_format_logs ADD COLUMN created_at INTEGER',
+      );
+    }
+
+    // 2. Migrate existing unredacted rows and backfill created_at
+    final rows = await db.query('unknown_format_logs');
+    for (final row in rows) {
+      final id = row['id'] as String;
+      final rawBody = row['smsBody'] as String? ?? '';
+      final timestampStr = row['timestamp'] as String? ?? '';
+      final existingCreatedAt = row['created_at'] as int?;
+
+      final redactedBody = SmsService.redactSensitiveData(rawBody);
+
+      final int createdAtMillis;
+      if (existingCreatedAt != null) {
+        createdAtMillis = existingCreatedAt;
+      } else {
+        final parsedTime = DateTime.tryParse(timestampStr);
+        createdAtMillis = parsedTime != null
+            ? parsedTime.millisecondsSinceEpoch
+            : DateTime.now().millisecondsSinceEpoch;
+      }
+
+      await db.update(
+        'unknown_format_logs',
+        {
+          'smsBody': redactedBody,
+          'created_at': createdAtMillis,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+
+    // 3. Enforce 30-day TTL cleanup
+    final cutoffMillis =
+        DateTime.now().subtract(const Duration(days: 30)).millisecondsSinceEpoch;
+    await db.delete(
+      'unknown_format_logs',
+      where: 'created_at < ?',
+      whereArgs: [cutoffMillis],
+    );
+
+    // 4. Enforce 500-row cap (evict oldest)
+    await db.execute('''
+      DELETE FROM unknown_format_logs 
+      WHERE id NOT IN (
+        SELECT id FROM unknown_format_logs 
+        ORDER BY COALESCE(created_at, 0) DESC, timestamp DESC 
+        LIMIT 500
       )
     ''');
   }

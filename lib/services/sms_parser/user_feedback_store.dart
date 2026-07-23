@@ -36,6 +36,8 @@ library;
 
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/widgets.dart';
+import 'package:pet/data/repositories/sms_transaction_repository.dart';
 import 'package:pet/services/sms_parser/transaction_parse_result.dart';
 
 /// Types of user feedback on a parsed SMS.
@@ -127,6 +129,15 @@ class UserFeedbackStore {
   /// Cache: smsHash → feedback action.
   static final Map<String, UserFeedback> _feedbackCache = {};
 
+  /// Optional persistence handler (e.g. for custom DB saving or testing).
+  static Future<void> Function(UserFeedback feedback)? onFeedbackRecorded;
+
+  @visibleForTesting
+  static void resetForTesting() {
+    _feedbackCache.clear();
+    onFeedbackRecorded = null;
+  }
+
   /// Load feedback from database (call at startup).
   /// Provide a list of feedback records loaded from your DB.
   static void loadFromRecords(List<UserFeedback> records) {
@@ -153,6 +164,24 @@ class UserFeedbackStore {
       confirmedAmount: confirmedAmount,
     );
     _feedbackCache[hash] = feedback;
+
+    bool hasBinding = false;
+    try {
+      final _ = WidgetsBinding.instance;
+      hasBinding = true;
+    } catch (_) {}
+
+    // Immediately persist write-through to SQLite (async, non-blocking)
+    if (onFeedbackRecorded != null) {
+      onFeedbackRecorded!(feedback).catchError((_) {});
+    } else if (hasBinding) {
+      Future.microtask(() async {
+        try {
+          await SmsTransactionRepository().saveFeedback(feedback.toMap());
+        } catch (_) {}
+      });
+    }
+
     return feedback;
   }
 

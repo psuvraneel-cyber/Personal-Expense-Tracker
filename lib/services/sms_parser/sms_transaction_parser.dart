@@ -40,6 +40,7 @@ import 'package:pet/services/sms_parser/intent_detector.dart';
 import 'package:pet/services/sms_parser/negative_filter.dart';
 import 'package:pet/services/sms_parser/time_extractor.dart';
 import 'package:pet/services/sms_parser/transaction_parse_result.dart';
+import 'package:pet/services/sms_parser/user_feedback_store.dart';
 
 /// Main SMS transaction parser with multi-layer pipeline.
 class SmsTransactionParser {
@@ -68,6 +69,19 @@ class SmsTransactionParser {
     ScoringConfig config = _defaultConfig,
   }) {
     final allReasons = <String>[];
+
+    // ═════════════════════════════════════════════════════════════════
+    //  STAGE 0: USER FEEDBACK OVERRIDE
+    // ═════════════════════════════════════════════════════════════════
+    // Check if user has previously provided explicit feedback on this SMS.
+    final feedbackOverride = UserFeedbackStore.applyFeedback(
+      TransactionParseResult.rejected(reasons: []),
+      body,
+      timestamp,
+    );
+    if (feedbackOverride != null) {
+      return feedbackOverride;
+    }
 
     // ═════════════════════════════════════════════════════════════════
     //  STAGE 1: PREPROCESS

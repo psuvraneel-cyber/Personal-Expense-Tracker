@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pet/services/sms_parser/self_consistency_checker.dart';
 import 'package:pet/services/sms_parser/sms_parser.dart';
 
 /// Comprehensive test suite for the production-grade SMS transaction parser.
@@ -1004,6 +1005,63 @@ void main() {
       expect(telemetry.senderPrefix, 'AD-');
       expect(telemetry.score, 42);
       expect(telemetry.userAction, 'markDebit');
+    });
+
+    test('Pipeline applies recorded user feedback (markCredit override)', () {
+      final date = DateTime(2026, 7, 20, 15, 0);
+      const body = 'Unclear message about 1000 rupees sent to friend';
+
+      // 1. Record user feedback
+      UserFeedbackStore.recordFeedback(
+        smsBody: body,
+        smsTimestamp: date,
+        action: UserFeedbackAction.markCredit,
+        confirmedAmount: 1000.0,
+      );
+
+      // 2. Parse through SmsTransactionParser
+      final parsed = SmsTransactionParser.parse(
+        body: body,
+        sender: 'AD-HDFCBK',
+        timestamp: date,
+      );
+
+      expect(parsed.isTransaction, isTrue);
+      expect(parsed.direction, TransactionDirection.credit);
+      expect(parsed.amount, 1000.0);
+      expect(parsed.confidence, 100);
+
+      // 3. Verify through ClassificationRuleEngine
+      final consensus = SelfConsistencyChecker.check(
+        body: body,
+        sender: 'AD-HDFCBK',
+        timestamp: date,
+      );
+
+      expect(consensus.result.isTransaction, isTrue);
+      expect(consensus.result.direction, TransactionDirection.credit);
+    });
+
+    test('Pipeline applies recorded user feedback (notTransaction override)', () {
+      final date = DateTime(2026, 7, 20, 16, 0);
+      const body = 'Rs 500 debited from A/c XX1234 on 20-Jul-26 for Swiggy';
+
+      // 1. Record user feedback as not a transaction
+      UserFeedbackStore.recordFeedback(
+        smsBody: body,
+        smsTimestamp: date,
+        action: UserFeedbackAction.notTransaction,
+      );
+
+      // 2. Parse through SmsTransactionParser
+      final parsed = SmsTransactionParser.parse(
+        body: body,
+        sender: 'AD-HDFCBK',
+        timestamp: date,
+      );
+
+      expect(parsed.isTransaction, isFalse);
+      expect(parsed.reasons.any((r) => r.contains('USER OVERRIDE')), isTrue);
     });
   });
 

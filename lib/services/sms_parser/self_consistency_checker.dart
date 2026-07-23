@@ -24,6 +24,7 @@ library;
 
 import 'package:pet/services/sms_parser/sms_transaction_parser.dart';
 import 'package:pet/services/sms_parser/transaction_parse_result.dart';
+import 'package:pet/services/sms_parser/user_feedback_store.dart';
 import 'package:pet/services/transaction_parser.dart';
 
 /// Result of the self-consistency check.
@@ -114,6 +115,25 @@ class SelfConsistencyChecker {
     required DateTime timestamp,
   }) {
     final reasons = <String>[];
+
+    // ── Check User Feedback Store Override ───────────────────────
+    final userFeedbackOverride = UserFeedbackStore.applyFeedback(
+      TransactionParseResult.rejected(reasons: []),
+      body,
+      timestamp,
+    );
+    if (userFeedbackOverride != null) {
+      final isTxn = userFeedbackOverride.isTransaction;
+      reasons.add(
+        'USER FEEDBACK OVERRIDE: ${isTxn ? "User-confirmed transaction" : "Marked as not a transaction"}',
+      );
+      return ConsistencyResult(
+        result: userFeedbackOverride,
+        source: ConsistencySource.consensus,
+        agreement: AgreementLevel.full,
+        consistencyReasons: reasons,
+      );
+    }
 
     // ── Run Method A: Modular pipeline ──────────────────────────
     final modularResult = SmsTransactionParser.parse(

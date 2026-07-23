@@ -21,9 +21,6 @@
 -keep class io.flutter.plugins.** { *; }
 -dontwarn io.flutter.embedding.**
 
-# Telephony plugin (SMS reading)
--keep class com.shounakmulay.telephony.** { *; }
-
 # Local Auth (biometric)
 -keep class androidx.biometric.** { *; }
 

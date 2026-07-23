@@ -150,7 +150,7 @@ class FakeFirestoreSyncService implements FirestoreSyncService {
   String get currentUserId => currentUid;
 
   @override
-  Stream<List<TransactionRecord>> transactionsStream({int limit = 1000}) {
+  Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) {
     return streamController.stream;
   }
 
@@ -176,7 +176,9 @@ class FakeFirestoreSyncService implements FirestoreSyncService {
   }
 
   @override
-  Future<List<TransactionRecord>> fetchAllTransactions({int limit = 1000}) async {
+  Future<List<TransactionRecord>> fetchAllTransactions({
+    int batchSize = 1000,
+  }) async {
     return List<TransactionRecord>.from(remoteDb);
   }
 
@@ -734,6 +736,31 @@ void main() {
       expect(repository.syncQueue.isEmpty, isTrue);
       expect(firestoreSync.remoteDb.first.amount, 220.0);
     });
+
+      test('MEDIUM-3: >1000 records in remote Firestore are fetched and synced without silent truncation', () async {
+        // Populate remoteDb with 1,250 transactions
+        firestoreSync.remoteDb.clear();
+        for (int i = 0; i < 1250; i++) {
+          firestoreSync.remoteDb.add(
+            TransactionRecord(
+              id: 'txn_large_$i',
+              amount: 10.0 + i,
+              type: TransactionType.expense,
+              categoryId: 'food',
+              date: DateTime.now().subtract(Duration(hours: i)),
+            ),
+          );
+        }
+
+        expect(firestoreSync.remoteDb.length, 1250);
+
+        // Run full sync from Firestore
+        await provider.syncFromFirestore();
+
+        // Verify local repository receives all 1,250 transactions without truncation
+        final localAll = await repository.getAllTransactions();
+        expect(localAll.length, 1250);
+      });
 
     group('Web specific behavior', () {
       test('On web, stream directly populates memory without SQLite calls', () async {

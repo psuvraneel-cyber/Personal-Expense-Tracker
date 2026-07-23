@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:pet/data/models/sms_transaction.dart';
+import 'package:pet/data/repositories/classification_repository.dart';
 import 'package:pet/data/repositories/sms_transaction_repository.dart';
 import 'package:pet/services/classification_rule_engine.dart';
 import 'package:pet/services/native_sms_reader.dart';
@@ -135,6 +136,13 @@ class ReconciliationService {
       // ── 3. Read watermark with validation ───────────────────────
       final watermark = _getValidatedWatermark(prefs, now);
 
+      // Perform maintenance cleanup on unknown format logs (30-day TTL & 500-row cap)
+      try {
+        await ClassificationRepository().cleanUpUnknownLogs();
+      } catch (e) {
+        AppLogger.debug('[Reconciliation] Error cleaning up unknown logs: $e');
+      }
+
       AppLogger.debug(
         '[Reconciliation] Starting sweep — watermark: '
         '${watermark != null ? DateTime.fromMillisecondsSinceEpoch(watermark) : "null (using ${_kMaxLookbackDays}d fallback)"}',
@@ -240,6 +248,30 @@ class ReconciliationService {
     }
 
     return stored;
+  }
+
+  @visibleForTesting
+  int? validateWatermarkForTest(SharedPreferences prefs, int nowMs) {
+    return _getValidatedWatermark(prefs, nowMs);
+  }
+
+  /// Returns the last sync timestamp (watermark or last run).
+  Future<DateTime?> getLastSyncTimestamp() async {
+    final prefs = await SharedPreferences.getInstance();
+    final watermark = prefs.getInt(_kWatermarkKey);
+    final lastRun = prefs.getInt(_kLastRunKey);
+    final smsServiceWatermark = prefs.getInt('pet_last_sms_timestamp');
+
+    int? latestMs;
+    for (final ts in [watermark, lastRun, smsServiceWatermark]) {
+      if (ts != null && ts > 0) {
+        if (latestMs == null || ts > latestMs) {
+          latestMs = ts;
+        }
+      }
+    }
+    if (latestMs == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(latestMs);
   }
 
   /// Advance the watermark to the newest SMS timestamp in the batch.
@@ -435,7 +467,8 @@ class ReconciliationService {
               amount: candidate.amount,
               timestamp: candidate.parsedDate,
               sender: candidate.sender,
-              windowMinutes: 2,
+              windowSeconds: 30,
+              merchantName: candidate.merchantName,
             );
         if (proximityExists) continue;
 

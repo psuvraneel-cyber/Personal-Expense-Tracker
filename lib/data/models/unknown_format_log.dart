@@ -68,6 +68,7 @@ class UnknownFormatLog {
       'smsBody': smsBody,
       'smsSender': smsSender,
       'timestamp': timestamp.toIso8601String(),
+      'created_at': timestamp.millisecondsSinceEpoch,
       'rejectionReason': rejectionReason,
       'isReviewed': isReviewed ? 1 : 0,
       'isResolved': isResolved ? 1 : 0,
@@ -79,11 +80,25 @@ class UnknownFormatLog {
   }
 
   factory UnknownFormatLog.fromMap(Map<String, dynamic> map) {
+    final timestampStr = map['timestamp'] as String?;
+    final createdAtMillis = map['created_at'] as int?;
+    final DateTime parsedTime;
+    if (timestampStr != null && timestampStr.isNotEmpty) {
+      parsedTime = DateTime.tryParse(timestampStr) ??
+          (createdAtMillis != null
+              ? DateTime.fromMillisecondsSinceEpoch(createdAtMillis)
+              : DateTime.now());
+    } else if (createdAtMillis != null) {
+      parsedTime = DateTime.fromMillisecondsSinceEpoch(createdAtMillis);
+    } else {
+      parsedTime = DateTime.now();
+    }
+
     return UnknownFormatLog(
       id: map['id'] as String,
       smsBody: map['smsBody'] as String,
       smsSender: map['smsSender'] as String,
-      timestamp: DateTime.parse(map['timestamp'] as String),
+      timestamp: parsedTime,
       rejectionReason: map['rejectionReason'] as String? ?? 'unknown',
       isReviewed: (map['isReviewed'] as int? ?? 0) == 1,
       isResolved: (map['isResolved'] as int? ?? 0) == 1,

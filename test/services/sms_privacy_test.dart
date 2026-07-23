@@ -51,5 +51,38 @@ void main() {
       expect(classified!.amount, equals(500));
       expect(classified.transactionType, equals('debit'));
     });
+
+    test('HIGH-1 Regression: 12-digit UPI ref numbers survive redaction unmangled', () {
+      // HDFC Bank sample with 12-digit UPI Ref
+      const hdfcMsg = 'Rs 500.00 debited from A/c XX1234 on 20-Jul-26 to VPA swiggy@hdfcbank UPI Ref 402312345678.';
+      final redactedHdfc = SmsService.redactSensitiveData(hdfcMsg);
+      expect(redactedHdfc, contains('402312345678')); // 12-digit UPI ref preserved unmangled
+      expect(redactedHdfc, isNot(contains('XX****5678'))); // Not mangled as account/phone
+
+      // SBI sample with ref no
+      const sbiMsg = 'Dear Customer, A/c 550123456789 debited by Rs 2500.00 on 20Jul26 ref no 123456789012.';
+      final redactedSbi = SmsService.redactSensitiveData(sbiMsg);
+      expect(redactedSbi, contains('123456789012')); // 12-digit ref no preserved unmangled
+      expect(redactedSbi, contains('A/c XX****6789')); // Full account masked with last 4 retained
+
+      // ICICI sample with full account & phone number
+      const iciciMsg = 'Your A/c 550123456789 is debited for Rs 1200. Call +919876543210 for help.';
+      final redactedIcici = SmsService.redactSensitiveData(iciciMsg);
+      expect(redactedIcici, contains('A/c XX****6789')); // Account masked (last 4 kept)
+      expect(redactedIcici, contains('XX****3210')); // Phone masked (last 4 kept)
+      expect(redactedIcici, isNot(contains('550123456789')));
+      expect(redactedIcici, isNot(contains('9876543210')));
+
+      // Axis sample with IMPS Ref No
+      const axisMsg = 'INR 350.00 debited from Card ending 5678 at Swiggy. IMPS Ref No 987654321098.';
+      final redactedAxis = SmsService.redactSensitiveData(axisMsg);
+      expect(redactedAxis, contains('987654321098')); // IMPS Ref preserved unmangled
+
+      // UPI App (PhonePe / GPay) sample with helpline phone number
+      const upiAppMsg = 'Paid ₹150 to Swiggy using PhonePe. Contact helpline 9876543210 for support.';
+      final redactedUpi = SmsService.redactSensitiveData(upiAppMsg);
+      expect(redactedUpi, contains('XX****3210')); // Phone masked preserving last 4
+      expect(redactedUpi, isNot(contains('9876543210')));
+    });
   });
 }

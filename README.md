@@ -49,12 +49,15 @@ cd pet-expense-tracker
 flutter pub get
 ```
 
-### 3. Setup Firebase
-Configure Firebase for this project using FlutterFire CLI:
+### 3. Setup Firebase & Credentials
+Configure Firebase for this project using FlutterFire CLI locally:
 ```bash
-flutterfire configure
+dart pub global activate flutterfire_cli
+flutterfire configure --project=<your-firebase-project-id>
 ```
-Make sure you enable **Google Sign-In** and **Firestore** from the Firebase console.
+* **Gitignored Configuration Files**: The local output configuration files (`android/app/google-services.json`, `lib/firebase_options.dart`, `ios/Runner/GoogleService-Info.plist`) are strictly gitignored and must never be committed to source control.
+* **CI/CD Pipeline Setup**: For automated CI builds, inject the required credential files from your CI secret store during a pre-build step before compilation.
+* **⚠️ Warning on Repository Export / Audit Tools (e.g., Repomix)**: If you use repo-flattening or export tools such as `repomix` to create code snapshot files (`repomix-output.txt`) for reviews or AI prompts, **NEVER commit the generated output file**. Repomix inlines full file contents from your workspace, which will expose locally-present gitignored secret files if committed.
 
 ### 4. Setup Environment Variables
 Create a `.env` file in the root of the project. **Do not commit this file to version control.**

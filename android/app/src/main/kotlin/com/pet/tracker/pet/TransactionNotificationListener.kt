@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -122,20 +124,7 @@ class TransactionNotificationListener : NotificationListenerService() {
          * Save notification data to SharedPreferences cache when the app is in background or closed.
          */
         fun saveNotificationToCache(context: Context, data: Map<String, Any?>) {
-            try {
-                val prefs = context.getSharedPreferences("pet_notification_cache", Context.MODE_PRIVATE)
-                val cachedString = prefs.getString("pending_notifications", "[]") ?: "[]"
-                val jsonArray = JSONArray(cachedString)
-                val jsonObject = JSONObject()
-                for ((key, value) in data) {
-                    jsonObject.put(key, value)
-                }
-                jsonArray.put(jsonObject)
-                prefs.edit().putString("pending_notifications", jsonArray.toString()).apply()
-                Log.d(TAG, "Cached notification. Total cached: ${jsonArray.length()}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to cache notification: ${e.message}")
-            }
+            EncryptedNotificationCache.saveNotification(context, data)
         }
     }
 
@@ -176,7 +165,8 @@ class TransactionNotificationListener : NotificationListenerService() {
 
         if (!hasCurrencyOrAmount || !hasTransactionVerb) return
 
-        Log.d(TAG, "Financial notification from $packageName: ${body.take(50)}...")
+        // CRITICAL-1: Log event occurrence ONLY — NEVER interpolate body, amount, or merchant details.
+        SafeLog.d(TAG, "Financial notification captured from $packageName")
 
         // Forward to Dart
         val data = mapOf(
@@ -191,13 +181,20 @@ class TransactionNotificationListener : NotificationListenerService() {
         try {
             val sink = eventSink
             if (sink != null) {
-                sink.success(data)
+                Handler(Looper.getMainLooper()).post {
+                    try {
+                        sink.success(data)
+                    } catch (e: Exception) {
+                        SafeLog.e(TAG, "Failed to deliver notification to EventSink: ${e.message}")
+                        saveNotificationToCache(applicationContext ?: this, data)
+                    }
+                }
             } else {
-                Log.d(TAG, "eventSink is null, caching notification")
+                SafeLog.d(TAG, "eventSink is null, caching notification")
                 saveNotificationToCache(applicationContext ?: this, data)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error forwarding notification: ${e.message}")
+            SafeLog.e(TAG, "Error forwarding notification: ${e.message}")
             saveNotificationToCache(applicationContext ?: this, data)
         }
     }
@@ -208,11 +205,11 @@ class TransactionNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        Log.d(TAG, "Notification listener connected")
+        SafeLog.d(TAG, "Notification listener connected")
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
-        Log.d(TAG, "Notification listener disconnected")
+        SafeLog.d(TAG, "Notification listener disconnected")
     }
 }

@@ -68,6 +68,16 @@ class ClassificationRepository {
       log.toMap(),
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+
+    // Enforce max 500-row cap on new insert
+    await db.execute('''
+      DELETE FROM unknown_format_logs 
+      WHERE id NOT IN (
+        SELECT id FROM unknown_format_logs 
+        ORDER BY COALESCE(created_at, 0) DESC, timestamp DESC 
+        LIMIT 500
+      )
+    ''');
     return log;
   }
 
@@ -123,5 +133,35 @@ class ClassificationRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  /// Enforce retention TTL (default 30 days) and row cap (default 500).
+  Future<void> cleanUpUnknownLogs({
+    int maxAgeDays = 30,
+    int maxRows = 500,
+  }) async {
+    final db = await _dbHelper.database;
+    final cutoffMillis =
+        DateTime.now().subtract(Duration(days: maxAgeDays)).millisecondsSinceEpoch;
+    final cutoffIso =
+        DateTime.now().subtract(Duration(days: maxAgeDays)).toIso8601String();
+
+    // Delete rows older than maxAgeDays
+    await db.delete(
+      'unknown_format_logs',
+      where:
+          '(created_at IS NOT NULL AND created_at < ?) OR (created_at IS NULL AND timestamp < ?)',
+      whereArgs: [cutoffMillis, cutoffIso],
+    );
+
+    // Cap row count at maxRows (evict oldest)
+    await db.execute('''
+      DELETE FROM unknown_format_logs 
+      WHERE id NOT IN (
+        SELECT id FROM unknown_format_logs 
+        ORDER BY COALESCE(created_at, 0) DESC, timestamp DESC 
+        LIMIT $maxRows
+      )
+    ''');
   }
 }

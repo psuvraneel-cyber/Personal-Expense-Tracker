@@ -220,6 +220,11 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       } catch (e) {
         AppLogger.debug('[MAIN] Failed to trigger sync queue on resume: $e');
       }
+      try {
+        _navigatorKey.currentContext?.read<SmsTransactionProvider>().runReconciliation();
+      } catch (e) {
+        AppLogger.debug('[MAIN] Failed to trigger SMS reconciliation on resume: $e');
+      }
     }
 
     if (!BiometricService.instance.isEnabled) return;

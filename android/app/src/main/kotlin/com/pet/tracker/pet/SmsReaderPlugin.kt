@@ -8,6 +8,8 @@ import android.content.IntentFilter
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Telephony
 import android.telephony.SmsMessage
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -41,6 +43,10 @@ import android.util.Log
  */
 class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     EventChannel.StreamHandler {
+
+    companion object {
+        private const val TAG = "SmsReaderPlugin"
+    }
 
     private lateinit var methodChannel: MethodChannel
     private lateinit var eventChannel: EventChannel
@@ -118,27 +124,15 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                 // Process cached notifications on startup
                 val context = applicationContext
                 if (context != null && events != null) {
-                    try {
-                        val prefs = context.getSharedPreferences("pet_notification_cache", Context.MODE_PRIVATE)
-                        val cachedString = prefs.getString("pending_notifications", "[]") ?: "[]"
-                        val jsonArray = JSONArray(cachedString)
-                        if (jsonArray.length() > 0) {
-                            Log.d("SmsReaderPlugin", "Processing ${jsonArray.length()} cached notifications")
-                            for (i in 0 until jsonArray.length()) {
-                                val jsonObject = jsonArray.getJSONObject(i)
-                                val data = mutableMapOf<String, Any?>()
-                                val keys = jsonObject.keys()
-                                while (keys.hasNext()) {
-                                    val key = keys.next()
-                                    data[key] = jsonObject.get(key)
-                                }
+                    val pendingList = EncryptedNotificationCache.popPendingNotifications(context)
+                    for (data in pendingList) {
+                        Handler(Looper.getMainLooper()).post {
+                            try {
                                 events.success(data)
+                            } catch (e: Exception) {
+                                SafeLog.e(TAG, "Failed to deliver cached notification to EventSink: ${e.message}")
                             }
-                            // Clear the cache
-                            prefs.edit().putString("pending_notifications", "[]").apply()
                         }
-                    } catch (e: Exception) {
-                        Log.e("SmsReaderPlugin", "Error processing cached notifications: ${e.message}")
                     }
                 }
             }
@@ -205,6 +199,35 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                 if (ctx != null) {
                     TransactionNotificationListener.requestAccess(ctx)
                     result.success(true)
+                } else {
+                    result.success(false)
+                }
+            }
+            "getDeviceManufacturer" -> {
+                result.success(android.os.Build.MANUFACTURER ?: "unknown")
+            }
+            "openBatteryOptimizationSettings" -> {
+                val ctx = applicationContext
+                if (ctx != null) {
+                    try {
+                        val intent = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        ctx.startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.fromParts("package", ctx.packageName, null)
+                            ).apply {
+                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            ctx.startActivity(intent)
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            result.success(false)
+                        }
+                    }
                 } else {
                     result.success(false)
                 }
@@ -277,14 +300,14 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                 } while (cursor.moveToNext())
             }
         } catch (e: SecurityException) {
-            android.util.Log.w("SmsReaderPlugin", "SMS permission denied: ${e.message}")
+            SafeLog.w("SmsReaderPlugin", "SMS permission denied: ${e.message}")
         } catch (e: Exception) {
-            android.util.Log.e("SmsReaderPlugin", "Error reading SMS from $contentUri: ${e.message}", e)
+            SafeLog.e("SmsReaderPlugin", "Error reading SMS from $contentUri: ${e.message}", e)
         } finally {
             cursor?.close()
         }
 
-        android.util.Log.d("SmsReaderPlugin", "readSms($contentUri): found ${results.size} bank SMS")
+        SafeLog.d("SmsReaderPlugin", "readSms($contentUri): found ${results.size} bank SMS")
         return results
     }
 
@@ -361,14 +384,14 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                 } while (cursor.moveToNext())
             }
         } catch (e: SecurityException) {
-            android.util.Log.w("SmsReaderPlugin", "SMS permission denied for reconciliation: ${e.message}")
+            SafeLog.w("SmsReaderPlugin", "SMS permission denied for reconciliation: ${e.message}")
         } catch (e: Exception) {
-            android.util.Log.e("SmsReaderPlugin", "Error reading SMS since $cutoffTime: ${e.message}", e)
+            SafeLog.e("SmsReaderPlugin", "Error reading SMS since $cutoffTime: ${e.message}", e)
         } finally {
             cursor?.close()
         }
 
-        android.util.Log.d("SmsReaderPlugin", "readSmsSince: cutoff=${cutoffTime}, found=${results.size} bank SMS")
+        SafeLog.d("SmsReaderPlugin", "readSmsSince: cutoff=${cutoffTime}, found=${results.size} bank SMS")
         return results
     }
 
@@ -470,14 +493,25 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                             "date" to (timestampByAddress[address] ?: System.currentTimeMillis()),
                             "type" to 1  // incoming = inbox type
                         )
-                        eventSink?.success(messageData)
+                        val sink = eventSink
+                        if (sink != null) {
+                            Handler(Looper.getMainLooper()).post {
+                                try {
+                                    sink.success(messageData)
+                                } catch (e: Exception) {
+                                    SafeLog.e(TAG, "Failed to deliver SMS to EventSink: ${e.message}")
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
         val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION)
-        filter.priority = 999
+        // Standard non-aggressive priority (100) to comply with Google Play developer policy
+        // guidelines while ensuring reliable real-time broadcast delivery.
+        filter.priority = 100
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(smsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)

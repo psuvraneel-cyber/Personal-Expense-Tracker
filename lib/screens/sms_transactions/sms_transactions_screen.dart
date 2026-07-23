@@ -429,6 +429,9 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
         // Summary bar
         _buildSummaryBar(provider, isDark),
 
+        // Last synced indicator
+        _buildLastSyncedIndicator(provider, isDark),
+
         // Filter chips
         _buildFilterChips(isDark),
 
@@ -752,6 +755,47 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
               amount: _currencyFormat.format(provider.totalCredits),
               icon: Icons.arrow_downward_rounded,
               color: AppTheme.incomeGreen,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLastSyncedIndicator(SmsTransactionProvider provider, bool isDark) {
+    final timestamp = provider.lastSyncTimestamp;
+    String label;
+    if (timestamp == null) {
+      label = 'Last synced: Never';
+    } else {
+      final diff = DateTime.now().difference(timestamp);
+      if (diff.inSeconds < 60) {
+        label = 'Last synced just now';
+      } else if (diff.inMinutes < 60) {
+        label = 'Last synced ${diff.inMinutes}m ago';
+      } else if (diff.inHours < 24) {
+        label = 'Last synced ${diff.inHours}h ago';
+      } else {
+        label = 'Last synced ${diff.inDays}d ago';
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            Icons.access_time_rounded,
+            size: 13,
+            color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
             ),
           ),
         ],
