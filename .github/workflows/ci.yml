@@ -33,12 +33,12 @@ jobs:
           else
             BASE="${{ github.event.before }}"
           fi
-          CHANGED_DART_FILES=$(git diff --name-only "$BASE" "${{ github.sha }}" -- '*.dart')
-          if [ -z "$CHANGED_DART_FILES" ]; then
+          mapfile -d '' -t CHANGED_DART_FILES < <(git diff --name-only -z "$BASE" "${{ github.sha }}" -- '*.dart')
+          if [ "${#CHANGED_DART_FILES[@]}" -eq 0 ]; then
             echo "No Dart files changed."
             exit 0
           fi
-          echo "$CHANGED_DART_FILES" | xargs dart format --set-exit-if-changed
+          dart format --set-exit-if-changed -- "${CHANGED_DART_FILES[@]}"
 
       - name: Analyze code
         run: flutter analyze --no-fatal-infos
