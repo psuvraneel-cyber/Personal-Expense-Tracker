@@ -425,7 +425,10 @@ class SmsService {
       final startIdx = m.start;
       final precedingText = redacted.substring(0, startIdx).toLowerCase();
       // Skip if preceded by reference ID keywords
-      if (RegExp(r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$', caseSensitive: false).hasMatch(precedingText)) {
+      if (RegExp(
+        r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$',
+        caseSensitive: false,
+      ).hasMatch(precedingText)) {
         return m.group(0)!;
       }
       final last4 = m.group(2)!;
@@ -441,10 +444,16 @@ class SmsService {
       final startIdx = m.start;
       final precedingText = redacted.substring(0, startIdx).toLowerCase();
       // Do not redact if preceded by currency or reference ID keywords
-      if (RegExp(r'(?:rs\.?|inr\.?|₹)\s*$', caseSensitive: false).hasMatch(precedingText)) {
+      if (RegExp(
+        r'(?:rs\.?|inr\.?|₹)\s*$',
+        caseSensitive: false,
+      ).hasMatch(precedingText)) {
         return m.group(0)!;
       }
-      if (RegExp(r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$', caseSensitive: false).hasMatch(precedingText)) {
+      if (RegExp(
+        r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$',
+        caseSensitive: false,
+      ).hasMatch(precedingText)) {
         return m.group(0)!;
       }
       final last4 = m.group(2)!;
@@ -648,8 +657,12 @@ Future<List<SmsTransaction>> _parseMessagesIsolate(_IsolateData data) async {
     }
     seenHashes.add(hash);
 
-    final category = classified.category ?? SmsService.inferCategoryFromClassified(classified);
-    final normalizedMerchant = MerchantNormalizer.normalize(classified.merchantName);
+    final category =
+        classified.category ??
+        SmsService.inferCategoryFromClassified(classified);
+    final normalizedMerchant = MerchantNormalizer.normalize(
+      classified.merchantName,
+    );
 
     parsed.add(
       SmsTransaction(

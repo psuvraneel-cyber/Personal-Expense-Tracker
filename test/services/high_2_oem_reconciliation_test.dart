@@ -21,28 +21,34 @@ void main() {
       expect(aggressiveOems, contains('poco'));
     });
 
-    test('ReconciliationService respects 5-minute throttle between runs', () async {
-      SharedPreferences.setMockInitialValues({
-        'pet_reconciliation_last_run': DateTime.now().millisecondsSinceEpoch,
-      });
+    test(
+      'ReconciliationService respects 5-minute throttle between runs',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'pet_reconciliation_last_run': DateTime.now().millisecondsSinceEpoch,
+        });
 
-      final service = ReconciliationService();
-      // Should return 0 immediately due to 5-min throttle
-      final count = await service.reconcile();
-      expect(count, equals(0));
-    });
+        final service = ReconciliationService();
+        // Should return 0 immediately due to 5-min throttle
+        final count = await service.reconcile();
+        expect(count, equals(0));
+      },
+    );
 
-    test('getLastSyncTimestamp reads watermark or last run correctly', () async {
-      final nowMs = DateTime.now().millisecondsSinceEpoch;
-      SharedPreferences.setMockInitialValues({
-        'pet_reconciliation_watermark': nowMs - 60000, // 1 min ago
-      });
+    test(
+      'getLastSyncTimestamp reads watermark or last run correctly',
+      () async {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        SharedPreferences.setMockInitialValues({
+          'pet_reconciliation_watermark': nowMs - 60000, // 1 min ago
+        });
 
-      final service = ReconciliationService();
-      final lastSync = await service.getLastSyncTimestamp();
+        final service = ReconciliationService();
+        final lastSync = await service.getLastSyncTimestamp();
 
-      expect(lastSync, isNotNull);
-      expect(lastSync!.millisecondsSinceEpoch, equals(nowMs - 60000));
-    });
+        expect(lastSync, isNotNull);
+        expect(lastSync!.millisecondsSinceEpoch, equals(nowMs - 60000));
+      },
+    );
   });
 }

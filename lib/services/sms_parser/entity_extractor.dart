@@ -657,8 +657,12 @@ class EntityExtractor {
     try {
       if (month < 1 || month > 12 || day < 1 || day > 31) return null;
       final dt = DateTime(
-        year, month, day,
-        smsTime.hour, smsTime.minute, smsTime.second,
+        year,
+        month,
+        day,
+        smsTime.hour,
+        smsTime.minute,
+        smsTime.second,
       );
       final now = DateTime.now();
       if (dt.isAfter(now.add(const Duration(days: 730)))) return null;

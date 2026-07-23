@@ -26,10 +26,14 @@ class CashflowForecastService {
       }
     }
 
-    final avgDailyExpense =
-        _avgDailyAmount(pastTransactions, TransactionType.expense);
-    final avgDailyIncome =
-        _avgDailyAmount(pastTransactions, TransactionType.income);
+    final avgDailyExpense = _avgDailyAmount(
+      pastTransactions,
+      TransactionType.expense,
+    );
+    final avgDailyIncome = _avgDailyAmount(
+      pastTransactions,
+      TransactionType.income,
+    );
     final netDaily = avgDailyIncome - avgDailyExpense;
 
     // Check if we have enough data for a reliable forecast
@@ -52,8 +56,9 @@ class CashflowForecastService {
     // remaining days in the month, rather than the old misleading
     // `avgDailyExpense * 0.9` which ignored actual balance.
     final daysRemainingInMonth = _daysRemainingInMonth(now);
-    final currentBalance =
-        dailyPoints.isNotEmpty ? dailyPoints.first.balance : balance;
+    final currentBalance = dailyPoints.isNotEmpty
+        ? dailyPoints.first.balance
+        : balance;
     final safeToSpend = daysRemainingInMonth > 0
         ? currentBalance / daysRemainingInMonth
         : currentBalance;
@@ -61,8 +66,7 @@ class CashflowForecastService {
     final starting = dailyPoints.isNotEmpty
         ? dailyPoints.first.balance - netDaily
         : balance;
-    final ending =
-        dailyPoints.isNotEmpty ? dailyPoints.last.balance : balance;
+    final ending = dailyPoints.isNotEmpty ? dailyPoints.last.balance : balance;
 
     return CashflowForecast(
       startingBalance: starting < 0 ? 0 : starting,

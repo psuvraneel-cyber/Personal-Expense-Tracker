@@ -62,9 +62,11 @@ class _CashflowScreenState extends State<CashflowScreen> {
           builder: (context, provider, _) {
             CashflowForecast forecast;
             String incomeRisk;
-            
+
             try {
-              forecast = CashflowForecastService.forecast(provider.allTransactions);
+              forecast = CashflowForecastService.forecast(
+                provider.allTransactions,
+              );
               incomeRisk = _computeIncomeRisk(provider.allTransactions);
             } catch (e) {
               return _buildError(isDark, e.toString());
@@ -82,7 +84,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
                       color: AppTheme.warningYellow.withAlpha(isDark ? 18 : 12),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: AppTheme.warningYellow.withAlpha(isDark ? 40 : 25),
+                        color: AppTheme.warningYellow.withAlpha(
+                          isDark ? 40 : 25,
+                        ),
                       ),
                     ),
                     child: Row(
@@ -254,7 +258,11 @@ class _CashflowScreenState extends State<CashflowScreen> {
     );
   }
 
-  Widget _buildStatsRow(CashflowForecast forecast, String incomeRisk, bool isDark) {
+  Widget _buildStatsRow(
+    CashflowForecast forecast,
+    String incomeRisk,
+    bool isDark,
+  ) {
     final items = [
       (
         'Starting balance',
@@ -362,7 +370,6 @@ class _CashflowScreenState extends State<CashflowScreen> {
       ],
     );
   }
-
 }
 
 class _BarChartPainter extends CustomPainter {

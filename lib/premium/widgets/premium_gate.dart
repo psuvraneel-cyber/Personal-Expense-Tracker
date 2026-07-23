@@ -22,7 +22,7 @@ class PremiumGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Consumer<PremiumProvider>(
       builder: (context, premium, _) {
         if (premium.isLoading) {
@@ -58,19 +58,27 @@ class PremiumGate extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentPurple.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.lock_rounded,
-                      size: 48,
-                      color: AppTheme.accentPurple,
-                    ),
-                  ).animate(onPlay: (c) => c.repeat(reverse: true))
-                   .shimmer(duration: 2500.ms, color: Colors.white.withValues(alpha: 0.2))
-                   .scale(begin: const Offset(0.96, 0.96), end: const Offset(1.04, 1.04), duration: 2000.ms),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentPurple.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.lock_rounded,
+                          size: 48,
+                          color: AppTheme.accentPurple,
+                        ),
+                      )
+                      .animate(onPlay: (c) => c.repeat(reverse: true))
+                      .shimmer(
+                        duration: 2500.ms,
+                        color: Colors.white.withValues(alpha: 0.2),
+                      )
+                      .scale(
+                        begin: const Offset(0.96, 0.96),
+                        end: const Offset(1.04, 1.04),
+                        duration: 2000.ms,
+                      ),
                   const SizedBox(height: 24),
                   Text(
                     title,
@@ -96,7 +104,10 @@ class PremiumGate extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accentPurple,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -117,8 +128,13 @@ class PremiumGate extends StatelessWidget {
                       }
                     },
                     child: Text(
-                      !premium.isPremium ? 'Unlock Premium' : 'Enable Experimental Features',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      !premium.isPremium
+                          ? 'Unlock Premium'
+                          : 'Enable Experimental Features',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ],

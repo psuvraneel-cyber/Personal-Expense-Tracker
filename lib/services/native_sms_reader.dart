@@ -288,8 +288,9 @@ class NativeSmsReader {
   Future<String> getDeviceManufacturer() async {
     if (!isSupported) return 'unknown';
     try {
-      final String manufacturer =
-          await _methodChannel.invokeMethod('getDeviceManufacturer');
+      final String manufacturer = await _methodChannel.invokeMethod(
+        'getDeviceManufacturer',
+      );
       return manufacturer;
     } catch (_) {
       return 'unknown';
@@ -306,8 +307,9 @@ class NativeSmsReader {
   Future<bool> openBatteryOptimizationSettings() async {
     if (!isSupported) return false;
     try {
-      final bool success =
-          await _methodChannel.invokeMethod('openBatteryOptimizationSettings');
+      final bool success = await _methodChannel.invokeMethod(
+        'openBatteryOptimizationSettings',
+      );
       return success;
     } catch (_) {
       return false;

@@ -30,7 +30,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
           _offerings = offerings;
           _isLoading = false;
           // Default to the first available package or monthly/yearly if present
-          if (offerings.current != null && offerings.current!.availablePackages.isNotEmpty) {
+          if (offerings.current != null &&
+              offerings.current!.availablePackages.isNotEmpty) {
             _selectedPackage = offerings.current!.availablePackages.first;
           }
         });
@@ -126,8 +127,16 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: isDark
-                ? [const Color(0xFF1E1035), const Color(0xFF0F0B1E), const Color(0xFF0A0915)]
-                : [const Color(0xFFF3E8FF), const Color(0xFFFAFAFA), Colors.white],
+                ? [
+                    const Color(0xFF1E1035),
+                    const Color(0xFF0F0B1E),
+                    const Color(0xFF0A0915),
+                  ]
+                : [
+                    const Color(0xFFF3E8FF),
+                    const Color(0xFFFAFAFA),
+                    Colors.white,
+                  ],
           ),
         ),
         child: SafeArea(
@@ -141,7 +150,10 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                     backgroundColor: Colors.transparent,
                     elevation: 0,
                     leading: IconButton(
-                      icon: Icon(Icons.close_rounded, color: isDark ? Colors.white70 : Colors.black87),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                     actions: [
@@ -164,40 +176,57 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                         const SizedBox(height: 20),
                         // Crown icon with glowing animation
                         Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppTheme.accentPurple.withValues(alpha: 0.15),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.accentPurple.withValues(alpha: 0.2),
-                                  blurRadius: 30,
-                                  spreadRadius: 5,
-                                )
-                              ]
-                            ),
-                            child: const Icon(
-                              Icons.workspace_premium_rounded,
-                              size: 72,
-                              color: Colors.amber,
-                            ),
-                          )
-                              .animate(onPlay: (controller) => controller.repeat(reverse: true))
-                              .shimmer(duration: 2000.ms, color: Colors.amber.withValues(alpha: 0.3))
-                              .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 1500.ms),
+                          child:
+                              Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: AppTheme.accentPurple.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppTheme.accentPurple
+                                              .withValues(alpha: 0.2),
+                                          blurRadius: 30,
+                                          spreadRadius: 5,
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.workspace_premium_rounded,
+                                      size: 72,
+                                      color: Colors.amber,
+                                    ),
+                                  )
+                                  .animate(
+                                    onPlay: (controller) =>
+                                        controller.repeat(reverse: true),
+                                  )
+                                  .shimmer(
+                                    duration: 2000.ms,
+                                    color: Colors.amber.withValues(alpha: 0.3),
+                                  )
+                                  .scale(
+                                    begin: const Offset(0.95, 0.95),
+                                    end: const Offset(1.05, 1.05),
+                                    duration: 1500.ms,
+                                  ),
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          'Unlock P.E.T Premium',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900,
-                            color: isDark ? Colors.white : Colors.black87,
-                            letterSpacing: -0.5,
-                          ),
-                          textAlign: TextAlign.center,
-                        ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
+                              'Unlock P.E.T Premium',
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                                color: isDark ? Colors.white : Colors.black87,
+                                letterSpacing: -0.5,
+                              ),
+                              textAlign: TextAlign.center,
+                            )
+                            .animate()
+                            .fadeIn(duration: 400.ms)
+                            .slideY(begin: 0.2, end: 0),
                         const SizedBox(height: 8),
                         Text(
                           'Gain access to elite wealth tracking features and AI-driven insights.',
@@ -211,37 +240,53 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
                         // Premium Features list
                         _buildFeatureRow(
-                          icon: Icons.auto_awesome_rounded,
-                          title: 'AI Financial Copilot',
-                          subtitle: 'Custom advice & automated budget adjustments.',
-                          color: const Color(0xFFEC4899),
-                          isDark: isDark,
-                        ).animate().fadeIn(delay: 250.ms, duration: 450.ms).slideX(begin: -0.1, end: 0),
+                              icon: Icons.auto_awesome_rounded,
+                              title: 'AI Financial Copilot',
+                              subtitle:
+                                  'Custom advice & automated budget adjustments.',
+                              color: const Color(0xFFEC4899),
+                              isDark: isDark,
+                            )
+                            .animate()
+                            .fadeIn(delay: 250.ms, duration: 450.ms)
+                            .slideX(begin: -0.1, end: 0),
                         const SizedBox(height: 16),
                         _buildFeatureRow(
-                          icon: Icons.account_balance_rounded,
-                          title: 'Advanced Tax Buckets',
-                          subtitle: 'Track 80C, 80D, HRA deductions dynamically.',
-                          color: const Color(0xFF10B981),
-                          isDark: isDark,
-                        ).animate().fadeIn(delay: 350.ms, duration: 450.ms).slideX(begin: -0.1, end: 0),
+                              icon: Icons.account_balance_rounded,
+                              title: 'Advanced Tax Buckets',
+                              subtitle:
+                                  'Track 80C, 80D, HRA deductions dynamically.',
+                              color: const Color(0xFF10B981),
+                              isDark: isDark,
+                            )
+                            .animate()
+                            .fadeIn(delay: 350.ms, duration: 450.ms)
+                            .slideX(begin: -0.1, end: 0),
                         const SizedBox(height: 16),
                         _buildFeatureRow(
-                          icon: Icons.insights_rounded,
-                          title: 'Cashflow Forecasting',
-                          subtitle: 'Runways, safe-to-spend targets & projections.',
-                          color: const Color(0xFF8B5CF6),
-                          isDark: isDark,
-                        ).animate().fadeIn(delay: 450.ms, duration: 450.ms).slideX(begin: -0.1, end: 0),
+                              icon: Icons.insights_rounded,
+                              title: 'Cashflow Forecasting',
+                              subtitle:
+                                  'Runways, safe-to-spend targets & projections.',
+                              color: const Color(0xFF8B5CF6),
+                              isDark: isDark,
+                            )
+                            .animate()
+                            .fadeIn(delay: 450.ms, duration: 450.ms)
+                            .slideX(begin: -0.1, end: 0),
                         const SizedBox(height: 16),
                         _buildFeatureRow(
-                          icon: Icons.timer_rounded,
-                          title: 'Spending Focus Mode',
-                          subtitle: 'Temporarily pause impulse transactions.',
-                          color: const Color(0xFFF59E0B),
-                          isDark: isDark,
-                        ).animate().fadeIn(delay: 550.ms, duration: 450.ms).slideX(begin: -0.1, end: 0),
-                        
+                              icon: Icons.timer_rounded,
+                              title: 'Spending Focus Mode',
+                              subtitle:
+                                  'Temporarily pause impulse transactions.',
+                              color: const Color(0xFFF59E0B),
+                              isDark: isDark,
+                            )
+                            .animate()
+                            .fadeIn(delay: 550.ms, duration: 450.ms)
+                            .slideX(begin: -0.1, end: 0),
+
                         const SizedBox(height: 40),
                         Text(
                           'Choose Your Subscription Plan',
@@ -264,24 +309,42 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                         else if (_offerings != null &&
                             _offerings!.current != null &&
                             _offerings!.current!.availablePackages.isNotEmpty)
-                          ..._offerings!.current!.availablePackages.map((package) {
+                          ..._offerings!.current!.availablePackages.map((
+                            package,
+                          ) {
                             final isSelected = _selectedPackage == package;
-                            return _buildPackageItem(package, isSelected, isDark)
+                            return _buildPackageItem(
+                                  package,
+                                  isSelected,
+                                  isDark,
+                                )
                                 .animate()
                                 .fadeIn(delay: 100.ms)
-                                .scale(begin: const Offset(0.97, 0.97), end: const Offset(1, 1), duration: 250.ms);
+                                .scale(
+                                  begin: const Offset(0.97, 0.97),
+                                  end: const Offset(1, 1),
+                                  duration: 250.ms,
+                                );
                           })
                         else
                           Center(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 24.0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 24.0,
+                              ),
                               child: Text(
                                 'No subscription packages available at this time.',
-                                style: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
+                                style: TextStyle(
+                                  color: isDark
+                                      ? Colors.white38
+                                      : Colors.black38,
+                                ),
                               ),
                             ),
                           ),
-                        const SizedBox(height: 120), // Bottom padding for content scroll clearance
+                        const SizedBox(
+                          height: 120,
+                        ), // Bottom padding for content scroll clearance
                       ]),
                     ),
                   ),
@@ -301,8 +364,16 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: isDark
-                            ? [Colors.transparent, const Color(0xFF0F0B1E).withValues(alpha: 0.95), const Color(0xFF0A0915)]
-                            : [Colors.transparent, Colors.white.withValues(alpha: 0.95), Colors.white],
+                            ? [
+                                Colors.transparent,
+                                const Color(0xFF0F0B1E).withValues(alpha: 0.95),
+                                const Color(0xFF0A0915),
+                              ]
+                            : [
+                                Colors.transparent,
+                                Colors.white.withValues(alpha: 0.95),
+                                Colors.white,
+                              ],
                       ),
                     ),
                     child: Column(
@@ -317,24 +388,37 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                             elevation: 8,
-                            shadowColor: AppTheme.accentPurple.withValues(alpha: 0.4),
+                            shadowColor: AppTheme.accentPurple.withValues(
+                              alpha: 0.4,
+                            ),
                           ),
-                          onPressed: _isLoading ? null : _purchaseSelectedPackage,
+                          onPressed: _isLoading
+                              ? null
+                              : _purchaseSelectedPackage,
                           child: _isLoading
                               ? const SizedBox(
                                   height: 24,
                                   width: 24,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Text(
                                   'Subscribe & Continue',
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                         ),
                         const SizedBox(height: 12),
                         const Text(
                           'Secured with Google Play billing. Cancel anytime.',
-                          style: TextStyle(fontSize: 11, color: AppTheme.textTertiary),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.textTertiary,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -398,7 +482,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     // Generate helpful duration markers for titles
     String durationTag = 'Subscription';
     bool isYearly = false;
-    
+
     if (package.packageType == PackageType.lifetime) {
       durationTag = 'Lifetime Access';
     } else if (package.packageType == PackageType.annual) {
@@ -419,13 +503,19 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDark
-              ? (isSelected ? AppTheme.accentPurple.withValues(alpha: 0.15) : AppTheme.surfaceDark)
-              : (isSelected ? AppTheme.accentPurple.withValues(alpha: 0.08) : AppTheme.surfaceLight),
+              ? (isSelected
+                    ? AppTheme.accentPurple.withValues(alpha: 0.15)
+                    : AppTheme.surfaceDark)
+              : (isSelected
+                    ? AppTheme.accentPurple.withValues(alpha: 0.08)
+                    : AppTheme.surfaceLight),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
                 ? AppTheme.accentPurple
-                : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.08)),
+                : (isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.08)),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -473,11 +563,16 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                       if (isYearly) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.accentTeal.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.accentTeal.withValues(alpha: 0.5)),
+                            border: Border.all(
+                              color: AppTheme.accentTeal.withValues(alpha: 0.5),
+                            ),
                           ),
                           child: const Text(
                             'BEST VALUE',

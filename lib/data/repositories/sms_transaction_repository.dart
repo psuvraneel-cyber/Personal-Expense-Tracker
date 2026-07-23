@@ -8,7 +8,7 @@ class SmsTransactionRepository {
   final DatabaseHelper _dbHelper;
 
   SmsTransactionRepository({DatabaseHelper? dbHelper})
-      : _dbHelper = dbHelper ?? DatabaseHelper();
+    : _dbHelper = dbHelper ?? DatabaseHelper();
 
   /// Get all SMS transactions, ordered by timestamp descending.
   Future<List<SmsTransaction>> getAllSmsTransactions() async {

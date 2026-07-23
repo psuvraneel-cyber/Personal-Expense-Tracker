@@ -1038,7 +1038,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!authenticated) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Authentication failed. Export cancelled.')),
+            const SnackBar(
+              content: Text('Authentication failed. Export cancelled.'),
+            ),
           );
         }
         return;
@@ -1048,7 +1050,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!context.mounted) return;
     final categoryProvider = context.read<CategoryProvider>();
     final categoryNames = {
-      for (final cat in categoryProvider.categories) cat.id: cat.name
+      for (final cat in categoryProvider.categories) cat.id: cat.name,
     };
 
     // Quick date range picker using the current financial year

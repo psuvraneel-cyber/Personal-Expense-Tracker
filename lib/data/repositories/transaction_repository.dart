@@ -140,7 +140,9 @@ class TransactionRepository {
   }
 
   /// Insert multiple transactions atomically using a batch.
-  Future<void> insertTransactionsBatch(List<TransactionRecord> transactions) async {
+  Future<void> insertTransactionsBatch(
+    List<TransactionRecord> transactions,
+  ) async {
     if (transactions.isEmpty) return;
     final db = await _dbHelper.database;
     final batch = db.batch();
@@ -258,24 +260,22 @@ class TransactionRepository {
     String userId,
   ) async {
     final db = await _dbHelper.database;
-    await db.insert(
-      'transaction_sync_queue',
-      {
-        'id': id,
-        'transactionId': transactionId,
-        'action': action,
-        'payload': payload,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'userId': userId,
-        'retryCount': 0,
-        'lastAttemptAt': 0,
-        'lastError': null,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('transaction_sync_queue', {
+      'id': id,
+      'transactionId': transactionId,
+      'action': action,
+      'payload': payload,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'userId': userId,
+      'retryCount': 0,
+      'lastAttemptAt': 0,
+      'lastError': null,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List<Map<String, dynamic>>> getPendingSyncActions(String userId) async {
+  Future<List<Map<String, dynamic>>> getPendingSyncActions(
+    String userId,
+  ) async {
     final db = await _dbHelper.database;
     return await db.query(
       'transaction_sync_queue',
@@ -287,11 +287,7 @@ class TransactionRepository {
 
   Future<void> deleteSyncAction(String id) async {
     final db = await _dbHelper.database;
-    await db.delete(
-      'transaction_sync_queue',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.delete('transaction_sync_queue', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> incrementSyncRetry(String id, String error) async {

@@ -105,237 +105,245 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
       body: PremiumGate(
         title: 'Unlock Premium Features',
         subtitle: 'Get advanced insights, AI guidance, and financial tools.',
-        child: Consumer4<
-          TransactionProvider,
-          GoalProvider,
-          RecurringProvider,
-          BudgetProvider
-        >(
-          builder: (
-            context,
-            txnProvider,
-            goalProvider,
-            recurringProvider,
-            budgetProvider,
-            _,
-          ) {
-            _recomputeIfNeeded(
-              txnProvider,
-              goalProvider,
-              recurringProvider,
-              budgetProvider,
-            );
-
-          final health = _cachedHealth!;
-          final now = DateTime.now();
-
-          final totalSaved = goalProvider.goals.fold(
-            0.0,
-            (s, g) => s + g.currentAmount,
-          );
-          final billsDueSoon = recurringProvider.recurring
-              .where(
-                (b) =>
-                    b.nextDueAt.isAfter(now) &&
-                    b.nextDueAt.difference(now).inDays <= 7,
-              )
-              .length;
-
-          final goalBadge = goalProvider.goals.isEmpty
-              ? null
-              : '${goalProvider.goals.length} goal${goalProvider.goals.length > 1 ? 's' : ''} · '
-                  '${fmt.format(totalSaved)} saved';
-
-          final billBadge = recurringProvider.recurring.isEmpty
-              ? null
-              : '${recurringProvider.recurring.length} tracked';
-
-          final features = [
-            (
-              Icons.flag_rounded,
-              'Savings Goals',
-              'Set targets & top up',
-              AppTheme.accentPurple,
-              goalBadge,
-              () => _push(context, const GoalsScreen()),
-            ),
-            (
-              Icons.repeat_rounded,
-              'Bills & Subscriptions',
-              'Upcoming payments',
-              AppTheme.accentTeal,
-              billBadge,
-              () => _push(context, const RecurringBillsScreen()),
-            ),
-            (
-              Icons.insights_rounded,
-              'Cash Flow',
-              'Safe-to-spend & runway',
-              const Color(0xFF8B5CF6),
-              null,
-              () => _push(context, const CashflowScreen()),
-            ),
-            (
-              Icons.calendar_view_week_rounded,
-              'Weekly Planner',
-              'Daily spend tracker',
-              AppTheme.accentTeal,
-              null,
-              () => _push(context, const WeeklyPlannerScreen()),
-            ),
-            (
-              Icons.pause_circle_rounded,
-              'Focus Mode',
-              'Pause impulse spending',
-              const Color(0xFFf59e0b),
-              null,
-              () => _push(context, const SpendPauseScreen()),
-            ),
-            (
-              Icons.receipt_long_rounded,
-              'Tax Buckets',
-              '80C, 80D, HRA & more',
-              const Color(0xFF10b981),
-              null,
-              () => _push(context, const TaxBucketsScreen()),
-            ),
-            (
-              Icons.auto_awesome_rounded,
-              'AI Copilot',
-              'Ask your finances anything',
-              const Color(0xFFec4899),
-              null,
-              () => _push(context, const AiCopilotScreen()),
-            ),
-            (
-              Icons.notifications_active_rounded,
-              'Alerts Centre',
-              'Budget & anomaly alerts',
-              AppTheme.expenseRed,
-              null,
-              () => _push(context, const AlertsScreen()),
-            ),
-          ];
-
-          final comingSoonFeatures = [
-            (
-              Icons.account_balance_rounded,
-              'Linked Bank Accounts',
-              'Connect your bank feeds automatically.',
-              const Color(0xFF3B82F6),
-            ),
-            (
-              Icons.people_alt_rounded,
-              'Family Sharing Mode',
-              'Share budgets and track household spending.',
-              const Color(0xFFF43F5E),
-            ),
-            (
-              Icons.receipt_long_rounded,
-              'Smart Receipt Scanner',
-              'Snap a picture of receipts to log transactions.',
-              const Color(0xFF10B981),
-            ),
-          ];
-
-          return CustomScrollView(
-            slivers: [
-              _buildAppBar(context, isDark),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    const SizedBox(height: 8),
-                    _buildHealthBanner(context, health, isDark),
-                    const SizedBox(height: 14),
-                    _buildQuickStats(
-                      context,
-                      totalSaved,
-                      billsDueSoon,
-                      _monthIncome,
-                      _monthExpense,
-                      fmt,
-                      isDark,
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSectionTitle(context, 'Features'),
-                    const SizedBox(height: 10),
-                  ]),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.1,
-                  ),
-                  delegate: SliverChildBuilderDelegate((_, i) {
-                    final f = features[i];
-                    return FeatureCard(
-                      icon: f.$1,
-                      title: f.$2,
-                      subtitle: f.$3,
-                      accentColor: f.$4,
-                      badge: f.$5,
-                      onTap: f.$6,
+        child:
+            Consumer4<
+              TransactionProvider,
+              GoalProvider,
+              RecurringProvider,
+              BudgetProvider
+            >(
+              builder:
+                  (
+                    context,
+                    txnProvider,
+                    goalProvider,
+                    recurringProvider,
+                    budgetProvider,
+                    _,
+                  ) {
+                    _recomputeIfNeeded(
+                      txnProvider,
+                      goalProvider,
+                      recurringProvider,
+                      budgetProvider,
                     );
-                  }, childCount: features.length),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _buildSectionTitle(context, 'Coming Soon'),
-                    const SizedBox(height: 10),
-                  ]),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.1,
-                  ),
-                  delegate: SliverChildBuilderDelegate((_, i) {
-                    final f = comingSoonFeatures[i];
-                    return FeatureCard(
-                      icon: f.$1,
-                      title: f.$2,
-                      subtitle: f.$3,
-                      accentColor: f.$4,
-                      onTap: null,
+
+                    final health = _cachedHealth!;
+                    final now = DateTime.now();
+
+                    final totalSaved = goalProvider.goals.fold(
+                      0.0,
+                      (s, g) => s + g.currentAmount,
                     );
-                  }, childCount: comingSoonFeatures.length),
-                ),
-              ),
-              if (health.insights.isNotEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 80),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildSectionTitle(context, '💡 Insights for You'),
-                      const SizedBox(height: 10),
-                      ...health.insights.map(
-                        (tip) => _buildInsightCard(context, tip, isDark),
+                    final billsDueSoon = recurringProvider.recurring
+                        .where(
+                          (b) =>
+                              b.nextDueAt.isAfter(now) &&
+                              b.nextDueAt.difference(now).inDays <= 7,
+                        )
+                        .length;
+
+                    final goalBadge = goalProvider.goals.isEmpty
+                        ? null
+                        : '${goalProvider.goals.length} goal${goalProvider.goals.length > 1 ? 's' : ''} · '
+                              '${fmt.format(totalSaved)} saved';
+
+                    final billBadge = recurringProvider.recurring.isEmpty
+                        ? null
+                        : '${recurringProvider.recurring.length} tracked';
+
+                    final features = [
+                      (
+                        Icons.flag_rounded,
+                        'Savings Goals',
+                        'Set targets & top up',
+                        AppTheme.accentPurple,
+                        goalBadge,
+                        () => _push(context, const GoalsScreen()),
                       ),
-                    ]),
-                  ),
-                )
-              else
-                const SliverPadding(
-                  padding: EdgeInsets.only(bottom: 80),
-                ),
-            ],
-          );
-        },
-      ),
+                      (
+                        Icons.repeat_rounded,
+                        'Bills & Subscriptions',
+                        'Upcoming payments',
+                        AppTheme.accentTeal,
+                        billBadge,
+                        () => _push(context, const RecurringBillsScreen()),
+                      ),
+                      (
+                        Icons.insights_rounded,
+                        'Cash Flow',
+                        'Safe-to-spend & runway',
+                        const Color(0xFF8B5CF6),
+                        null,
+                        () => _push(context, const CashflowScreen()),
+                      ),
+                      (
+                        Icons.calendar_view_week_rounded,
+                        'Weekly Planner',
+                        'Daily spend tracker',
+                        AppTheme.accentTeal,
+                        null,
+                        () => _push(context, const WeeklyPlannerScreen()),
+                      ),
+                      (
+                        Icons.pause_circle_rounded,
+                        'Focus Mode',
+                        'Pause impulse spending',
+                        const Color(0xFFf59e0b),
+                        null,
+                        () => _push(context, const SpendPauseScreen()),
+                      ),
+                      (
+                        Icons.receipt_long_rounded,
+                        'Tax Buckets',
+                        '80C, 80D, HRA & more',
+                        const Color(0xFF10b981),
+                        null,
+                        () => _push(context, const TaxBucketsScreen()),
+                      ),
+                      (
+                        Icons.auto_awesome_rounded,
+                        'AI Copilot',
+                        'Ask your finances anything',
+                        const Color(0xFFec4899),
+                        null,
+                        () => _push(context, const AiCopilotScreen()),
+                      ),
+                      (
+                        Icons.notifications_active_rounded,
+                        'Alerts Centre',
+                        'Budget & anomaly alerts',
+                        AppTheme.expenseRed,
+                        null,
+                        () => _push(context, const AlertsScreen()),
+                      ),
+                    ];
+
+                    final comingSoonFeatures = [
+                      (
+                        Icons.account_balance_rounded,
+                        'Linked Bank Accounts',
+                        'Connect your bank feeds automatically.',
+                        const Color(0xFF3B82F6),
+                      ),
+                      (
+                        Icons.people_alt_rounded,
+                        'Family Sharing Mode',
+                        'Share budgets and track household spending.',
+                        const Color(0xFFF43F5E),
+                      ),
+                      (
+                        Icons.receipt_long_rounded,
+                        'Smart Receipt Scanner',
+                        'Snap a picture of receipts to log transactions.',
+                        const Color(0xFF10B981),
+                      ),
+                    ];
+
+                    return CustomScrollView(
+                      slivers: [
+                        _buildAppBar(context, isDark),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          sliver: SliverList(
+                            delegate: SliverChildListDelegate([
+                              const SizedBox(height: 8),
+                              _buildHealthBanner(context, health, isDark),
+                              const SizedBox(height: 14),
+                              _buildQuickStats(
+                                context,
+                                totalSaved,
+                                billsDueSoon,
+                                _monthIncome,
+                                _monthExpense,
+                                fmt,
+                                isDark,
+                              ),
+                              const SizedBox(height: 20),
+                              _buildSectionTitle(context, 'Features'),
+                              const SizedBox(height: 10),
+                            ]),
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 12,
+                                  crossAxisSpacing: 12,
+                                  childAspectRatio: 1.1,
+                                ),
+                            delegate: SliverChildBuilderDelegate((_, i) {
+                              final f = features[i];
+                              return FeatureCard(
+                                icon: f.$1,
+                                title: f.$2,
+                                subtitle: f.$3,
+                                accentColor: f.$4,
+                                badge: f.$5,
+                                onTap: f.$6,
+                              );
+                            }, childCount: features.length),
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          sliver: SliverList(
+                            delegate: SliverChildListDelegate([
+                              _buildSectionTitle(context, 'Coming Soon'),
+                              const SizedBox(height: 10),
+                            ]),
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 12,
+                                  crossAxisSpacing: 12,
+                                  childAspectRatio: 1.1,
+                                ),
+                            delegate: SliverChildBuilderDelegate((_, i) {
+                              final f = comingSoonFeatures[i];
+                              return FeatureCard(
+                                icon: f.$1,
+                                title: f.$2,
+                                subtitle: f.$3,
+                                accentColor: f.$4,
+                                onTap: null,
+                              );
+                            }, childCount: comingSoonFeatures.length),
+                          ),
+                        ),
+                        if (health.insights.isNotEmpty)
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 24, 16, 80),
+                            sliver: SliverList(
+                              delegate: SliverChildListDelegate([
+                                _buildSectionTitle(
+                                  context,
+                                  '💡 Insights for You',
+                                ),
+                                const SizedBox(height: 10),
+                                ...health.insights.map(
+                                  (tip) =>
+                                      _buildInsightCard(context, tip, isDark),
+                                ),
+                              ]),
+                            ),
+                          )
+                        else
+                          const SliverPadding(
+                            padding: EdgeInsets.only(bottom: 80),
+                          ),
+                      ],
+                    );
+                  },
+            ),
       ),
     );
   }
@@ -609,4 +617,3 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 }
-

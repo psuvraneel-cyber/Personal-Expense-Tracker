@@ -26,7 +26,8 @@ class FirebaseAuthService {
 
   FirebaseAuth? _customFirebaseAuth;
 
-  FirebaseAuth get _firebaseAuth => _customFirebaseAuth ?? FirebaseAuth.instance;
+  FirebaseAuth get _firebaseAuth =>
+      _customFirebaseAuth ?? FirebaseAuth.instance;
 
   @visibleForTesting
   set firebaseAuth(FirebaseAuth auth) => _customFirebaseAuth = auth;
@@ -54,6 +55,7 @@ class FirebaseAuthService {
     if (currentUser?.isAnonymous == true) return 'guest@pet.local';
     return currentUser?.email;
   }
+
   String? get photoUrl => currentUser?.photoURL;
 
   /// True on Web, Android, and iOS — false on desktop (Windows/Linux/macOS).
@@ -94,7 +96,8 @@ class FirebaseAuthService {
 
     if (prefs.getBool('isLocalGuest') == true) {
       _isLocalGuest = true;
-      _localGuestName = await SecureStorageService.instance.read('userName') ?? 'Guest';
+      _localGuestName =
+          await SecureStorageService.instance.read('userName') ?? 'Guest';
       AppLogger.debug('[AUTH] Local guest session restored: $_localGuestName');
       return true;
     }
@@ -149,7 +152,7 @@ class FirebaseAuthService {
       final result = kIsWeb
           ? await _signInWithPopup()
           : await _signInWithGoogleMobile();
-      
+
       if (result != null) {
         _isLocalGuest = false;
         _localGuestName = null;
@@ -175,7 +178,9 @@ class FirebaseAuthService {
       await prefs.remove('isLocalGuest');
       return true;
     } catch (e) {
-      AppLogger.debug('[AUTH] Anonymous sign-in failed, falling back to local guest: $e');
+      AppLogger.debug(
+        '[AUTH] Anonymous sign-in failed, falling back to local guest: $e',
+      );
       _isLocalGuest = true;
       _localGuestName = username;
       final prefs = await SharedPreferences.getInstance();
@@ -209,7 +214,9 @@ class FirebaseAuthService {
           idToken: googleAuth.idToken,
         );
 
-        await _firebaseAuth.currentUser?.reauthenticateWithCredential(credential);
+        await _firebaseAuth.currentUser?.reauthenticateWithCredential(
+          credential,
+        );
         return true;
       }
     } catch (e) {
@@ -225,7 +232,7 @@ class FirebaseAuthService {
     await _firebaseAuth.signOut();
     _isLocalGuest = false;
     _localGuestName = null;
-    
+
     // Clear secure storage values
     await SecureStorageService.instance.delete('userName');
     await SecureStorageService.instance.delete('userEmail');

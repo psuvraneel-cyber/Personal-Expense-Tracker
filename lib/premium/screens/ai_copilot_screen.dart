@@ -93,7 +93,9 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       final sign = t.type == TransactionType.income ? '+' : '-';
       final rawNote = t.note.isNotEmpty ? ' (${t.note})' : '';
       final note = SmsService.redactSensitiveData(rawNote);
-      final merchant = t.merchantName != null ? ' at ${SmsService.redactSensitiveData(t.merchantName!)}' : '';
+      final merchant = t.merchantName != null
+          ? ' at ${SmsService.redactSensitiveData(t.merchantName!)}'
+          : '';
       return '$date: $sign₹${t.amount.toStringAsFixed(0)}$merchant — $catName via ${t.paymentMethod.displayName}$note';
     }).toList();
 
@@ -176,7 +178,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       ),
       body: PremiumGate(
         title: 'Unlock AI Financial Copilot',
-        subtitle: 'Get personalized insights and answers about your spending habits.',
+        subtitle:
+            'Get personalized insights and answers about your spending habits.',
         child: Column(
           children: [
             if (_showSuggestions && _messages.isEmpty)
@@ -410,10 +413,7 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
             const SizedBox(height: 8),
             const Text(
               'AI Copilot can make mistakes. Consider verifying important information.',
-              style: TextStyle(
-                fontSize: 10,
-                color: AppTheme.textTertiary,
-              ),
+              style: TextStyle(fontSize: 10, color: AppTheme.textTertiary),
               textAlign: TextAlign.center,
             ),
           ],
