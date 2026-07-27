@@ -106,17 +106,21 @@ class AmountExtractor {
   /// 4. If no primary match, try "amount of Rs X" pattern.
   static AmountResult extract(String body) {
     final reasons = <String>[];
+    // Sanitize zero-width spaces, LTR/RTL markers, and non-breaking spaces
+    final cleanedBody = body
+        .replaceAll(RegExp(r'[\u200B-\u200D\uFEFF\u200E\u200F]'), '')
+        .replaceAll('\u00A0', ' ');
 
     // Find all balance keyword positions to exclude their amounts
     final balancePositions = <int>{};
-    for (final match in _balanceAmountPattern.allMatches(body)) {
+    for (final match in _balanceAmountPattern.allMatches(cleanedBody)) {
       // Mark the end position of the balance keyword as the start
       // of the amount to exclude
       balancePositions.add(match.end);
     }
 
     // Find all amount matches
-    final allMatches = _amountPattern.allMatches(body).toList();
+    final allMatches = _amountPattern.allMatches(cleanedBody).toList();
     reasons.add('Found ${allMatches.length} amount pattern(s) in body');
 
     for (final match in allMatches) {
@@ -162,7 +166,7 @@ class AmountExtractor {
     }
 
     // Fallback: try "amount of Rs X" pattern
-    final altMatch = _amountOfPattern.firstMatch(body);
+    final altMatch = _amountOfPattern.firstMatch(cleanedBody);
     if (altMatch != null) {
       final raw = altMatch.group(1)!.replaceAll(',', '');
       final amount = double.tryParse(raw);

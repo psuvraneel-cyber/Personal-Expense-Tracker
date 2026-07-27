@@ -352,7 +352,11 @@ class SmsTransactionProvider extends ChangeNotifier {
     );
     await _repository.saveFeedback(feedback.toMap());
 
-    await _repository.deleteSmsTransaction(id);
+    await _repository.deleteSmsTransaction(
+      id,
+      status: 'ignored',
+      reason: 'pending_review_rejected',
+    );
     _uncertainTransactions.removeAt(index);
     notifyListeners();
   }

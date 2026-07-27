@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/category.dart';
 import 'package:pet/data/repositories/category_repository.dart';
 import 'package:pet/core/constants/categories.dart';
@@ -49,7 +50,7 @@ class CategoryProvider extends ChangeNotifier {
         _subscribeToFirestoreCustomCategories();
       }
     } catch (e) {
-      debugPrint('Error loading categories: $e');
+      AppLogger.error('Error loading categories', error: e, label: 'CategoryProvider');
       if (_categories.isEmpty) {
         _categories = List<Category>.from(defaultCategories);
       }
@@ -62,7 +63,7 @@ class CategoryProvider extends ChangeNotifier {
   /// Subscribes to Firestore custom categories and merges them on top of defaults.
   void _subscribeToFirestoreCustomCategories() {
     if (AccountDeletionService.isDeletionInProgress) {
-      debugPrint('[Category] Skip subscribe — account deletion in progress');
+      AppLogger.warn('Skip subscribe — account deletion in progress', label: 'Category');
       return;
     }
     _firestoreSubscription?.cancel();
@@ -86,10 +87,10 @@ class CategoryProvider extends ChangeNotifier {
           notifyListeners();
         },
         onError: (Object e) =>
-            debugPrint('[CategoryProvider] Firestore stream error: $e'),
+            AppLogger.error('Firestore stream error', error: e, label: 'CategoryProvider'),
       );
     } catch (e) {
-      debugPrint('[CategoryProvider] Could not subscribe to Firestore: $e');
+      AppLogger.error('Could not subscribe to Firestore', error: e, label: 'CategoryProvider');
     }
   }
 
@@ -120,7 +121,7 @@ class CategoryProvider extends ChangeNotifier {
       await _repository
           .insertCategory(category)
           .catchError(
-            (Object e) => debugPrint('SQLite category insert failed: $e'),
+            (Object e) => AppLogger.error('SQLite category insert failed', error: e, label: 'DB'),
           );
     }
     _categories.add(category);
@@ -129,7 +130,7 @@ class CategoryProvider extends ChangeNotifier {
     // Mirror to Firestore in background.
     _firestoreSync
         .upsertCategory(category)
-        .catchError((Object e) => debugPrint('[Sync] category upsert: $e'));
+        .catchError((Object e) => AppLogger.error('category upsert failed', error: e, label: 'Sync'));
   }
 
   Future<void> updateCategory(Category category) async {
@@ -137,7 +138,7 @@ class CategoryProvider extends ChangeNotifier {
       await _repository
           .updateCategory(category)
           .catchError(
-            (Object e) => debugPrint('SQLite category update failed: $e'),
+            (Object e) => AppLogger.error('SQLite category update failed', error: e, label: 'DB'),
           );
     }
     final index = _categories.indexWhere((c) => c.id == category.id);
@@ -148,7 +149,7 @@ class CategoryProvider extends ChangeNotifier {
 
     _firestoreSync
         .upsertCategory(category)
-        .catchError((Object e) => debugPrint('[Sync] category update: $e'));
+        .catchError((Object e) => AppLogger.error('category update failed', error: e, label: 'Sync'));
   }
 
   Future<void> deleteCategory(String id) async {
@@ -156,7 +157,7 @@ class CategoryProvider extends ChangeNotifier {
       await _repository
           .deleteCategory(id)
           .catchError(
-            (Object e) => debugPrint('SQLite category delete failed: $e'),
+            (Object e) => AppLogger.error('SQLite category delete failed', error: e, label: 'DB'),
           );
     }
     _categories.removeWhere((c) => c.id == id);
@@ -164,7 +165,7 @@ class CategoryProvider extends ChangeNotifier {
 
     _firestoreSync
         .deleteCategory(id)
-        .catchError((Object e) => debugPrint('[Sync] category delete: $e'));
+        .catchError((Object e) => AppLogger.error('category delete failed', error: e, label: 'Sync'));
   }
 
   /// Clear all in-memory state, cancel Firestore subscriptions,
@@ -179,7 +180,7 @@ class CategoryProvider extends ChangeNotifier {
     // Wipe custom categories from SQLite.
     if (!kIsWeb) {
       await _repository.deleteAllCustomCategories().catchError(
-        (Object e) => debugPrint('SQLite cat clear failed: $e'),
+        (Object e) => AppLogger.error('SQLite cat clear failed', error: e, label: 'DB'),
       );
     }
   }

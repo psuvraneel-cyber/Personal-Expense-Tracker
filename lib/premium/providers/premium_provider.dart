@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:pet/premium/services/premium_entitlement_service.dart';
 
@@ -49,7 +50,7 @@ class PremiumProvider extends ChangeNotifier {
       _experimentalEnabled =
           await PremiumEntitlementService.isExperimentalEnabled();
     } catch (e) {
-      debugPrint('[PremiumProvider] load() failed: $e');
+      AppLogger.error('load() failed', error: e, label: 'PremiumProvider');
       // Ensure premium defaults to false on unrecoverable errors
       _isPremium = false;
     } finally {

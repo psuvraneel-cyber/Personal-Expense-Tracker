@@ -175,6 +175,7 @@ class TransactionRepository {
     final db = await _dbHelper.database;
     await db.delete('transactions');
     await db.delete('sms_transactions');
+    await db.delete('sms_processing_state');
   }
 
   Future<double> getTotalByType(String type, int month, int year) async {

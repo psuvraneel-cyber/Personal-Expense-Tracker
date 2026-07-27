@@ -138,7 +138,11 @@ class NegativeFilter {
   /// 10. Card offer filter
   /// 11. Mandate/autopay setup filter (not a completed transaction)
   /// 12. Balance-only filter (informational, not transactional)
-  static NegativeFilterResult apply(String body, String sender) {
+  static NegativeFilterResult apply(
+    String body,
+    String sender, {
+    bool hasCompletedTransaction = false,
+  }) {
     final senderTrust = classifySender(sender);
 
     // ── Filter 1: Minimum length ─────────────────────────────────
@@ -155,15 +159,6 @@ class NegativeFilter {
     // ── Filter 2: OTP / security code ────────────────────────────
     // OTP messages from banks contain amounts but are NOT transactions.
     // These are the #1 source of false positives from trusted senders.
-    //
-    // Matches: "OTP", "one time password", "one-time password",
-    // "verification code", "CVV", "security code", "MPIN", "TPIN"
-    //
-    // Why each pattern:
-    // - OTP: explicit one-time password indicator
-    // - CVV: card verification value (security, not transaction)
-    // - PIN/MPIN/TPIN: authentication codes
-    // - verification/verify: account verification SMS
     final otpReason = _checkOtp(body);
     if (otpReason != null) {
       return NegativeFilterResult.reject(
@@ -174,8 +169,6 @@ class NegativeFilter {
     }
 
     // ── Filter 3: Promotional sender + no strong intent ──────────
-    // Messages from VK-/HP-/etc. senders are promotional by default.
-    // Only allow through if they have VERY strong transaction signals.
     if (senderTrust == SenderTrust.promotional) {
       final promoReason = _checkPromotionalSender(body);
       if (promoReason != null) {
@@ -188,8 +181,6 @@ class NegativeFilter {
     }
 
     // ── Filter 4: Scam / contest / prize ─────────────────────────
-    // "Congratulations! You won ₹5000" — these contain amounts but
-    // are always scams. High-confidence rejection.
     final scamReason = _checkScam(body);
     if (scamReason != null) {
       return NegativeFilterResult.reject(
@@ -200,8 +191,6 @@ class NegativeFilter {
     }
 
     // ── Filter 5: Promotional keywords ───────────────────────────
-    // "offer", "discount", "cashback up to", "limited time",
-    // "apply now", "subscribe", "unsubscribe"
     final promoReason = _checkPromoKeywords(body);
     if (promoReason != null) {
       return NegativeFilterResult.reject(
@@ -212,8 +201,6 @@ class NegativeFilter {
     }
 
     // ── Filter 6: Suspicious URLs ────────────────────────────────
-    // Transaction SMS from banks rarely contain clickable URLs.
-    // Promotional and scam SMS almost always do.
     final urlReason = _checkSuspiciousUrl(body);
     if (urlReason != null) {
       return NegativeFilterResult.reject(
@@ -224,8 +211,6 @@ class NegativeFilter {
     }
 
     // ── Filter 7: Loan / insurance offer ─────────────────────────
-    // "Pre-approved loan of Rs 5,00,000" — contains large amounts
-    // but is not a transaction. Very common from bank senders.
     final loanReason = _checkLoanInsurance(body);
     if (loanReason != null) {
       return NegativeFilterResult.reject(
@@ -236,8 +221,6 @@ class NegativeFilter {
     }
 
     // ── Filter 8: KYC / account update ───────────────────────────
-    // "Update your KYC", "your KYC is expiring" —
-    // informational, not transactional.
     final kycReason = _checkKycUpdate(body);
     if (kycReason != null) {
       return NegativeFilterResult.reject(
@@ -248,7 +231,6 @@ class NegativeFilter {
     }
 
     // ── Filter 9: App download / install ─────────────────────────
-    // "Download our app", "Install now" — marketing push.
     final appReason = _checkAppDownload(body);
     if (appReason != null) {
       return NegativeFilterResult.reject(
@@ -259,7 +241,6 @@ class NegativeFilter {
     }
 
     // ── Filter 10: Credit/debit card offer ───────────────────────
-    // "You are eligible for a credit card" — not a transaction.
     final cardReason = _checkCardOffer(body);
     if (cardReason != null) {
       return NegativeFilterResult.reject(
@@ -270,8 +251,6 @@ class NegativeFilter {
     }
 
     // ── Filter 11: Mandate/autopay SETUP ─────────────────────────
-    // "Mandate creation successful" or "auto-debit registration" —
-    // these set up future payments, not actual debits.
     final mandateReason = _checkMandateSetup(body);
     if (mandateReason != null) {
       return NegativeFilterResult.reject(
@@ -282,9 +261,17 @@ class NegativeFilter {
     }
 
     // ── Filter 12: Overdue / EMI reminder ────────────────────────
-    // "Loan overdue: Pay ₹15,000 by 20-Feb" — a reminder, not a
+    // "Loan overdue: Pay ₹15,000 by 20-Feb" — a pure reminder, not a
     // completed transaction.
-    final reminderReason = _checkPaymentReminder(body);
+    //
+    // CRITICAL: Reminder detection executes ONLY IF the SMS has NOT
+    // already been classified as a completed financial transaction.
+    // Legitimate credit card transactions from HDFC, ICICI, Axis, SBI, etc.
+    // often contain footer text like "Pay your bill by 10-AUG-26".
+    final reminderReason = _checkPaymentReminder(
+      body,
+      hasCompletedTransaction: hasCompletedTransaction,
+    );
     if (reminderReason != null) {
       return NegativeFilterResult.reject(
         reason: reminderReason,
@@ -585,7 +572,23 @@ class NegativeFilter {
     caseSensitive: false,
   );
 
-  static String? _checkPaymentReminder(String body) {
+  /// Strong completed transaction execution signal check (debit/credit verb + structural signal).
+  static final RegExp _completedTxnSignal = RegExp(
+    r'\b(?:debited|credited|paid|spent|transferred|withdrawn|swiped|charged|sent\s+to|received|txn\s+of|dr\.?|cr\.?)\b.*'
+    r'(?:A/c|Acct|Card|Ref|UPI|IMPS|NEFT|POS|at\s+[A-Za-z0-9]|to\s+[A-Za-z0-9]|from\s+[A-Za-z0-9]|vpa|naame|nikasi)',
+    caseSensitive: false,
+  );
+
+  static String? _checkPaymentReminder(
+    String body, {
+    bool hasCompletedTransaction = false,
+  }) {
+    // CRITICAL: Reminder detection MUST ONLY execute if the SMS has NOT
+    // already been classified as a completed financial transaction.
+    if (hasCompletedTransaction || _completedTxnSignal.hasMatch(body)) {
+      return null;
+    }
+
     final match = _reminderPattern.firstMatch(body);
     if (match != null) {
       return 'Payment reminder/overdue notice: "${match.group(0)}"';

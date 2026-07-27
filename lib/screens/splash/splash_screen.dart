@@ -237,6 +237,7 @@ class _SplashScreenState extends State<SplashScreen>
       'unknown_format_logs',
       'classification_rules',
       'sms_transactions',
+      'sms_processing_state',
       'tax_categories',
       'linked_accounts',
       'family_members',

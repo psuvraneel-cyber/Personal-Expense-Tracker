@@ -33,31 +33,37 @@ object SafeLog {
     }
 
     /**
-     * Info log — safe operational event logging.
+     * Info log — executed ONLY in debug builds.
      */
     fun i(tag: String, message: String) {
-        Log.i(tag, message)
-    }
-
-    /**
-     * Warning log — non-fatal warnings without sensitive payload details.
-     */
-    fun w(tag: String, message: String, throwable: Throwable? = null) {
-        if (throwable != null) {
-            Log.w(tag, message, throwable)
-        } else {
-            Log.w(tag, message)
+        if (BuildConfig.DEBUG) {
+            Log.i(tag, message)
         }
     }
 
     /**
-     * Error log — operational errors without sensitive payload details.
+     * Warning log — executed ONLY in debug builds.
+     */
+    fun w(tag: String, message: String, throwable: Throwable? = null) {
+        if (BuildConfig.DEBUG) {
+            if (throwable != null) {
+                Log.w(tag, message, throwable)
+            } else {
+                Log.w(tag, message)
+            }
+        }
+    }
+
+    /**
+     * Error log — executed ONLY in debug builds.
      */
     fun e(tag: String, message: String, throwable: Throwable? = null) {
-        if (throwable != null) {
-            Log.e(tag, message, throwable)
-        } else {
-            Log.e(tag, message)
+        if (BuildConfig.DEBUG) {
+            if (throwable != null) {
+                Log.e(tag, message, throwable)
+            } else {
+                Log.e(tag, message)
+            }
         }
     }
 }

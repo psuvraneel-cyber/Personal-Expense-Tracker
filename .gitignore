@@ -12,16 +12,29 @@
 .swiftpm/
 migrate_working_dir/
 
-# Secrets — never commit API keys or signing credentials
-.env
-android/key.properties
+# Secrets — never commit API keys, certificates, or signing credentials
+key.properties
+**/key.properties
 *.jks
 *.keystore
+*.pem
+*.p12
+*.key
+*.cer
+*.crt
+.env
+.env.*
+!.env.example
+!*.example
+*google-services*.json
+*GoogleService-Info*.plist
 android/app/google-services.json
-lib/firebase_options.dart
 ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+lib/firebase_options_*.dart
 repomix-output*
 *.repomix*
+
 
 # IntelliJ related
 *.iml

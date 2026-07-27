@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/models/sms_transaction.dart';
@@ -9,6 +10,152 @@ class SmsTransactionRepository {
 
   SmsTransactionRepository({DatabaseHelper? dbHelper})
       : _dbHelper = dbHelper ?? DatabaseHelper();
+
+  // ─── Watermark & Metadata Management ──────────────────────────────
+
+  /// Get watermark value for a key from SQLite.
+  /// Fallback: checks legacy SharedPreferences key if not found in SQLite,
+  /// returns it and backfills into SQLite.
+  Future<int?> getWatermark(String key) async {
+    final db = await _dbHelper.database;
+    final result = await db.query(
+      'system_watermarks',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+
+    if (result.isNotEmpty) {
+      return result.first['value'] as int?;
+    }
+
+    // Fallback: check legacy SharedPreferences key
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final legacyKey = key == 'sms_watermark'
+          ? 'pet_last_sms_timestamp'
+          : (key == 'reconciliation_watermark'
+              ? 'pet_reconciliation_watermark'
+              : null);
+
+      if (legacyKey != null) {
+        final legacyVal = prefs.getInt(legacyKey);
+        if (legacyVal != null && legacyVal > 0) {
+          await setWatermark(key, legacyVal);
+          return legacyVal;
+        }
+      }
+    } catch (_) {
+      // Ignore SharedPreferences errors during fallback
+    }
+
+    return null;
+  }
+
+  /// Set watermark value for a key in SQLite system_watermarks table.
+  Future<void> setWatermark(String key, int timestamp) async {
+    final db = await _dbHelper.database;
+    await db.insert(
+      'system_watermarks',
+      {
+        'key': key,
+        'value': timestamp,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Reset all watermarks in SQLite system_watermarks table.
+  Future<void> clearWatermarks() async {
+    final db = await _dbHelper.database;
+    await db.delete('system_watermarks');
+  }
+
+  /// Insert a batch of transactions AND update watermarks in the EXACT SAME SQLite transaction.
+  ///
+  /// Guaranteed Atomicity: Either all transaction rows + watermark updates commit together,
+  /// or NEITHER commits (on crash, error, or rollback).
+  Future<int> insertBatchWithWatermark({
+    required List<SmsTransaction> transactions,
+    int? watermarkTimestamp,
+    List<String> watermarkKeys = const ['sms_watermark'],
+  }) async {
+    final db = await _dbHelper.database;
+    int insertedCount = 0;
+
+    await db.transaction((txn) async {
+      for (final transaction in transactions) {
+        final stateCheck = await txn.query(
+          'sms_processing_state',
+          where: 'smsHash = ?',
+          whereArgs: [transaction.smsHash],
+          limit: 1,
+        );
+        final txnCheck = await txn.query(
+          'sms_transactions',
+          where: 'smsHash = ?',
+          whereArgs: [transaction.smsHash],
+          limit: 1,
+        );
+
+        if (stateCheck.isEmpty && txnCheck.isEmpty) {
+          await txn.insert(
+            'sms_transactions',
+            transaction.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await txn.insert(
+            'sms_processing_state',
+            {
+              'id': transaction.id,
+              'smsHash': transaction.smsHash,
+              'status': 'accepted',
+              'processedAt': DateTime.now().toIso8601String(),
+              'reason': 'batch_inserted',
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+          insertedCount++;
+        }
+      }
+
+      if (watermarkTimestamp != null && watermarkTimestamp > 0) {
+        final nowIso = DateTime.now().toIso8601String();
+        for (final key in watermarkKeys) {
+          final existing = await txn.query(
+            'system_watermarks',
+            columns: ['value'],
+            where: 'key = ?',
+            whereArgs: [key],
+            limit: 1,
+          );
+          final currentVal =
+              existing.isNotEmpty ? (existing.first['value'] as int) : 0;
+          if (watermarkTimestamp > currentVal) {
+            await txn.insert(
+              'system_watermarks',
+              {
+                'key': key,
+                'value': watermarkTimestamp,
+                'updatedAt': nowIso,
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
+        }
+      }
+    });
+
+    return insertedCount;
+  }
+
+  /// Batch insert SMS transactions, skipping duplicates.
+  /// Delegates to atomic [insertBatchWithWatermark].
+  Future<int> insertBatch(List<SmsTransaction> transactions) async {
+    return insertBatchWithWatermark(transactions: transactions);
+  }
 
   /// Get all SMS transactions, ordered by timestamp descending.
   Future<List<SmsTransaction>> getAllSmsTransactions() async {
@@ -47,66 +194,102 @@ class SmsTransactionRepository {
 
   /// Insert a new SMS transaction.
   /// Returns `true` if inserted, `false` if duplicate (hash already exists).
-  Future<bool> insertSmsTransaction(SmsTransaction transaction) async {
+  /// Mark the processing state of an SMS hash in sms_processing_state table.
+  Future<void> markSmsProcessingState({
+    required String smsHash,
+    required String status,
+    String? reason,
+  }) async {
     final db = await _dbHelper.database;
-
-    // Check for duplicate using SMS hash
-    final existing = await db.query(
-      'sms_transactions',
-      where: 'smsHash = ?',
-      whereArgs: [transaction.smsHash],
-      limit: 1,
-    );
-
-    if (existing.isNotEmpty) return false; // Duplicate — skip
-
+    final nowIso = DateTime.now().toIso8601String();
     await db.insert(
-      'sms_transactions',
-      transaction.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.ignore,
+      'sms_processing_state',
+      {
+        'id': smsHash, // Use smsHash as primary key or uuid
+        'smsHash': smsHash,
+        'status': status,
+        'processedAt': nowIso,
+        'reason': reason,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
-    return true;
   }
 
-  /// Batch insert SMS transactions, skipping duplicates.
-  /// Returns the count of newly inserted transactions.
-  Future<int> insertBatch(List<SmsTransaction> transactions) async {
+  /// Mark an SMS hash as explicitly ignored (e.g. "Not a transaction").
+  Future<void> markSmsIgnored(String smsHash, {String? reason}) async {
+    await markSmsProcessingState(
+      smsHash: smsHash,
+      status: 'ignored',
+      reason: reason ?? 'user_ignored',
+    );
+  }
+
+  /// Insert a new SMS transaction.
+  /// Returns `true` if inserted, `false` if duplicate (hash already exists in processing state or transactions table).
+  Future<bool> insertSmsTransaction(SmsTransaction transaction) async {
     final db = await _dbHelper.database;
-    int insertedCount = 0;
+    bool inserted = false;
 
     await db.transaction((txn) async {
-      for (final transaction in transactions) {
-        final existing = await txn.query(
-          'sms_transactions',
-          where: 'smsHash = ?',
-          whereArgs: [transaction.smsHash],
-          limit: 1,
-        );
+      final stateCheck = await txn.query(
+        'sms_processing_state',
+        where: 'smsHash = ?',
+        whereArgs: [transaction.smsHash],
+        limit: 1,
+      );
+      if (stateCheck.isNotEmpty) return;
 
-        if (existing.isEmpty) {
-          await txn.insert(
-            'sms_transactions',
-            transaction.toMap(),
-            conflictAlgorithm: ConflictAlgorithm.ignore,
-          );
-          insertedCount++;
-        }
+      final txnCheck = await txn.query(
+        'sms_transactions',
+        where: 'smsHash = ?',
+        whereArgs: [transaction.smsHash],
+        limit: 1,
+      );
+      if (txnCheck.isNotEmpty) return;
+
+      final rowId = await txn.insert(
+        'sms_transactions',
+        transaction.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+
+      if (rowId != 0 && rowId != -1) {
+        await txn.insert(
+          'sms_processing_state',
+          {
+            'id': transaction.id,
+            'smsHash': transaction.smsHash,
+            'status': 'accepted',
+            'processedAt': DateTime.now().toIso8601String(),
+            'reason': 'inserted',
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        inserted = true;
       }
     });
 
-    return insertedCount;
+    return inserted;
   }
 
-  /// Check if a transaction with the given hash already exists.
+  /// Check if a transaction with the given hash already exists or has been processed/deleted/ignored.
   Future<bool> existsByHash(String hash) async {
     final db = await _dbHelper.database;
-    final result = await db.query(
+    final stateResult = await db.query(
+      'sms_processing_state',
+      where: 'smsHash = ?',
+      whereArgs: [hash],
+      limit: 1,
+    );
+    if (stateResult.isNotEmpty) return true;
+
+    final txnResult = await db.query(
       'sms_transactions',
       where: 'smsHash = ?',
       whereArgs: [hash],
       limit: 1,
     );
-    return result.isNotEmpty;
+    return txnResult.isNotEmpty;
   }
 
   /// Check if a transaction with the same reference ID, amount, and date exists.
@@ -134,24 +317,51 @@ class SmsTransactionRepository {
     return result.isNotEmpty;
   }
 
-  /// Get all SMS transaction hashes for dedup.
+  /// Get all processed SMS transaction hashes (from both sms_processing_state and sms_transactions).
   Future<Set<String>> getAllHashes() async {
     final db = await _dbHelper.database;
-    final result = await db.query('sms_transactions', columns: ['smsHash']);
-    return result.map((r) => r['smsHash'] as String).toSet();
+    final set = <String>{};
+
+    final stateResult = await db.query('sms_processing_state', columns: ['smsHash']);
+    for (final r in stateResult) {
+      set.add(r['smsHash'] as String);
+    }
+
+    final txnResult = await db.query('sms_transactions', columns: ['smsHash']);
+    for (final r in txnResult) {
+      set.add(r['smsHash'] as String);
+    }
+
+    return set;
   }
 
-  /// Get all SMS transaction hashes for transactions within a date range.
-  /// More efficient than [getAllHashes] for reconciliation scopes.
+  /// Get all processed SMS transaction hashes for transactions within a date range.
   Future<Set<String>> getHashesSince(DateTime since) async {
     final db = await _dbHelper.database;
-    final result = await db.query(
+    final sinceStr = since.toIso8601String();
+    final set = <String>{};
+
+    final stateResult = await db.query(
+      'sms_processing_state',
+      columns: ['smsHash'],
+      where: 'processedAt >= ?',
+      whereArgs: [sinceStr],
+    );
+    for (final r in stateResult) {
+      set.add(r['smsHash'] as String);
+    }
+
+    final txnResult = await db.query(
       'sms_transactions',
       columns: ['smsHash'],
       where: 'timestamp >= ?',
-      whereArgs: [since.toIso8601String()],
+      whereArgs: [sinceStr],
     );
-    return result.map((r) => r['smsHash'] as String).toSet();
+    for (final r in txnResult) {
+      set.add(r['smsHash'] as String);
+    }
+
+    return set;
   }
 
   /// Proximity-based deduplication check.
@@ -249,10 +459,54 @@ class SmsTransactionRepository {
     );
   }
 
-  /// Delete an SMS transaction (e.g., false positive).
-  Future<void> deleteSmsTransaction(String id) async {
+  /// Delete an SMS transaction and permanently mark its smsHash as deleted (or ignored) in sms_processing_state.
+  Future<void> deleteSmsTransaction(
+    String id, {
+    String status = 'deleted',
+    String reason = 'user_deleted',
+  }) async {
     final db = await _dbHelper.database;
-    await db.delete('sms_transactions', where: 'id = ?', whereArgs: [id]);
+    final txns = await db.query(
+      'sms_transactions',
+      columns: ['smsHash'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    final smsHash = txns.isNotEmpty ? txns.first['smsHash'] as String? : null;
+
+    await db.transaction((txn) async {
+      if (smsHash != null) {
+        final existingState = await txn.query(
+          'sms_processing_state',
+          columns: ['status'],
+          where: 'smsHash = ?',
+          whereArgs: [smsHash],
+          limit: 1,
+        );
+        final existingStatus =
+            existingState.isNotEmpty
+                ? existingState.first['status'] as String?
+                : null;
+
+        final targetStatus = (existingStatus == 'ignored' && status == 'deleted')
+            ? 'ignored'
+            : status;
+
+        await txn.insert(
+          'sms_processing_state',
+          {
+            'id': smsHash,
+            'smsHash': smsHash,
+            'status': targetStatus,
+            'processedAt': DateTime.now().toIso8601String(),
+            'reason': reason,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await txn.delete('sms_transactions', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   /// Get total debits for a given month.

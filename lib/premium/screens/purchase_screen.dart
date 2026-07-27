@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 
+import 'package:pet/core/utils/app_logger.dart';
+
 class PurchaseScreen extends StatefulWidget {
   const PurchaseScreen({super.key});
 
@@ -36,7 +38,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         });
       }
     } on PlatformException catch (e) {
-      debugPrint("Error fetching offerings: $e");
+      AppLogger.error('Error fetching offerings', error: e, label: 'PurchaseScreen');
       if (mounted) {
         setState(() {
           _isLoading = false;

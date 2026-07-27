@@ -297,5 +297,70 @@ void main() {
         }
       }
     });
+
+    test('Migration from version 13 to 14 creates system_watermarks table', () async {
+      final tempDir = Directory.systemTemp.createTempSync();
+      final dbPath = p.join(tempDir.path, 'migration_v14_test.db');
+
+      try {
+        // Create database at version 13
+        final db = await openDatabase(
+          dbPath,
+          version: 13,
+          onCreate: (db, version) async {
+            await db.execute('''
+              CREATE TABLE sms_transactions (
+                id TEXT PRIMARY KEY,
+                amount REAL NOT NULL,
+                merchantName TEXT NOT NULL,
+                bankName TEXT NOT NULL DEFAULT 'Unknown Bank',
+                transactionType TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                rawSmsBody TEXT NOT NULL,
+                smsSender TEXT NOT NULL,
+                smsHash TEXT NOT NULL UNIQUE
+              )
+            ''');
+          },
+        );
+
+        // Verify system_watermarks table does NOT exist in version 13
+        var wmExists = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='system_watermarks'",
+        );
+        expect(wmExists.isEmpty, isTrue);
+
+        await db.close();
+
+        // Trigger migration to version 14
+        final dbUpgrade = await openDatabase(
+          dbPath,
+          version: 14,
+          onUpgrade: (db, oldVersion, newVersion) async {
+            if (oldVersion < 14) {
+              await db.execute('''
+                CREATE TABLE IF NOT EXISTS system_watermarks (
+                  key TEXT PRIMARY KEY,
+                  value INTEGER NOT NULL,
+                  updatedAt TEXT NOT NULL
+                )
+              ''');
+            }
+          },
+        );
+
+        // Verify system_watermarks table exists in version 14
+        wmExists = await dbUpgrade.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='system_watermarks'",
+        );
+        expect(wmExists.isNotEmpty, isTrue);
+
+        await dbUpgrade.close();
+      } finally {
+        if (tempDir.existsSync()) {
+          tempDir.deleteSync(recursive: true);
+        }
+      }
+    });
   });
 }

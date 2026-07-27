@@ -1,11 +1,21 @@
-# Release Signing — Key Properties
-# Copy this file to key.properties and fill in your values.
+# Release Signing Credentials Template
+# Copy this file to key.properties (in android/ or android/app/) and fill in your values.
 # DO NOT commit key.properties to version control.
 #
-# To generate a keystore:
+# Alternative 1: Environment Variables (CI/CD friendly)
+#   ANDROID_KEYSTORE_PATH (or KEYSTORE_PATH)
+#   ANDROID_KEYSTORE_PASSWORD (or KEYSTORE_PASSWORD)
+#   ANDROID_KEY_ALIAS (or KEY_ALIAS)
+#   ANDROID_KEY_PASSWORD (or KEY_PASSWORD)
+#
+# Alternative 2: Gradle Properties (-P command line arguments)
+#   ./gradlew assembleRelease -PstoreFile=... -PstorePassword=... -PkeyAlias=... -PkeyPassword=...
+#
+# To generate a new keystore:
 #   keytool -genkey -v -keystore pet-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias pet-release
 
 storePassword=<your-store-password>
 keyPassword=<your-key-password>
 keyAlias=pet-release
 storeFile=<path-to-pet-release.jks>
+

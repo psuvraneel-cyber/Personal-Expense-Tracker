@@ -38,13 +38,23 @@
 -keepattributes EnclosingMethod
 -keepattributes InnerClasses
 
-# ─── Privacy: Strip debug/verbose logs from release builds ───────────────────
-# android.util.Log.d() and Log.v() output is visible via adb logcat even in
-# release builds. Since our native plugins log financial notification content
-# (TransactionNotificationListener) and SMS counts (SmsReaderPlugin), we strip
-# all debug/verbose log calls unconditionally in release.
-# Log.w() and Log.e() are intentionally kept for diagnostics.
+# ─── Investment-Grade Privacy: Complete Logcat Elimination ───────────────────
+# Strip ALL android.util.Log and io.flutter.Log method calls unconditionally
+# from release APKs. Zero log statements or exception traces reach Android Logcat.
 -assumenosideeffects class android.util.Log {
-    public static int d(...);
-    public static int v(...);
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+    public static *** w(...);
+    public static *** e(...);
+    public static *** println(...);
+}
+
+-assumenosideeffects class io.flutter.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+    public static *** w(...);
+    public static *** e(...);
+    public static *** println(...);
 }

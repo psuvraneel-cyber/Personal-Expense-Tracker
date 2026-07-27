@@ -86,15 +86,29 @@ class SmsTransactionParser {
     // ═════════════════════════════════════════════════════════════════
     //  STAGE 1: PREPROCESS
     // ═════════════════════════════════════════════════════════════════
-    // Normalize body for consistent matching. Keep original for display.
-    final normalizedBody = body.trim();
+    // Normalize body: replace zero-width spaces, RTL/LTR marks, and non-breaking spaces with standard space.
+    final normalizedBody = body
+        .replaceAll(RegExp(r'[\u200B-\u200D\uFEFF\u200E\u200F\u00A0]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
 
     // ═════════════════════════════════════════════════════════════════
-    //  STAGE 2: NEGATIVE FILTERS
+    //  STAGE 2: INTENT DETECTION (EARLY EVALUATION)
     // ═════════════════════════════════════════════════════════════════
-    // Fail-fast: reject OTP, promo, scam, offers before doing any
-    // extraction work. This is the cheapest stage.
-    final filterResult = NegativeFilter.apply(normalizedBody, sender);
+    // Evaluate transaction intent early so negative filters know whether
+    // the SMS represents a completed financial transaction.
+    final intent = IntentDetector.detect(normalizedBody);
+
+    // ═════════════════════════════════════════════════════════════════
+    //  STAGE 3: NEGATIVE FILTERS
+    // ═════════════════════════════════════════════════════════════════
+    // Fail-fast: reject OTP, promo, scam, offers before doing extraction.
+    // Bypasses reminder filter if SMS is a completed financial transaction.
+    final filterResult = NegativeFilter.apply(
+      normalizedBody,
+      sender,
+      hasCompletedTransaction: intent.hasIntent,
+    );
     if (filterResult.rejected) {
       allReasons.add(
         'REJECTED by ${filterResult.filterName}: ${filterResult.reason}',
@@ -103,12 +117,6 @@ class SmsTransactionParser {
     }
     allReasons.add('Passed all negative filters');
 
-    // ═════════════════════════════════════════════════════════════════
-    //  STAGE 3: INTENT DETECTION
-    // ═════════════════════════════════════════════════════════════════
-    // Confirm transaction intent BEFORE extracting amounts.
-    // This prevents "Get ₹500 cashback" from becoming a transaction.
-    final intent = IntentDetector.detect(normalizedBody);
     allReasons.addAll(intent.reasons);
 
     if (!intent.hasIntent) {

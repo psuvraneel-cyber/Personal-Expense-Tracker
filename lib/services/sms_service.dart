@@ -161,12 +161,26 @@ class SmsService {
   }
 
   Future<int> _processMessages(List<NativeSmsMessage> messages) async {
+    final processedHashes = await _repository.getAllHashes();
+
+    // Pre-filter out messages already in processing state (accepted, ignored, deleted, etc.)
+    final unparsedMessages = messages.where((m) {
+      if (m.body.isEmpty) return false;
+      final hash = SmsTransaction.generateHash(m.body, m.dateTime);
+      return !processedHashes.contains(hash);
+    }).toList();
+
     AppLogger.debug(
-      '[PET-SMS] Processing ${messages.length} messages from native reader (dispatching to isolate)',
+      '[PET-SMS] Processing ${unparsedMessages.length}/${messages.length} unparsed messages from native reader (dispatching to isolate)',
     );
 
+    if (unparsedMessages.isEmpty) {
+      AppLogger.debug('[PET-SMS] All messages already in processing state — skipping isolate');
+      return 0;
+    }
+
     // Run the CPU-heavy classification inside an isolate
-    final parsed = await compute(_parseMessagesIsolate, _IsolateData(messages));
+    final parsed = await compute(_parseMessagesIsolate, _IsolateData(unparsedMessages));
 
     AppLogger.debug(
       '[PET-SMS] Isolate returned ${parsed.length} parsed transactions',
@@ -176,7 +190,7 @@ class SmsService {
     int duplicateCount = 0;
 
     for (final txn in parsed) {
-      // DB dedup: skip if already persisted from a previous scan.
+      // DB dedup: skip if already persisted/ignored/deleted from a previous scan.
       final exists = await _repository.existsByHash(txn.smsHash);
       if (exists) {
         duplicateCount++;
@@ -204,20 +218,19 @@ class SmsService {
       'new ${newTxns.length}',
     );
 
-    final insertedCount = await _repository.insertBatch(newTxns);
-    AppLogger.debug('[PET-SMS] Inserted $insertedCount new transactions');
+    // Calculate latest SMS dateMillis for watermark advancement
+    final int? latestMs = messages.isNotEmpty
+        ? messages.map((m) => m.dateMillis).reduce((a, b) => a > b ? a : b)
+        : null;
 
-    // Update the last-processed watermark for incremental scans
-    if (messages.isNotEmpty) {
-      final latestMs = messages
-          .map((m) => m.dateMillis)
-          .reduce((a, b) => a > b ? a : b);
-      final prefs = await SharedPreferences.getInstance();
-      final existing = prefs.getInt(_kLastProcessedTimestamp) ?? 0;
-      if (latestMs > existing) {
-        await prefs.setInt(_kLastProcessedTimestamp, latestMs);
-      }
-    }
+    // Atomically insert transaction rows AND update watermark in ONE SQLite transaction
+    final insertedCount = await _repository.insertBatchWithWatermark(
+      transactions: newTxns,
+      watermarkTimestamp: latestMs,
+      watermarkKeys: const ['sms_watermark'],
+    );
+
+    AppLogger.debug('[PET-SMS] Atomically inserted $insertedCount new transactions and updated watermark ($latestMs)');
 
     return insertedCount;
   }

@@ -24,7 +24,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     db = await openDatabase(
       inMemoryDatabasePath,
-      version: 12,
+      version: 14,
       onCreate: (db, version) async {
         await DatabaseHelper().onCreateForTesting(db, version);
       },
@@ -140,25 +140,25 @@ void main() {
       final nowMs = DateTime.now().millisecondsSinceEpoch;
 
       // Case A: Future-dated watermark -> returns null
-      await prefs.setInt('pet_reconciliation_watermark', nowMs + 3600000); // +1 hr
-      final futureResult = service.validateWatermarkForTest(prefs, nowMs);
+      await repo.setWatermark('pet_reconciliation_watermark', nowMs + 3600000); // +1 hr
+      final futureResult = await service.validateWatermarkForTest(prefs, nowMs);
       expect(futureResult, isNull);
 
       // Case B: Negative watermark -> returns null
-      await prefs.setInt('pet_reconciliation_watermark', -500);
-      final negativeResult = service.validateWatermarkForTest(prefs, nowMs);
+      await repo.setWatermark('pet_reconciliation_watermark', -500);
+      final negativeResult = await service.validateWatermarkForTest(prefs, nowMs);
       expect(negativeResult, isNull);
 
       // Case C: >30-day old watermark (31 days ago) -> returns null
       final thirtyOneDaysAgoMs = nowMs - (31 * 24 * 60 * 60 * 1000);
-      await prefs.setInt('pet_reconciliation_watermark', thirtyOneDaysAgoMs);
-      final staleResult = service.validateWatermarkForTest(prefs, nowMs);
+      await repo.setWatermark('pet_reconciliation_watermark', thirtyOneDaysAgoMs);
+      final staleResult = await service.validateWatermarkForTest(prefs, nowMs);
       expect(staleResult, isNull);
 
       // Case D: Valid 1-hour old watermark -> returns stored timestamp
       final oneHourAgoMs = nowMs - (1 * 60 * 60 * 1000);
-      await prefs.setInt('pet_reconciliation_watermark', oneHourAgoMs);
-      final validResult = service.validateWatermarkForTest(prefs, nowMs);
+      await repo.setWatermark('pet_reconciliation_watermark', oneHourAgoMs);
+      final validResult = await service.validateWatermarkForTest(prefs, nowMs);
       expect(validResult, equals(oneHourAgoMs));
     });
 

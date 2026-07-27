@@ -1,6 +1,7 @@
 import 'package:pet/core/utils/app_logger.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,6 +36,14 @@ import 'package:pet/screens/biometric/biometric_lock_screen.dart';
 import 'package:timezone/data/latest.dart' as tz;
 
 void main() async {
+  // Global Privacy & Security Guard:
+  // In release builds, override debugPrint to be a complete NO-OP.
+  // This guarantees zero logs reach Logcat or stdout even if third-party packages
+  // or legacy components attempt to invoke debugPrint directly.
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+
   WidgetsFlutterBinding.ensureInitialized();
   tz.initializeTimeZones();
 

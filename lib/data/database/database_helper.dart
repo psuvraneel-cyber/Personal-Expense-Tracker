@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io' show Directory, File;
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:meta/meta.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/services/platform_stub.dart'
     if (dart.library.io) 'package:pet/services/platform_native.dart'
     as platform;
@@ -110,20 +111,20 @@ class DatabaseHelper {
     if (cipherSupported) {
       final File dbFile = File(path);
       if (await dbFile.exists() && await _isDatabasePlaintext(path)) {
-        debugPrint('[DB] ⚠️ Plaintext database detected. Migrating to encrypted database...');
+        AppLogger.warn('Plaintext database detected. Migrating to encrypted database...', label: 'DB');
         try {
           final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
           await _encryptDatabaseInPlace(path, password);
-          debugPrint('[DB] ✅ Migration to encrypted database complete.');
+          AppLogger.info('Migration to encrypted database complete.', label: 'DB');
         } catch (e) {
-          debugPrint('[DB] ❌ Encryption migration failed: $e');
+          AppLogger.error('Encryption migration failed', error: e, label: 'DB');
         }
       }
 
       final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
       return await openDatabase(
         path,
-        version: 12,
+        version: 14,
         password: password,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -133,10 +134,10 @@ class DatabaseHelper {
         },
       );
     } else {
-      debugPrint('[DB] SQLCipher is not supported on this platform. Opening in plaintext.');
+      AppLogger.warn('SQLCipher is not supported on this platform. Opening in plaintext.', label: 'DB');
       return await openDatabase(
         path,
-        version: 12,
+        version: 14,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
         onOpen: (db) async {
@@ -158,14 +159,14 @@ class DatabaseHelper {
       final result = await db.rawQuery('PRAGMA integrity_check');
       final status = result.firstOrNull?['integrity_check'] as String? ?? '';
       if (status == 'ok') {
-        debugPrint('[DB] Integrity check: ok');
+        AppLogger.info('Integrity check: ok', label: 'DB');
         return true;
       } else {
-        debugPrint('[DB] ⚠️ Integrity check FAILED: $status');
+        AppLogger.error('Integrity check FAILED: $status', label: 'DB');
         return false;
       }
     } catch (e) {
-      debugPrint('[DB] Integrity check error: $e');
+      AppLogger.error('Integrity check error', error: e, label: 'DB');
       return false;
     }
   }
@@ -224,6 +225,9 @@ class DatabaseHelper {
     // Create sms_transactions table
     await _createSmsTransactionsTable(db);
 
+    // Create sms_processing_state table
+    await _createSmsProcessingStateTable(db);
+
     // Create classification system tables
     await _createClassificationTables(db);
 
@@ -235,6 +239,9 @@ class DatabaseHelper {
 
     // Create sync queue table
     await _createSyncQueueTable(db);
+
+    // Create system watermarks table
+    await _createSystemWatermarksTable(db);
 
     // Seed default categories
     await _seedDefaultCategories(db);
@@ -342,6 +349,49 @@ class DatabaseHelper {
     if (oldVersion < 12) {
       await _migrateUnknownFormatLogsV12(db);
     }
+    if (oldVersion < 13) {
+      await _createSmsProcessingStateTable(db);
+      await db.execute('''
+        INSERT OR IGNORE INTO sms_processing_state (id, smsHash, status, processedAt, reason)
+        SELECT id, smsHash, 'accepted', timestamp, 'migrated_from_sms_transactions'
+        FROM sms_transactions
+      ''');
+    }
+    if (oldVersion < 14) {
+      await _createSystemWatermarksTable(db);
+    }
+  }
+
+  /// Create system_watermarks table for atomic transaction-bound watermark persistence.
+  Future<void> _createSystemWatermarksTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS system_watermarks (
+        key TEXT PRIMARY KEY,
+        value INTEGER NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// Create sms_processing_state table for tracking processed, ignored, rejected, and deleted SMS messages.
+  Future<void> _createSmsProcessingStateTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sms_processing_state (
+        id TEXT PRIMARY KEY,
+        smsHash TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL,
+        processedAt TEXT NOT NULL,
+        reason TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_sms_processing_hash ON sms_processing_state (smsHash)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_sms_processing_status ON sms_processing_state (status)
+    ''');
   }
 
   Future<void> _createPremiumTables(Database db) async {

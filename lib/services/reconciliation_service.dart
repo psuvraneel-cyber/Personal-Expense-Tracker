@@ -134,7 +134,7 @@ class ReconciliationService {
       }
 
       // ── 3. Read watermark with validation ───────────────────────
-      final watermark = _getValidatedWatermark(prefs, now);
+      final watermark = await _getValidatedWatermark(now);
 
       // Perform maintenance cleanup on unknown format logs (30-day TTL & 500-row cap)
       try {
@@ -164,6 +164,10 @@ class ReconciliationService {
         '[Reconciliation] Fetched ${messages.length} candidate SMS',
       );
 
+      final latestMs = messages
+          .map((m) => m.dateMillis)
+          .reduce((a, b) => a > b ? a : b);
+
       // ── 5. Pre-load existing hashes for fast dedup ──────────────
       final lookbackStart = DateTime.now().subtract(
         const Duration(days: _kMaxLookbackDays + 1),
@@ -189,16 +193,10 @@ class ReconciliationService {
         '[Reconciliation] Parsed ${candidates.length} potential transactions',
       );
 
-      if (candidates.isEmpty) {
-        _advanceWatermark(prefs, messages, now);
-        return 0;
-      }
+      // ── 7. Multi-layer deduplication & ATOMIC insert + watermark commit ─
+      final insertedCount = await _deduplicateAndInsert(candidates, latestMs);
 
-      // ── 7. Multi-layer deduplication & insert ───────────────────
-      final insertedCount = await _deduplicateAndInsert(candidates);
-
-      // ── 8. Advance watermark ────────────────────────────────────
-      _advanceWatermark(prefs, messages, now);
+      await prefs.setInt(_kLastRunKey, now);
 
       stopwatch.stop();
       AppLogger.debug(
@@ -227,8 +225,8 @@ class ReconciliationService {
   /// - Watermark is zero or negative
   /// - Watermark is in the future (clock skew or corruption)
   /// - Watermark is older than 7 days (gap too large, use full window)
-  int? _getValidatedWatermark(SharedPreferences prefs, int nowMs) {
-    final stored = prefs.getInt(_kWatermarkKey);
+  Future<int?> _getValidatedWatermark(int nowMs) async {
+    final stored = await _repository.getWatermark(_kWatermarkKey);
 
     if (stored == null || stored <= 0) return null;
     if (stored > nowMs) {
@@ -251,16 +249,16 @@ class ReconciliationService {
   }
 
   @visibleForTesting
-  int? validateWatermarkForTest(SharedPreferences prefs, int nowMs) {
-    return _getValidatedWatermark(prefs, nowMs);
+  Future<int?> validateWatermarkForTest(SharedPreferences prefs, int nowMs) async {
+    return _getValidatedWatermark(nowMs);
   }
 
   /// Returns the last sync timestamp (watermark or last run).
   Future<DateTime?> getLastSyncTimestamp() async {
+    final watermark = await _repository.getWatermark(_kWatermarkKey);
+    final smsServiceWatermark = await _repository.getWatermark('sms_watermark');
     final prefs = await SharedPreferences.getInstance();
-    final watermark = prefs.getInt(_kWatermarkKey);
     final lastRun = prefs.getInt(_kLastRunKey);
-    final smsServiceWatermark = prefs.getInt('pet_last_sms_timestamp');
 
     int? latestMs;
     for (final ts in [watermark, lastRun, smsServiceWatermark]) {
@@ -433,20 +431,23 @@ class ReconciliationService {
   //  MULTI-LAYER DEDUPLICATION & INSERT
   // ═══════════════════════════════════════════════════════════════════
 
-  /// Apply three-tier deduplication and insert new transactions.
+  /// Apply three-tier deduplication and insert new transactions ATOMICALLY with watermark update.
   ///
   /// For each candidate:
   /// 1. Hash check (already done in pre-filter, but double-check at insert)
   /// 2. Reference ID + amount + date check (cross-source dedup)
   /// 3. Amount + timestamp proximity + sender check (fuzzy dedup)
   ///
-  /// Returns the count of newly inserted transactions.
-  Future<int> _deduplicateAndInsert(List<_ParsedCandidate> candidates) async {
-    int insertedCount = 0;
+  /// All passed candidates + watermark timestamp commit in ONE ATOMIC SQLite TRANSACTION.
+  Future<int> _deduplicateAndInsert(
+    List<_ParsedCandidate> candidates,
+    int? latestMs,
+  ) async {
+    final newTxns = <SmsTransaction>[];
 
     for (final candidate in candidates) {
       try {
-        // ── Layer 1: Hash dedup (cheapest) ──────────────────────
+        // ── Layer 1: Hash dedup ──────────────────────────────────
         final hashExists = await _repository.existsByHash(candidate.hash);
         if (hashExists) continue;
 
@@ -461,7 +462,7 @@ class ReconciliationService {
           if (refExists) continue;
         }
 
-        // ── Layer 3: Proximity dedup (fuzzy) ────────────────────
+        // ── Layer 3: Proximity dedup ────────────────────────────
         final proximityExists = await _repository
             .existsByAmountTimestampProximity(
               amount: candidate.amount,
@@ -472,40 +473,39 @@ class ReconciliationService {
             );
         if (proximityExists) continue;
 
-        // ── All layers passed — insert ──────────────────────────
-        final transaction = SmsTransaction(
-          id: _uuid.v4(),
-          amount: candidate.amount,
-          merchantName: candidate.merchantName,
-          bankName: candidate.bankName,
-          transactionType: candidate.transactionType,
-          transactionSubType: candidate.transactionSubType,
-          timestamp: candidate.parsedDate,
-          rawSmsBody: SmsService.redactSensitiveData(candidate.body),
-          smsSender: candidate.sender,
-          smsHash: candidate.hash,
-          category: candidate.category ?? 'Uncategorized',
-          referenceId: candidate.referenceId,
-          upiId: candidate.upiId,
-          confidence: candidate.confidence,
-          source: 'reconciliation',
+        // ── All layers passed ────────────────────────────────────
+        newTxns.add(
+          SmsTransaction(
+            id: _uuid.v4(),
+            amount: candidate.amount,
+            merchantName: candidate.merchantName,
+            bankName: candidate.bankName,
+            transactionType: candidate.transactionType,
+            transactionSubType: candidate.transactionSubType,
+            timestamp: candidate.parsedDate,
+            rawSmsBody: SmsService.redactSensitiveData(candidate.body),
+            smsSender: candidate.sender,
+            smsHash: candidate.hash,
+            category: candidate.category ?? 'Uncategorized',
+            referenceId: candidate.referenceId,
+            upiId: candidate.upiId,
+            confidence: candidate.confidence,
+            source: 'reconciliation',
+          ),
         );
-
-        final inserted = await _repository.insertSmsTransaction(transaction);
-        if (inserted) {
-          insertedCount++;
-          AppLogger.debug(
-            '[Reconciliation] +1 new: ${candidate.transactionType} '
-            '₹${candidate.amount} at ${candidate.merchantName}',
-          );
-        }
       } catch (e) {
         AppLogger.debug(
-          '[Reconciliation] Error inserting candidate (${candidate.hash}): $e',
+          '[Reconciliation] Error filtering candidate (${candidate.hash}): $e',
         );
-        // Continue with remaining candidates
       }
     }
+
+    // Atomically insert all new transactions AND advance watermarks in ONE SQLite transaction
+    final insertedCount = await _repository.insertBatchWithWatermark(
+      transactions: newTxns,
+      watermarkTimestamp: latestMs,
+      watermarkKeys: const ['reconciliation_watermark', 'sms_watermark'],
+    );
 
     return insertedCount;
   }
@@ -516,8 +516,8 @@ class ReconciliationService {
 
   /// Get diagnostic info for debugging.
   Future<Map<String, dynamic>> getDiagnostics() async {
+    final watermark = await _repository.getWatermark(_kWatermarkKey);
     final prefs = await SharedPreferences.getInstance();
-    final watermark = prefs.getInt(_kWatermarkKey);
     final lastRun = prefs.getInt(_kLastRunKey);
 
     return {
@@ -539,6 +539,7 @@ class ReconciliationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kWatermarkKey);
     await prefs.remove(_kLastRunKey);
+    await _repository.clearWatermarks();
     AppLogger.debug(
       '[Reconciliation] Watermark reset — next run will do full scan',
     );

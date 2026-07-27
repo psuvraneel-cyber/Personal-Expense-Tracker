@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/config/app_env.dart';
+import 'package:pet/core/utils/app_logger.dart';
 
 class PremiumEntitlementService {
   PremiumEntitlementService._();
@@ -21,9 +22,9 @@ class PremiumEntitlementService {
     final apiKey = AppEnv.revenueCatGoogleApiKey;
 
     if (apiKey.isEmpty) {
-      debugPrint(
-        '[PremiumEntitlementService] WARNING: REVENUECAT_GOOGLE_API_KEY is '
-        'empty. Premium features will not work. Add it to your .env file.',
+      AppLogger.warn(
+        'REVENUECAT_GOOGLE_API_KEY is empty. Premium features will not work.',
+        label: 'PremiumEntitlementService',
       );
       return;
     }
@@ -47,7 +48,7 @@ class PremiumEntitlementService {
     try {
       await Purchases.logIn(uid);
     } catch (e) {
-      debugPrint('[PremiumEntitlementService] logIn failed: $e');
+      AppLogger.error('logIn failed', error: e, label: 'PremiumEntitlementService');
     }
   }
 
@@ -56,7 +57,7 @@ class PremiumEntitlementService {
     try {
       await Purchases.logOut();
     } catch (e) {
-      debugPrint('[PremiumEntitlementService] logOut failed: $e');
+      AppLogger.error('logOut failed', error: e, label: 'PremiumEntitlementService');
     }
     // Clear cached entitlement so the next user starts fresh
     final prefs = await SharedPreferences.getInstance();
@@ -84,7 +85,7 @@ class PremiumEntitlementService {
 
       return isActive;
     } catch (e) {
-      debugPrint('[PremiumEntitlementService] Error checking premium: $e');
+      AppLogger.error('Error checking premium', error: e, label: 'PremiumEntitlementService');
 
       // Fall back to cached value instead of returning false
       if (uid != null) {
@@ -93,8 +94,9 @@ class PremiumEntitlementService {
         if (cachedUid == uid) {
           final cached = prefs.getBool(_kCachedPremium);
           if (cached != null) {
-            debugPrint(
-              '[PremiumEntitlementService] Using cached premium=$cached for $uid',
+            AppLogger.info(
+              'Using cached premium=$cached',
+              label: 'PremiumEntitlementService',
             );
             return cached;
           }
