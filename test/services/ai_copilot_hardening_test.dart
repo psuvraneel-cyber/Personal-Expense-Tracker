@@ -15,7 +15,7 @@ void main() {
       // Test that the redaction function correctly masks account and phone numbers in notes
       final sensitiveNote = 'Paid to 9876543210 for a/c 1234567890';
       final redacted = SmsService.redactSensitiveData(sensitiveNote);
-      
+
       // Both the phone number and account number should be masked
       expect(redacted, contains('XX****3210'));
       expect(redacted, contains('XX****7890'));

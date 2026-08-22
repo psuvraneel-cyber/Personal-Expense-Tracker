@@ -92,7 +92,7 @@ class RecurringProvider extends ChangeNotifier {
     notifyListeners();
 
     final detected = RecurringDetectionService.detect(sms);
-    
+
     final existing = await _repository.getAll();
     final manuals = existing.where((r) => r.source == 'manual').toList();
 
@@ -137,7 +137,9 @@ class RecurringProvider extends ChangeNotifier {
     await _scheduleUpcomingReminders(recurring);
   }
 
-  Future<void> _scheduleUpcomingReminders(List<RecurringPayment> recurring) async {
+  Future<void> _scheduleUpcomingReminders(
+    List<RecurringPayment> recurring,
+  ) async {
     final now = DateTime.now();
     for (final item in recurring) {
       // Schedule a notification 3 days before the due date at 10 AM.
@@ -145,12 +147,16 @@ class RecurringProvider extends ChangeNotifier {
         item.nextDueAt.year,
         item.nextDueAt.month,
         item.nextDueAt.day - 3,
-        10, 0, 0,
+        10,
+        0,
+        0,
       );
-      
+
       if (scheduleDate.isAfter(now)) {
         await NotificationService.scheduleNotification(
-          id: NotificationService.collisionSafeId('sched_${item.id}_${item.nextDueAt.toIso8601String()}'),
+          id: NotificationService.collisionSafeId(
+            'sched_${item.id}_${item.nextDueAt.toIso8601String()}',
+          ),
           title: 'Upcoming bill reminder',
           body: '${item.merchantName} is due in 3 days.',
           scheduledDate: scheduleDate,

@@ -51,7 +51,8 @@ class TransactionRecord {
       'taxCategory': taxCategory,
       'source': source.toJson(),
       'accountId': accountId,
-      'updatedAt': updatedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      'updatedAt':
+          updatedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
     };
   }
 
@@ -74,7 +75,9 @@ class TransactionRecord {
       taxCategory: map['taxCategory'] as String?,
       source: TransactionSource.fromJson(map['source'] as String?),
       accountId: map['accountId'] as String?,
-      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt'] as String) : null,
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.parse(map['updatedAt'] as String)
+          : null,
     );
   }
 

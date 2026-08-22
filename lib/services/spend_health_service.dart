@@ -297,7 +297,10 @@ class SpendHealthService {
     }
     final daysSoFar = now.day > 0 ? now.day : 1;
     // If user tracked on >60% of days so far, full marks
-    final ratio = _safeRatio(daysWithTxn.length.toDouble(), daysSoFar.toDouble());
+    final ratio = _safeRatio(
+      daysWithTxn.length.toDouble(),
+      daysSoFar.toDouble(),
+    );
     final score = (ratio.clamp(0.0, 0.6) / 0.6 * 100).round().clamp(0, 100);
 
     if (ratio < 0.4) {

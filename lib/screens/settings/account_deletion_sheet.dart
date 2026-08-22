@@ -159,12 +159,14 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
     try {
       final success = await FirebaseAuthService().reauthenticateGoogle();
       if (!success) {
-        if (mounted) setState(() => _errorMessage = 'Sign-in failed or was cancelled.');
+        if (mounted)
+          setState(() => _errorMessage = 'Sign-in failed or was cancelled.');
         return;
       }
       if (mounted) setState(() => _step = 2);
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Sign-in failed. Please try again.');
+      if (mounted)
+        setState(() => _errorMessage = 'Sign-in failed. Please try again.');
     }
   }
 
@@ -248,7 +250,8 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
       DeletionStep.deletingCloudTransactions: 'Deleting cloud transactions...',
       DeletionStep.deletingCloudBudgets: 'Deleting cloud budgets...',
       DeletionStep.deletingCloudCategories: 'Deleting cloud categories...',
-      DeletionStep.deletingCloudTombstones: 'Deleting cloud deletion tombstones...',
+      DeletionStep.deletingCloudTombstones:
+          'Deleting cloud deletion tombstones...',
       DeletionStep.deletingCloudPremiumData: 'Deleting premium data...',
       DeletionStep.deletingUserProfile: 'Deleting user profile...',
       DeletionStep.deletingAuthAccount: 'Removing account...',

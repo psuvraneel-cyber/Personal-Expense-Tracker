@@ -27,21 +27,27 @@ class ExportService {
   }) async {
     final filtered = _filterByDate(transactions, startDate, endDate);
     final rows = <List<String>>[
-      ['Date', 'Type', 'Amount', 'Category', 'Merchant', 'Payment Method', 'Note'],
-      ...filtered.map(
-        (t) {
-          final catName = categoryNames[t.categoryId] ?? 'Uncategorized';
-          return [
-            _dateFormat.format(t.date),
-            t.type.toJson(),
-            t.amount.toStringAsFixed(2),
-            catName,
-            t.merchantName ?? '',
-            t.paymentMethod.toJson(),
-            t.note,
-          ];
-        },
-      ),
+      [
+        'Date',
+        'Type',
+        'Amount',
+        'Category',
+        'Merchant',
+        'Payment Method',
+        'Note',
+      ],
+      ...filtered.map((t) {
+        final catName = categoryNames[t.categoryId] ?? 'Uncategorized';
+        return [
+          _dateFormat.format(t.date),
+          t.type.toJson(),
+          t.amount.toStringAsFixed(2),
+          catName,
+          t.merchantName ?? '',
+          t.paymentMethod.toJson(),
+          t.note,
+        ];
+      }),
     ];
 
     // Simple CSV generation — escape fields containing commas/quotes
@@ -129,23 +135,27 @@ class ExportService {
               color: PdfColor.fromInt(0xFFEDE9FE),
             ),
             cellPadding: const pw.EdgeInsets.all(6),
-            headers: ['Date', 'Type', 'Amount', 'Category', 'Merchant', 'Payment', 'Note'],
-            data: filtered
-                .map(
-                  (t) {
-                    final catName = categoryNames[t.categoryId] ?? 'Uncategorized';
-                    return [
-                      _dateFormat.format(t.date),
-                      t.type.toString().split('.').last,
-                      _amountFormat.format(t.amount),
-                      catName,
-                      t.merchantName ?? '',
-                      t.paymentMethod.toString().split('.').last,
-                      t.note,
-                    ];
-                  },
-                )
-                .toList(),
+            headers: [
+              'Date',
+              'Type',
+              'Amount',
+              'Category',
+              'Merchant',
+              'Payment',
+              'Note',
+            ],
+            data: filtered.map((t) {
+              final catName = categoryNames[t.categoryId] ?? 'Uncategorized';
+              return [
+                _dateFormat.format(t.date),
+                t.type.toString().split('.').last,
+                _amountFormat.format(t.amount),
+                catName,
+                t.merchantName ?? '',
+                t.paymentMethod.toString().split('.').last,
+                t.note,
+              ];
+            }).toList(),
           ),
         ],
       ),

@@ -946,8 +946,12 @@ class TransactionParser {
     try {
       if (month < 1 || month > 12 || day < 1 || day > 31) return null;
       final dt = DateTime(
-        year, month, day,
-        smsTime.hour, smsTime.minute, smsTime.second,
+        year,
+        month,
+        day,
+        smsTime.hour,
+        smsTime.minute,
+        smsTime.second,
       );
       // Reject dates more than 2 years in the future or 10 years in the past
       final now = DateTime.now();

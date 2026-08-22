@@ -493,14 +493,10 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
               DropdownButtonFormField<String>(
                 initialValue: selectedCategoryId,
                 decoration: const InputDecoration(labelText: 'Category'),
-                items: categories
-                    .map((c) => c.id)
-                    .toSet()
-                    .map((id) {
-                      final c = categories.firstWhere((cat) => cat.id == id);
-                      return DropdownMenuItem(value: c.id, child: Text(c.name));
-                    })
-                    .toList(),
+                items: categories.map((c) => c.id).toSet().map((id) {
+                  final c = categories.firstWhere((cat) => cat.id == id);
+                  return DropdownMenuItem(value: c.id, child: Text(c.name));
+                }).toList(),
                 onChanged: (v) => setS(() => selectedCategoryId = v),
               ),
               const SizedBox(height: 12),

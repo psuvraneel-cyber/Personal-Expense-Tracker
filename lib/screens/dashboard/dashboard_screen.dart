@@ -128,7 +128,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     bool billsChanged = !identical(_lastBills, recurringProvider.recurring);
     bool budgetsChanged = !identical(_lastBudgets, budgetProvider.budgets);
 
-    if (txnsChanged || goalsChanged || billsChanged || budgetsChanged || _cachedHealth == null) {
+    if (txnsChanged ||
+        goalsChanged ||
+        billsChanged ||
+        budgetsChanged ||
+        _cachedHealth == null) {
       _lastTxns = txnProvider.allTransactions;
       _lastGoals = goalProvider.goals;
       _lastBills = recurringProvider.recurring;
@@ -181,15 +185,15 @@ class _DashboardScreenState extends State<DashboardScreen>
           context,
           listen: false,
         );
-        
+
         _updateHealthCache(
-          txnProvider, 
-          goalProvider, 
-          recurringProvider, 
-          budgetProvider, 
-          totalBudget
+          txnProvider,
+          goalProvider,
+          recurringProvider,
+          budgetProvider,
+          totalBudget,
         );
-        
+
         final healthResult = _cachedHealth!;
 
         // Generate AI insight from health data

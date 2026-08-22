@@ -158,7 +158,9 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
   void _onAuthStateChanged(User? user) {
     if (AccountDeletionService.isDeletionInProgress) {
-      AppLogger.debug('[MAIN] Account deletion in progress — ignoring auth change');
+      AppLogger.debug(
+        '[MAIN] Account deletion in progress — ignoring auth change',
+      );
       return;
     }
     final currentUserId = FirebaseAuthService().currentUserId;
@@ -211,19 +213,27 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (AccountDeletionService.isDeletionInProgress) {
-      AppLogger.debug('[MAIN] Account deletion in progress — ignoring lifecycle resume');
+      AppLogger.debug(
+        '[MAIN] Account deletion in progress — ignoring lifecycle resume',
+      );
       return;
     }
     if (state == AppLifecycleState.resumed) {
       try {
-        _navigatorKey.currentContext?.read<TransactionProvider>().triggerSyncQueue();
+        _navigatorKey.currentContext
+            ?.read<TransactionProvider>()
+            .triggerSyncQueue();
       } catch (e) {
         AppLogger.debug('[MAIN] Failed to trigger sync queue on resume: $e');
       }
       try {
-        _navigatorKey.currentContext?.read<SmsTransactionProvider>().runReconciliation();
+        _navigatorKey.currentContext
+            ?.read<SmsTransactionProvider>()
+            .runReconciliation();
       } catch (e) {
-        AppLogger.debug('[MAIN] Failed to trigger SMS reconciliation on resume: $e');
+        AppLogger.debug(
+          '[MAIN] Failed to trigger SMS reconciliation on resume: $e',
+        );
       }
     }
 

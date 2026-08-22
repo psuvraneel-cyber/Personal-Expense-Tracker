@@ -133,7 +133,7 @@ class NotificationService {
           presentSound: true,
         ),
       );
-      
+
       await _plugin.zonedSchedule(
         id,
         title,
@@ -177,12 +177,15 @@ class NotificationService {
   static Future<AndroidScheduleMode> _resolveScheduleMode() async {
     final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     if (androidPlugin != null) {
       final canSchedule = await androidPlugin.canScheduleExactNotifications();
       if (canSchedule == false) {
-        AppLogger.debug('[NotificationService] Exact alarm permission not '
-            'granted — falling back to inexact scheduling.');
+        AppLogger.debug(
+          '[NotificationService] Exact alarm permission not '
+          'granted — falling back to inexact scheduling.',
+        );
         return AndroidScheduleMode.inexact;
       }
     }

@@ -59,7 +59,9 @@ class AccountDeletionService {
     // skip directly to local cleanup.
     if (user == null) {
       if (isDeletionInProgress) {
-        AppLogger.debug('[AccountDeletion] User is null but deletion is in progress — running local cleanup');
+        AppLogger.debug(
+          '[AccountDeletion] User is null but deletion is in progress — running local cleanup',
+        );
         await _runLocalCleanup(targetUid);
         return;
       } else {
@@ -146,7 +148,9 @@ class AccountDeletionService {
       await _clearPreferences();
       AppLogger.debug('[AccountDeletion] _clearPreferences returned');
     } catch (e) {
-      AppLogger.debug('[AccountDeletion] Local SharedPreferences cleanup failed: $e');
+      AppLogger.debug(
+        '[AccountDeletion] Local SharedPreferences cleanup failed: $e',
+      );
     }
 
     // ── Step 10: RevenueCat logout
@@ -161,13 +165,17 @@ class AccountDeletionService {
 
     // Set deletion-in-progress to false
     isDeletionInProgress = false;
-    AppLogger.debug('[AccountDeletion] Resetting progress state: isTesting = $isTesting');
+    AppLogger.debug(
+      '[AccountDeletion] Resetting progress state: isTesting = $isTesting',
+    );
     if (!isTesting) {
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('deletion_in_progress', false);
       } catch (e) {
-        AppLogger.debug('[AccountDeletion] Resetting deletion_in_progress failed: $e');
+        AppLogger.debug(
+          '[AccountDeletion] Resetting deletion_in_progress failed: $e',
+        );
       }
     }
 
@@ -222,8 +230,14 @@ class AccountDeletionService {
     await db.transaction((txn) async {
       // Scoped deletion: only clear queue entries belonging to this UID
       try {
-        await txn.delete('transaction_sync_queue', where: 'userId = ?', whereArgs: [uid]);
-        AppLogger.debug('[AccountDeletion] Scoped transaction_sync_queue cleared for $uid');
+        await txn.delete(
+          'transaction_sync_queue',
+          where: 'userId = ?',
+          whereArgs: [uid],
+        );
+        AppLogger.debug(
+          '[AccountDeletion] Scoped transaction_sync_queue cleared for $uid',
+        );
       } catch (e) {
         AppLogger.debug('[AccountDeletion] Could not clear sync queue: $e');
       }
@@ -242,7 +256,9 @@ class AccountDeletionService {
 
   /// Clear all SharedPreferences
   Future<void> _clearPreferences() async {
-    AppLogger.debug('[AccountDeletion] _clearPreferences entered, isTesting=$isTesting');
+    AppLogger.debug(
+      '[AccountDeletion] _clearPreferences entered, isTesting=$isTesting',
+    );
     if (isTesting) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

@@ -299,7 +299,9 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
                               );
                             },
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark ? Colors.white : AppTheme.primaryDark,
+                        foregroundColor: isDark
+                            ? Colors.white
+                            : AppTheme.primaryDark,
                         side: BorderSide(
                           color: isDark
                               ? Colors.white.withValues(alpha: 0.3)
@@ -312,7 +314,11 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.person_outline, size: 22, color: isDark ? Colors.white : AppTheme.primaryDark),
+                          Icon(
+                            Icons.person_outline,
+                            size: 22,
+                            color: isDark ? Colors.white : AppTheme.primaryDark,
+                          ),
                           const SizedBox(width: 12),
                           Text(
                             'Sign in as Guest',
