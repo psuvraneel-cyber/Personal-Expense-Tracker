@@ -20,4 +20,4 @@ FIREBASE_PROJECT_ID = "personal-expense-tracker-6891b"
 # If a namespace already exists, use: wrangler kv namespace list
 [[kv_namespaces]]
 binding = "KV_LIMITS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "1ec67e82bc5f4dd7aa13fda71b79747a"
