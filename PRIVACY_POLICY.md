@@ -53,9 +53,10 @@ The App integrates with selected third-party services to provide authentication,
 | Service | Purpose | Transmitted Data | Privacy Policy |
 | :--- | :--- | :--- | :--- |
 | **Firebase Authentication** | User sign-in & identity | Email address, Google Account ID | [Google Privacy Policy](https://policies.google.com/privacy) |
-| **Google Cloud Firestore** | Optional cloud synchronization | Redacted transaction metadata, categories, budgets | [Google Cloud Privacy](https://cloud.google.com/terms) |
-| **Cloudflare Workers** | Secure proxy for optional AI Copilot | Anonymized spending category totals (No PII, no account numbers, no raw SMS) | [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/) |
-| **Groq API** | LLM processing for AI Copilot insights | Anonymized financial category summaries | [Groq Privacy Policy](https://groq.com/privacy-policy/) |
+| **Google Cloud Firestore** | Optional cloud synchronization | Redacted transaction metadata, categories, budgets, recurring rules, goals | [Google Cloud Privacy](https://cloud.google.com/terms) |
+| **Firebase Crashlytics** | Stability & crash diagnostics | Anonymous stack traces, device OS version (zero financial PII) | [Firebase Privacy](https://firebase.google.com/support/privacy) |
+| **Cloudflare Workers** | Secure proxy for optional AI Copilot | Anonymized monthly category totals, budget utilization percentages, and sanitized recent transaction labels (No PII, no account numbers, no raw SMS) | [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/) |
+| **Groq API** | LLM processing for AI Copilot insights | Anonymized financial context summaries and user chat turns | [Groq Privacy Policy](https://groq.com/privacy-policy/) |
 | **RevenueCat** | Premium subscription management | App store purchase receipts, anonymous subscriber ID | [RevenueCat Privacy Policy](https://www.revenuecat.com/privacy/) |
 
 ---

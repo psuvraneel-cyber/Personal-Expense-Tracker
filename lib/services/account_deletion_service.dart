@@ -96,11 +96,13 @@ class AccountDeletionService {
       _progressController.add(DeletionStep.deletingCloudTombstones);
       await _deleteFirestoreCollection(uid, 'tombstones');
 
-      // ── Step 5: Delete premium data collections
+      // ── Step 5: Delete premium and recurring data collections
       _progressController.add(DeletionStep.deletingCloudPremiumData);
       for (final collection in [
         'saving_goals',
         'recurring_payments',
+        'recurring_rules',
+        'recurring_occurrences',
         'alerts',
         'family_members',
         'linked_accounts',
@@ -213,6 +215,8 @@ class AccountDeletionService {
       'family_members',
       'alerts',
       'recurring_payments',
+      'recurring_occurrences',
+      'recurring_rules',
       'saving_goals',
       'transactions',
       'budgets',

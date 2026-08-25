@@ -1,6 +1,6 @@
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/transaction_provider.dart';
@@ -22,6 +22,8 @@ import 'package:pet/services/platform_stub.dart'
     if (dart.library.io) 'package:pet/services/platform_native.dart'
     as platform;
 import 'package:pet/screens/settings/account_deletion_sheet.dart';
+import 'package:pet/screens/settings/notification_settings_screen.dart';
+import 'package:pet/core/widgets/oem_battery_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -90,6 +92,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionTitle(context, 'Appearance'),
           const SizedBox(height: 8),
           _buildThemePicker(context, isDark, currentThemeMode),
+          const SizedBox(height: 16),
+
+          // Notifications
+          _buildSectionTitle(context, 'Notifications'),
+          const SizedBox(height: 8),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.notifications_none_rounded,
+            iconColor: AppTheme.accentPurple,
+            title: 'Notification Preferences',
+            subtitle: 'Manage budget, anomaly, and bill alert categories',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const NotificationSettingsScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.battery_charging_full_rounded,
+            iconColor: AppTheme.incomeGreen,
+            title: 'Battery & Autostart Settings',
+            subtitle: 'Prevent MIUI/ColorOS/FuntouchOS from stopping SMS alerts',
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (_) => const OemBatteryDialog(),
+              );
+            },
+          ),
           const SizedBox(height: 16),
 
           // Premium
@@ -390,6 +428,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _showTimeoutPicker(context),
             ),
           const SizedBox(height: 16),
+
+          // Developer Options — DEBUG builds only.
+          // Compile-time constant: entire block tree-shaken in release.
+          if (kDebugMode) ...[
+            _buildSectionTitle(context, 'Developer Options'),
+            const SizedBox(height: 8),
+            Consumer<PremiumProvider>(
+              builder: (context, premium, _) {
+                return _buildSettingTile(
+                  context,
+                  isDark: isDark,
+                  icon: Icons.developer_mode_rounded,
+                  iconColor: Colors.orange,
+                  title: 'Developer Premium Access',
+                  subtitle: premium.isDeveloperPremiumAccessEnabled
+                      ? 'ON \u2014 All premium features unlocked'
+                      : 'OFF \u2014 Using real RevenueCat entitlements',
+                  trailing: Switch(
+                    value: premium.isDeveloperPremiumAccessEnabled,
+                    activeThumbColor: Colors.orange,
+                    onChanged: (v) => premium.setDeveloperPremiumAccess(v),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // About
           _buildSectionTitle(context, 'About'),

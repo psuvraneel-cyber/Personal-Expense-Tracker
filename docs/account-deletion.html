@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Deletion & Data Erasure — P.E.T. (Personal Expense Tracker)</title>
+    <style>
+        :root {
+            --primary: #6366F1;
+            --primary-dark: #4F46E5;
+            --bg: #0F172A;
+            --card-bg: #1E293B;
+            --text: #F8FAFC;
+            --text-muted: #94A3B8;
+            --border: #334155;
+            --danger: #EF4444;
+            --success: #10B981;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 24px 16px;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            color: var(--text);
+            font-size: 28px;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .badge {
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--primary);
+            font-size: 13px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+        h2 {
+            font-size: 18px;
+            color: #E2E8F0;
+            margin-top: 28px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+        p, li {
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        .highlight-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+        .highlight-box h3 {
+            color: var(--danger);
+            margin-top: 0;
+            font-size: 16px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: var(--text);
+            font-weight: 500;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #0F172A;
+            color: var(--text);
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .btn {
+            background: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: var(--primary-dark);
+        }
+        .footer {
+            margin-top: 32px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            P.E.T. — Data Erasure
+            <span class="badge">Google Play Policy</span>
+        </h1>
+        <p>This portal allows users of <strong>P.E.T. — Personal Expense Tracker</strong> to request permanent deletion of their account and all associated personal and financial data in accordance with Google Play's User Data policy.</p>
+
+        <h2>1. In-App Deletion (Instant & Recommended)</h2>
+        <p>If you have the P.E.T. app installed on your device, you can delete your data immediately without waiting for support processing:</p>
+        <ul>
+            <li>Open <strong>P.E.T.</strong> on your Android device.</li>
+            <li>Navigate to <strong>Settings &gt; Account Settings &gt; Delete Account</strong>.</li>
+            <li>Confirm deletion using your biometric or device credentials.</li>
+            <li>All local SQLite encrypted databases, Firebase Cloud Firestore documents, and Authentication records are erased instantly.</li>
+        </ul>
+
+        <h2>2. Web-Based Deletion Request</h2>
+        <p>If you no longer have access to the app, submit the form below or email <a href="mailto:psuvraneel@gmail.com?subject=PET%20Account%20Deletion%20Request">psuvraneel@gmail.com</a> with your registered Google / Firebase account email address. Requests are processed within 48 hours.</p>
+
+        <form action="mailto:psuvraneel@gmail.com" method="post" enctype="text/plain">
+            <div class="form-group">
+                <label for="email">Registered Email Address *</label>
+                <input type="email" id="email" name="Email" required placeholder="your.email@example.com">
+            </div>
+            <div class="form-group">
+                <label for="reason">Reason for deletion (Optional)</label>
+                <textarea id="reason" name="Reason" rows="3" placeholder="Let us know if you encountered any issues..."></textarea>
+            </div>
+            <button type="submit" class="btn">Submit Deletion Request</button>
+        </form>
+
+        <h2>3. What Data Is Permanently Erased</h2>
+        <ul>
+            <li><strong>Firebase Authentication Record:</strong> Email, User UID, and OAuth provider tokens.</li>
+            <li><strong>Cloud Firestore Collections:</strong> All synchronized transactions, budgets, custom categories, saving goals, recurring rules, alerts, and tombstones.</li>
+            <li><strong>Subscription Entitlements:</strong> RevenueCat subscriber record dissociation.</li>
+            <li><strong>Local Application Storage:</strong> SQLCipher 256-bit encrypted database and SharedPreferences cache upon next app launch / local wipe.</li>
+        </ul>
+
+        <div class="highlight-box">
+            <h3>⚠️ Irreversible Action</h3>
+            <p style="margin: 0; font-size: 13px; color: #FCA5A5;">Once executed, account deletion is permanent and cannot be undone. Any active Google Play subscription should also be canceled separately in Google Play Store &gt; Subscriptions.</p>
+        </div>
+
+        <div class="footer">
+            <p>P.E.T. (Personal Expense Tracker) • <a href="https://github.com/psuvraneel-cyber/Personal-Expense-Tracker/blob/main/PRIVACY_POLICY.md">Privacy Policy</a> • Contact: <a href="mailto:psuvraneel@gmail.com">psuvraneel@gmail.com</a></p>
+        </div>
+    </div>
+</body>
+</html>

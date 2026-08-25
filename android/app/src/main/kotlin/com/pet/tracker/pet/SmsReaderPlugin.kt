@@ -16,6 +16,7 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import androidx.annotation.GuardedBy
 import org.json.JSONArray
 import org.json.JSONObject
 import android.util.Log
@@ -46,6 +47,96 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
 
     companion object {
         private const val TAG = "SmsReaderPlugin"
+
+        private val sinkLock = Any()
+
+        @GuardedBy("sinkLock")
+        private var _eventSink: EventChannel.EventSink? = null
+
+        /**
+         * Thread-safe property for managing SMS EventSink subscription.
+         */
+        var eventSink: EventChannel.EventSink?
+            get() = synchronized(sinkLock) { _eventSink }
+            set(value) = synchronized(sinkLock) {
+                _eventSink = value
+                SafeLog.d(TAG, "EventSink updated (active=${value != null})")
+            }
+
+        /**
+         * Known bank/UPI sender ID patterns for native-side pre-filtering.
+         * Matching is case-insensitive, partial match on the sender address.
+         * This avoids passing millions of personal/promo SMS to Dart.
+         */
+        val bankSenderPatterns = listOf(
+            // Major private banks
+            "HDFC", "HDFCBK", "ICICI", "ICICIB", "AXIS", "AXISBK", "KOTAK", "KOTAKB",
+            "YESBK", "YESBNK", "INDUS", "INDBNK",
+            "FEDER", "FEDBNK", "IDFCFB", "IDFCBK", "RBLBNK", "RBLBK",
+            "BANDHN", "DBSBNK",
+            // Major public banks
+            "SBI", "SBIINB", "SBIPSG", "PNB", "PNBSMS", "BOB", "BARODA", "BARODAB",
+            "CANARA", "CANBK", "UNION", "UNIONB", "UBOI",
+            "IDBI", "IDBIBK", "INDIAN", "INDBNK", "CENTRL", "CENTBK",
+            "IOB", "IOBSMS", "UCO", "UCOBK",
+            "BOI", "BOIIND", "KARNAB", "KRNTKB", "SOUTHI", "SIBBNK",
+            // Payments banks & UPI apps
+            "PAYTM", "PYTM", "AIRTEL", "JIOFI", "JIOPA", "GPAY", "GOOGLE",
+            "PHONEPE", "PHNEPE", "BHIM", "AMAZONP", "AMZNPAY", "WHATSAP",
+            // Foreign banks
+            "STANCHART", "SCBANK", "SCBIND", "CITI", "CITIBNK", "HSBC", "HSBCIN",
+            // Small Finance Banks & Fintech
+            "AUBANK", "AUSFB", "EQITAS", "UJJIVN", "JUPITE",
+            "FIBANK", "SLICE", "NIYOBN",
+            // Additional common sender patterns (TRAI prefixes stripped)
+            "SBIUPI", "HDFCUPI", "ICIUPI", "AXISUPI",
+            // Wallet & fintech
+            "MOBIKWIK", "FREECHARGE", "LAZYPAY", "SIMPL", "CRED",
+        )
+
+        /**
+         * Content keywords that indicate a financial transaction.
+         * Used as secondary filter — SMS must contain at least one of these
+         * in addition to matching a sender pattern (or if sender is unknown).
+         */
+        val transactionKeywords = listOf(
+            // Transaction verbs
+            "debited", "credited", "debit", "credit", "paid", "received",
+            "sent", "transferred", "spent", "withdrawn", "deposited",
+            "refund", "cashback", "reversed", "reversal",
+            // Transaction channels
+            "UPI", "IMPS", "NEFT", "RTGS",
+            // Account patterns
+            "A/c", "Acct", "account",
+            // Transaction indicators
+            "Txn", "transaction", "payment",
+        )
+
+        /**
+         * Native pre-filter to determine if an SMS is likely a bank transaction message.
+         */
+        fun isLikelyBankSms(address: String, body: String): Boolean {
+            if (body.isBlank()) return false
+
+            val upperAddress = address.uppercase()
+            val senderMatch = bankSenderPatterns.any { pattern ->
+                upperAddress.contains(pattern)
+            }
+
+            if (senderMatch) return true
+
+            val hasCurrency = body.contains("Rs", ignoreCase = true) ||
+                    body.contains("INR", ignoreCase = true) ||
+                    body.contains("₹")
+
+            if (!hasCurrency) return false
+
+            val hasKeyword = transactionKeywords.any { keyword ->
+                body.contains(keyword, ignoreCase = true)
+            }
+
+            return hasKeyword
+        }
     }
 
     private lateinit var methodChannel: MethodChannel
@@ -53,57 +144,7 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     private lateinit var notificationEventChannel: EventChannel
     private var applicationContext: Context? = null
     private var smsReceiver: BroadcastReceiver? = null
-    private var eventSink: EventChannel.EventSink? = null
     private var notificationEventSink: EventChannel.EventSink? = null
-
-    /**
-     * Known bank/UPI sender ID patterns for native-side pre-filtering.
-     * Matching is case-insensitive, partial match on the sender address.
-     * This avoids passing millions of personal/promo SMS to Dart.
-     */
-    private val bankSenderPatterns = listOf(
-        // Major private banks
-        "HDFC", "HDFCBK", "ICICI", "ICICIB", "AXIS", "AXISBK", "KOTAK", "KOTAKB",
-        "YESBK", "YESBNK", "INDUS", "INDBNK",
-        "FEDER", "FEDBNK", "IDFCFB", "IDFCBK", "RBLBNK", "RBLBK",
-        "BANDHN", "DBSBNK",
-        // Major public banks
-        "SBI", "SBIINB", "SBIPSG", "PNB", "PNBSMS", "BOB", "BARODA", "BARODAB",
-        "CANARA", "CANBK", "UNION", "UNIONB", "UBOI",
-        "IDBI", "IDBIBK", "INDIAN", "INDBNK", "CENTRL", "CENTBK",
-        "IOB", "IOBSMS", "UCO", "UCOBK",
-        "BOI", "BOIIND", "KARNAB", "KRNTKB", "SOUTHI", "SIBBNK",
-        // Payments banks & UPI apps
-        "PAYTM", "PYTM", "AIRTEL", "JIOFI", "JIOPA", "GPAY", "GOOGLE",
-        "PHONEPE", "PHNEPE", "BHIM", "AMAZONP", "AMZNPAY", "WHATSAP",
-        // Foreign banks
-        "STANCHART", "SCBANK", "SCBIND", "CITI", "CITIBNK", "HSBC", "HSBCIN",
-        // Small Finance Banks & Fintech
-        "AUBANK", "AUSFB", "EQITAS", "UJJIVN", "JUPITE",
-        "FIBANK", "SLICE", "NIYOBN",
-        // Additional common sender patterns (TRAI prefixes stripped)
-        "SBIUPI", "HDFCUPI", "ICIUPI", "AXISUPI",
-        // Wallet & fintech
-        "MOBIKWIK", "FREECHARGE", "LAZYPAY", "SIMPL", "CRED",
-    )
-
-    /**
-     * Content keywords that indicate a financial transaction.
-     * Used as secondary filter — SMS must contain at least one of these
-     * in addition to matching a sender pattern (or if sender is unknown).
-     */
-    private val transactionKeywords = listOf(
-        // Transaction verbs
-        "debited", "credited", "debit", "credit", "paid", "received",
-        "sent", "transferred", "spent", "withdrawn", "deposited",
-        "refund", "cashback", "reversed", "reversal",
-        // Transaction channels
-        "UPI", "IMPS", "NEFT", "RTGS",
-        // Account patterns
-        "A/c", "Acct", "account",
-        // Transaction indicators
-        "Txn", "transaction", "payment",
-    )
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = binding.applicationContext
@@ -230,6 +271,15 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                     }
                 } else {
                     result.success(false)
+                }
+            }
+            "popPendingNotifications" -> {
+                val ctx = applicationContext
+                if (ctx != null) {
+                    val list = EncryptedNotificationCache.popPendingNotifications(ctx)
+                    result.success(list)
+                } else {
+                    result.success(emptyList<Map<String, Any?>>())
                 }
             }
             else -> result.notImplemented()
@@ -395,43 +445,6 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         return results
     }
 
-    /**
-     * Native-side pre-filter to determine if an SMS is likely from a bank/UPI service.
-     *
-     * This runs on the Kotlin side BEFORE passing data to Dart, dramatically
-     * reducing the number of SMS that need full regex parsing.
-     *
-     * @param address  The sender address (e.g., "AD-HDFCBK", "+919876543210")
-     * @param body     The SMS body text
-     * @return true if the SMS should be passed to Dart for full parsing
-     */
-    private fun isLikelyBankSms(address: String, body: String): Boolean {
-        // Empty messages are not useful
-        if (body.isBlank()) return false
-
-        // Check if sender matches known bank patterns
-        val upperAddress = address.uppercase()
-        val senderMatch = bankSenderPatterns.any { pattern ->
-            upperAddress.contains(pattern)
-        }
-
-        if (senderMatch) return true
-
-        // For unknown senders (e.g., short codes, phone numbers),
-        // check if the body contains financial transaction keywords
-        // AND a currency indicator (Rs/INR/₹)
-        val hasCurrency = body.contains("Rs", ignoreCase = true) ||
-                body.contains("INR", ignoreCase = true) ||
-                body.contains("₹")
-
-        if (!hasCurrency) return false
-
-        val hasKeyword = transactionKeywords.any { keyword ->
-            body.contains(keyword, ignoreCase = true)
-        }
-
-        return hasKeyword
-    }
 
     // ─── Live SMS Listener via BroadcastReceiver ────────────────────
 

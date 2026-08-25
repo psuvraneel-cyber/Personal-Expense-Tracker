@@ -1,14 +1,27 @@
-import 'package:pet/core/utils/app_logger.dart';
 import 'dart:io';
 import 'package:workmanager/workmanager.dart';
-import 'package:pet/services/sms_service.dart';
+import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/data/repositories/budget_repository.dart';
+import 'package:pet/data/repositories/transaction_repository.dart';
+import 'package:pet/premium/models/notification_category.dart';
+import 'package:pet/premium/repositories/alert_repository.dart';
+import 'package:pet/premium/repositories/recurring_payment_repository.dart';
+import 'package:pet/premium/services/alert_evaluator.dart';
+import 'package:pet/premium/services/bill_reminder_scheduler.dart';
+import 'package:pet/premium/services/daily_reminder_evaluator.dart';
+import 'package:pet/premium/services/notification_preferences_service.dart';
+import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/services/reconciliation_service.dart';
+import 'package:pet/services/sms_service.dart';
 
 /// Background task name for periodic SMS inbox scanning.
 const String kSmsInboxScanTask = 'com.pet.tracker.smsInboxScan';
 
 /// Background task name for periodic reconciliation sweep.
 const String kReconciliationSweepTask = 'com.pet.tracker.reconciliationSweep';
+
+/// Background task name for periodic budget, anomaly, and bill alert evaluation.
+const String kAlertEvaluationTask = 'com.pet.tracker.alertEvaluation';
 
 /// Top-level callback dispatcher for WorkManager.
 /// This MUST be a top-level function (not a class method).
@@ -47,13 +60,136 @@ void smsCallbackDispatcher() {
       } catch (e) {
         AppLogger.debug('[PET-BG] Background reconciliation error: $e');
       }
+    } else if (taskName == kAlertEvaluationTask) {
+      try {
+        await NotificationService.initialize();
+
+        final now = DateTime.now();
+        final budgetRepo = BudgetRepository();
+        final txnRepo = TransactionRepository();
+        final alertRepo = AlertRepository();
+
+        final budgetsList = await budgetRepo.getBudgetsByMonth(
+          now.month,
+          now.year,
+        );
+        final budgetsMap = <String, double>{};
+        final spentMap = <String, double>{};
+
+        for (final budget in budgetsList) {
+          budgetsMap[budget.categoryId] = budget.amount;
+          spentMap[budget.categoryId] = await txnRepo.getSpentInCategory(
+            budget.categoryId,
+            now.month,
+            now.year,
+          );
+        }
+
+        final transactions = await txnRepo.getAllTransactions();
+
+        final budgetAlerts = AlertEvaluator.evaluateBudgetAlerts(
+          budgets: budgetsMap,
+          spent: spentMap,
+          now: now,
+        );
+
+        final anomalyAlerts = AlertEvaluator.evaluateAnomalies(
+          transactions: transactions,
+          now: now,
+        );
+
+        final cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
+          transactions: transactions,
+          now: now,
+        );
+
+        final allAlerts = [...budgetAlerts, ...anomalyAlerts, ?cashflowAlert];
+
+        for (final alert in allAlerts) {
+          if (alert.alertKey != null) {
+            final exists = await alertRepo.existsByKey(alert.alertKey!);
+            if (exists) continue;
+          }
+          await alertRepo.insert(alert);
+
+          final category = alert.type == 'anomaly'
+              ? NotificationCategory.anomaly
+              : alert.type == 'cashflow'
+              ? NotificationCategory.cashflow
+              : NotificationCategory.budget;
+
+          final payload = '${alert.type}:${alert.categoryId ?? alert.id}';
+
+          await NotificationService.showInstant(
+            id: NotificationService.collisionSafeId(alert.id),
+            title: alert.title,
+            body: alert.message,
+            category: category,
+            payload: payload,
+          );
+        }
+
+        // Re-arm scheduled bill reminders for boot safety (P0-2)
+        final recurringRepo = RecurringPaymentRepository();
+        final recurringPayments = await recurringRepo.getAll();
+        await BillReminderScheduler.scheduleReminders(
+          recurringPayments,
+          now: now,
+        );
+
+        // Evaluate Daily Expense Reminder (P2-1)
+        final dailyEnabled =
+            await NotificationPreferencesService.isCategoryEnabled(
+              NotificationCategory.dailySummary,
+            );
+        if (dailyEnabled) {
+          final reminderHour =
+              await NotificationPreferencesService.getReminderHour();
+          final lastReminderDate =
+              await NotificationPreferencesService.getLastDailyReminderDate();
+
+          final startOfToday = DateTime(now.year, now.month, now.day);
+          final todayTxns = await txnRepo.getTransactionsByDateRange(
+            startOfToday,
+            now,
+          );
+
+          final shouldFireDaily = DailyReminderEvaluator.shouldFireReminder(
+            now: now,
+            reminderHour: reminderHour,
+            lastReminderDate: lastReminderDate,
+            todayTransactionCount: todayTxns.length,
+          );
+
+          if (shouldFireDaily) {
+            final todayKey = DailyReminderEvaluator.formatDateKey(now);
+            await NotificationPreferencesService.setLastDailyReminderDate(
+              todayKey,
+            );
+
+            await NotificationService.showInstant(
+              id: NotificationService.collisionSafeId('daily_$todayKey'),
+              title: 'Daily Expense Reminder',
+              body: "Don't forget to log your expenses for today!",
+              category: NotificationCategory.dailySummary,
+              payload: 'daily',
+            );
+          }
+        }
+
+        AppLogger.debug(
+          '[PET-BG] Background alert evaluation completed: evaluated ${allAlerts.length} alerts & re-armed bill reminders',
+        );
+      } catch (e) {
+        AppLogger.debug('[PET-BG] Background alert evaluation error: $e');
+      }
     }
 
     return Future.value(true);
   });
 }
 
-/// Initialize WorkManager for periodic background SMS scanning.
+/// Initialize WorkManager for periodic background SMS scanning and alert evaluation.
 ///
 /// Call this once during app startup (after permissions are granted).
 Future<void> initSmsBackgroundService() async {
@@ -93,17 +229,32 @@ Future<void> initSmsBackgroundService() async {
     backoffPolicyDelay: const Duration(minutes: 15),
   );
 
+  // Register a periodic task for budget & anomaly alert evaluation (every 30 minutes).
+  await Workmanager().registerPeriodicTask(
+    kAlertEvaluationTask,
+    kAlertEvaluationTask,
+    frequency: const Duration(minutes: 30),
+    constraints: Constraints(
+      networkType: NetworkType.notRequired,
+      requiresBatteryNotLow: true,
+    ),
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    backoffPolicy: BackoffPolicy.linear,
+    backoffPolicyDelay: const Duration(minutes: 5),
+  );
+
   AppLogger.debug(
-    '[PET-BG] Background SMS scan + reconciliation services initialized',
+    '[PET-BG] Background SMS scan, reconciliation, and alert evaluation services initialized',
   );
 }
 
-/// Cancel background SMS scanning and reconciliation.
+/// Cancel background SMS scanning, reconciliation, and alert evaluation.
 Future<void> cancelSmsBackgroundService() async {
   if (!Platform.isAndroid) return;
   await Workmanager().cancelByUniqueName(kSmsInboxScanTask);
   await Workmanager().cancelByUniqueName(kReconciliationSweepTask);
+  await Workmanager().cancelByUniqueName(kAlertEvaluationTask);
   AppLogger.debug(
-    '[PET-BG] Background SMS scan + reconciliation services cancelled',
+    '[PET-BG] Background SMS scan, reconciliation, and alert evaluation services cancelled',
   );
 }

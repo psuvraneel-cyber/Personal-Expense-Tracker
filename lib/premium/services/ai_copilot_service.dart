@@ -57,6 +57,22 @@ class ClientErrorException implements Exception {
   String toString() => message;
 }
 
+/// Exception thrown when the server returns a 401 authentication error.
+class AuthErrorException implements Exception {
+  final int statusCode;
+  final String message;
+  final String? errorCode;
+  const AuthErrorException(this.statusCode, this.message, {this.errorCode});
+  @override
+  String toString() => message;
+
+  /// Whether this auth error is potentially resolvable by refreshing the token.
+  bool get isRetryable =>
+      errorCode == null ||
+      errorCode == 'AUTH_TOKEN_EXPIRED' ||
+      errorCode == 'AUTH_TOKEN_UNKNOWN_KEY';
+}
+
 class AiCopilotService {
   AiCopilotService({required this.model});
 
@@ -118,10 +134,22 @@ class AiCopilotService {
       {'role': 'user', 'content': message},
     ];
 
-    // ── 5. API call with single retry ────────────────────────────────────────
+    // ── 5. API call with auth retry + general retry ──────────────────────────
     String reply;
     try {
       reply = await _callApi(messages);
+    } on AuthErrorException catch (e) {
+      // On 401, force-refresh the Firebase ID token and retry exactly once
+      if (e.isRetryable) {
+        try {
+          reply = await _callApi(messages, forceRefresh: true);
+        } on AuthErrorException {
+          // Second 401 — do not retry further
+          rethrow;
+        }
+      } else {
+        rethrow;
+      }
     } on ClientErrorException {
       rethrow;
     } on Exception {
@@ -154,13 +182,13 @@ class AiCopilotService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  Future<String> _callApi(List<Map<String, String>> messages) async {
+  Future<String> _callApi(List<Map<String, String>> messages, {bool forceRefresh = false}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw Exception('Login required to use the AI Copilot.');
     }
 
-    final idToken = await user.getIdToken();
+    final idToken = await user.getIdToken(forceRefresh);
     if (idToken == null) {
       throw Exception('Failed to get authentication token.');
     }
@@ -179,6 +207,22 @@ class AiCopilotService {
           }),
         )
         .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 401) {
+      // Parse structured error code if available
+      String? errorCode;
+      String errMsg = response.body;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) {
+          errorCode = decoded['errorCode']?.toString();
+          if (decoded['error'] != null) {
+            errMsg = decoded['error'].toString();
+          }
+        }
+      } catch (_) {}
+      throw AuthErrorException(response.statusCode, errMsg, errorCode: errorCode);
+    }
 
     if (response.statusCode >= 400 && response.statusCode < 500) {
       String errMsg = response.body;

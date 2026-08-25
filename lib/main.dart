@@ -10,10 +10,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/theme_mode_notifier.dart';
 import 'package:pet/providers/transaction_provider.dart';
+import 'package:pet/providers/recurring_transaction_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'dart:ui' show PlatformDispatcher;
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/firebase_options.dart';
 import 'package:pet/screens/splash/splash_screen.dart';
@@ -24,6 +27,8 @@ import 'package:pet/premium/providers/alert_provider.dart';
 import 'package:pet/premium/providers/linked_account_provider.dart';
 import 'package:pet/premium/providers/family_provider.dart';
 import 'package:pet/premium/providers/tax_provider.dart';
+import 'package:pet/premium/repositories/recurring_payment_repository.dart';
+import 'package:pet/premium/services/bill_reminder_scheduler.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/services/firebase_auth_service.dart';
@@ -32,6 +37,11 @@ import 'package:pet/providers/dashboard_config_provider.dart';
 import 'package:pet/services/haptic_service.dart';
 import 'package:pet/services/biometric_service.dart';
 import 'package:pet/screens/biometric/biometric_lock_screen.dart';
+import 'package:pet/screens/budget/budget_screen.dart';
+import 'package:pet/premium/screens/alerts_screen.dart';
+import 'package:pet/premium/screens/recurring_bills_screen.dart';
+import 'package:pet/premium/screens/goals_screen.dart';
+import 'package:pet/premium/screens/cashflow_screen.dart';
 
 import 'package:timezone/data/latest.dart' as tz;
 
@@ -57,6 +67,13 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    FlutterError.onError = (errorDetails) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
   } catch (e) {
     AppLogger.debug('Firebase init failed: $e');
   }
@@ -92,8 +109,12 @@ void main() async {
   try {
     // Initialize notifications
     await NotificationService.initialize();
+    // Re-arm pending bill reminders from durable SQLite storage on app boot
+    final recurringRepo = RecurringPaymentRepository();
+    final recurringPayments = await recurringRepo.getAll();
+    await BillReminderScheduler.scheduleReminders(recurringPayments);
   } catch (e) {
-    AppLogger.debug('Notification init failed: $e');
+    AppLogger.debug('Notification init or reminder re-arm failed: $e');
   }
 
   ThemeMode themeMode = ThemeMode.system;
@@ -156,6 +177,22 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       _onAuthStateChanged,
     );
 
+    // Query notification permission status
+    NotificationService.permissionStatus();
+
+    // Listen to notification tap responses (warm taps)
+    NotificationService.selectNotificationNotifier
+        .addListener(_handleNotificationPayload);
+
+    // Check cold-start notification launch payload post-frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final coldPayload = NotificationService.initialPayload;
+      if (coldPayload != null && coldPayload.isNotEmpty) {
+        NotificationService.clearInitialPayload();
+        _navigateToPayload(coldPayload);
+      }
+    });
+
     // Show biometric lock on cold start if enabled
     if (BiometricService.instance.isEnabled) {
       _showBiometricLock = true;
@@ -163,6 +200,52 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       // Mark active if biometric is not enabled
       BiometricService.instance.markActive();
     }
+  }
+
+  void _handleNotificationPayload() {
+    final payload = NotificationService.selectNotificationNotifier.value;
+    if (payload != null && payload.isNotEmpty) {
+      NotificationService.selectNotificationNotifier.value = null;
+      _navigateToPayload(payload);
+    }
+  }
+
+  void _navigateToPayload(String payload) {
+    final nav = _navigatorKey.currentState;
+    if (nav == null) {
+      AppLogger.debug(
+        '[MAIN] Navigator state null, ignoring payload: $payload',
+      );
+      return;
+    }
+
+    AppLogger.debug('[MAIN] Deep linking to notification payload: $payload');
+    final parts = payload.split(':');
+    final type = parts.first;
+
+    Widget targetScreen;
+    switch (type) {
+      case 'bill':
+        targetScreen = const RecurringBillsScreen();
+        break;
+      case 'budget':
+        targetScreen = const BudgetScreen();
+        break;
+      case 'goal':
+        targetScreen = const GoalsScreen();
+        break;
+      case 'cashflow':
+        targetScreen = const CashflowScreen();
+        break;
+      case 'anomaly':
+      default:
+        targetScreen = const AlertsScreen();
+        break;
+    }
+
+    nav.push(
+      MaterialPageRoute(builder: (_) => targetScreen),
+    );
   }
 
   void _onAuthStateChanged(User? user) {
@@ -195,6 +278,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<TaxProvider>().clearData();
       ctx.read<WeeklyPlannerProvider>().clearData();
       ctx.read<DashboardConfigProvider>().clearData();
+      ctx.read<RecurringTransactionProvider>().clearData();
       _lastUid = null;
     } else if (currentUserId != null && currentUserId != _lastUid) {
       AppLogger.debug(
@@ -204,6 +288,8 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<CategoryProvider>().loadCategories();
       ctx.read<TransactionProvider>().loadTransactions();
       ctx.read<BudgetProvider>().loadBudgets();
+      ctx.read<RecurringTransactionProvider>().loadRules();
+      ctx.read<PremiumProvider>().logInUser(currentUserId);
     } else {
       AppLogger.debug('[MAIN] No action taken (same user or null→null)');
     }
@@ -211,6 +297,8 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    NotificationService.selectNotificationNotifier
+        .removeListener(_handleNotificationPayload);
     WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _themeMode.dispose();
@@ -224,10 +312,17 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       return;
     }
     if (state == AppLifecycleState.resumed) {
+      NotificationService.permissionStatus();
       try {
         _navigatorKey.currentContext?.read<TransactionProvider>().triggerSyncQueue();
       } catch (e) {
         AppLogger.debug('[MAIN] Failed to trigger sync queue on resume: $e');
+      }
+      try {
+        _navigatorKey.currentContext?.read<TransactionProvider>().checkRecurringOccurrences();
+        _navigatorKey.currentContext?.read<RecurringTransactionProvider>().checkAndGenerateDue();
+      } catch (e) {
+        AppLogger.debug('[MAIN] Failed to trigger recurring check on resume: $e');
       }
       try {
         _navigatorKey.currentContext?.read<SmsTransactionProvider>().runReconciliation();
@@ -275,6 +370,9 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
         ),
         ChangeNotifierProvider(
           create: (_) => TransactionProvider()..loadTransactions(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => RecurringTransactionProvider()..loadRules(),
         ),
         ChangeNotifierProxyProvider<TransactionProvider, BudgetProvider>(
           create: (_) => BudgetProvider()..loadBudgets(),

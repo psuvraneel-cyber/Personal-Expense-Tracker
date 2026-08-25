@@ -12,10 +12,6 @@
 class AppEnv {
   AppEnv._(); // non-instantiable
 
-  // ── Supabase ──────────────────────────────────────────────────────────────
-  static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-
   // ── Groq AI Copilot ───────────────────────────────────────────────────────
   static const groqModel = String.fromEnvironment(
     'GROQ_MODEL',

@@ -3,51 +3,99 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helper Functions ───────────────────────────────────────────
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
     // ── User profile + sub-collections ─────────────────────────────
     match /users/{uid} {
 
       // Only the signed-in user can read/write their own profile doc
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if isOwner(uid);
 
-      // Allow read and deletion of any document within the user's subtree
-      match /{document=**} {
-        allow read, delete: if request.auth != null && request.auth.uid == uid;
-      }
+      // ── Core Financial Collections ───────────────────────────────
 
-      // ── Transactions ─────────────────────────────────────────────
+      // Transactions
       match /transactions/{txnId} {
-        allow read: if request.auth != null && request.auth.uid == uid;
+        allow read: if isOwner(uid);
 
-        allow create: if request.auth != null
-          && request.auth.uid == uid
+        allow create: if isOwner(uid)
           && request.resource.data.keys().hasAll(['amount', 'type', 'categoryId', 'date'])
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
           && request.resource.data.type in ['income', 'expense'];
 
-        allow update: if request.auth != null
-          && request.auth.uid == uid
-          // Prevent changing the immutable owner (uid encoded in the path, not the doc)
+        allow update: if isOwner(uid)
           && request.resource.data.keys().hasAll(['amount', 'type', 'categoryId', 'date'])
           && request.resource.data.amount is number
-          && request.resource.data.amount > 0;
+          && request.resource.data.amount > 0
+          && request.resource.data.type in ['income', 'expense'];
 
-        allow delete: if request.auth != null && request.auth.uid == uid;
+        allow delete: if isOwner(uid);
       }
 
-      // ── Categories ───────────────────────────────────────────────
+      // Categories
       match /categories/{catId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if isOwner(uid);
       }
 
-      // ── Budgets ──────────────────────────────────────────────────
+      // Budgets
       match /budgets/{budgetId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if isOwner(uid);
       }
 
-      // ── Tombstones ───────────────────────────────────────────────
+      // Recurring Rules (automation engine)
+      match /recurring_rules/{ruleId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Recurring Occurrences (generated ledger occurrences)
+      match /recurring_occurrences/{occurrenceId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Tombstones (offline delete-wins synchronization)
       match /tombstones/{tombstoneId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if isOwner(uid);
+      }
+
+      // ── Premium Feature Collections ──────────────────────────────
+
+      // Savings Goals
+      match /saving_goals/{goalId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Recurring Payments
+      match /recurring_payments/{paymentId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Smart Alerts & Anomalies
+      match /alerts/{alertId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Tax Deduction Buckets
+      match /tax_categories/{taxCatId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Linked Accounts (Bank / Aggregator Integration)
+      match /linked_accounts/{accId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Family Members / Group Sharing
+      match /family_members/{memberId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Allow deletion and read of any other legacy or auxiliary document within the user's subtree
+      // (ensures account deletion can cleanly wipe all orphaned subcollections)
+      match /{document=**} {
+        allow read, delete: if isOwner(uid);
       }
     }
 

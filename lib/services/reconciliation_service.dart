@@ -272,36 +272,6 @@ class ReconciliationService {
     return DateTime.fromMillisecondsSinceEpoch(latestMs);
   }
 
-  /// Advance the watermark to the newest SMS timestamp in the batch.
-  void _advanceWatermark(
-    SharedPreferences prefs,
-    List<NativeSmsMessage> messages,
-    int nowMs,
-  ) {
-    if (messages.isEmpty) {
-      prefs.setInt(_kLastRunKey, nowMs);
-      return;
-    }
-
-    final latestMs = messages
-        .map((m) => m.dateMillis)
-        .reduce((a, b) => a > b ? a : b);
-
-    // Only advance forward, never backward
-    final currentWatermark = prefs.getInt(_kWatermarkKey) ?? 0;
-    if (latestMs > currentWatermark) {
-      prefs.setInt(_kWatermarkKey, latestMs);
-    }
-
-    // Also update SmsService's watermark for consistency
-    final smsServiceKey = 'pet_last_sms_timestamp';
-    final smsServiceWatermark = prefs.getInt(smsServiceKey) ?? 0;
-    if (latestMs > smsServiceWatermark) {
-      prefs.setInt(smsServiceKey, latestMs);
-    }
-
-    prefs.setInt(_kLastRunKey, nowMs);
-  }
 
   // ═══════════════════════════════════════════════════════════════════
   //  ISOLATE-BASED PARSING

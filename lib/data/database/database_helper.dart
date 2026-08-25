@@ -11,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart' hide databaseFactory;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactory, databaseFactoryFfi, sqfliteFfiInit;
 import 'package:pet/core/constants/categories.dart';
+import 'package:pet/data/models/enums.dart';
+import 'package:pet/services/recurrence_calculator.dart';
 import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
 
@@ -124,7 +126,7 @@ class DatabaseHelper {
       final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
       return await openDatabase(
         path,
-        version: 14,
+        version: 15,
         password: password,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -137,7 +139,7 @@ class DatabaseHelper {
       AppLogger.warn('SQLCipher is not supported on this platform. Opening in plaintext.', label: 'DB');
       return await openDatabase(
         path,
-        version: 14,
+        version: 15,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
         onOpen: (db) async {
@@ -193,8 +195,15 @@ class DatabaseHelper {
         taxCategory TEXT,
         source TEXT DEFAULT 'manual',
         accountId TEXT,
-        updatedAt TEXT
+        updatedAt TEXT,
+        recurringRuleId TEXT,
+        occurrenceDate TEXT
       )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_txn_recurring
+      ON transactions (recurringRuleId)
     ''');
 
     // Create categories table
@@ -236,6 +245,9 @@ class DatabaseHelper {
 
     // Create premium feature tables
     await _createPremiumTables(db);
+
+    // Create recurring transaction tables (rules and occurrences)
+    await _createRecurringTables(db);
 
     // Create sync queue table
     await _createSyncQueueTable(db);
@@ -359,6 +371,167 @@ class DatabaseHelper {
     }
     if (oldVersion < 14) {
       await _createSystemWatermarksTable(db);
+    }
+    if (oldVersion < 15) {
+      await _migrateToV15(db);
+    }
+  }
+
+  /// Create recurring_rules and recurring_occurrences tables for recurring transaction scheduling.
+  Future<void> _createRecurringTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS recurring_rules (
+        id TEXT PRIMARY KEY,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL,
+        categoryId TEXT NOT NULL,
+        note TEXT DEFAULT '',
+        paymentMethod TEXT DEFAULT 'UPI',
+        frequency TEXT NOT NULL,
+        interval INTEGER DEFAULT 1,
+        startDate TEXT NOT NULL,
+        endDate TEXT,
+        nextOccurrenceDate TEXT NOT NULL,
+        lastGeneratedDate TEXT,
+        isActive INTEGER DEFAULT 1,
+        merchantName TEXT,
+        taxCategory TEXT,
+        source TEXT DEFAULT 'manual',
+        accountId TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        userId TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_recurring_rules_active
+      ON recurring_rules (isActive, nextOccurrenceDate)
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS recurring_occurrences (
+        id TEXT PRIMARY KEY,
+        ruleId TEXT NOT NULL,
+        scheduledDate TEXT NOT NULL,
+        status TEXT NOT NULL,
+        transactionId TEXT,
+        generatedAt TEXT,
+        updatedAt TEXT NOT NULL,
+        UNIQUE(ruleId, scheduledDate)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_recurring_occ_rule
+      ON recurring_occurrences (ruleId)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_recurring_occ_txn
+      ON recurring_occurrences (transactionId)
+    ''');
+  }
+
+  /// Migration v15: Add recurring columns to transactions, create recurring_rules
+  /// and recurring_occurrences tables, and safely backfill legacy recurring transactions.
+  Future<void> _migrateToV15(Database db) async {
+    // 1. Add recurringRuleId and occurrenceDate columns to transactions if missing
+    final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
+    final hasRecurringRuleId = txnCols.any((c) => c['name'] == 'recurringRuleId');
+    if (!hasRecurringRuleId) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN recurringRuleId TEXT');
+    }
+    final hasOccurrenceDate = txnCols.any((c) => c['name'] == 'occurrenceDate');
+    if (!hasOccurrenceDate) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN occurrenceDate TEXT');
+    }
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_txn_recurring
+      ON transactions (recurringRuleId)
+    ''');
+
+    // 2. Create recurring tables
+    await _createRecurringTables(db);
+
+    // 3. Backfill legacy recurring transactions
+    try {
+      final legacyRows = await db.query(
+        'transactions',
+        where: 'isRecurring = 1 AND recurringFrequency IS NOT NULL AND (recurringRuleId IS NULL OR recurringRuleId = \'\')',
+      );
+
+      for (final row in legacyRows) {
+        final txnId = row['id'] as String;
+        final amount = (row['amount'] as num).toDouble();
+        final type = row['type'] as String? ?? 'expense';
+        final categoryId = row['categoryId'] as String? ?? 'other';
+        final dateStr = row['date'] as String;
+        final note = row['note'] as String? ?? '';
+        final paymentMethod = row['paymentMethod'] as String? ?? 'UPI';
+        final freqStr = row['recurringFrequency'] as String?;
+        final merchantName = row['merchantName'] as String?;
+        final taxCategory = row['taxCategory'] as String?;
+        final source = row['source'] as String? ?? 'manual';
+        final accountId = row['accountId'] as String?;
+
+        final date = DateTime.tryParse(dateStr) ?? DateTime.now();
+        final freq = RecurringFrequency.fromJson(freqStr) ?? RecurringFrequency.monthly;
+        final nextDate = RecurrenceCalculator.computeNextOccurrence(
+          anchorDate: date,
+          currentOccurrence: date,
+          frequency: freq,
+        );
+
+        final ruleId = 'rule_legacy_$txnId';
+        final nowStr = DateTime.now().toIso8601String();
+
+        await db.insert('recurring_rules', {
+          'id': ruleId,
+          'amount': amount,
+          'type': type,
+          'categoryId': categoryId,
+          'note': note,
+          'paymentMethod': paymentMethod,
+          'frequency': freq.toJson(),
+          'interval': 1,
+          'startDate': date.toIso8601String(),
+          'endDate': null,
+          'nextOccurrenceDate': nextDate.toIso8601String(),
+          'lastGeneratedDate': date.toIso8601String(),
+          'isActive': 1,
+          'merchantName': merchantName,
+          'taxCategory': taxCategory,
+          'source': source,
+          'accountId': accountId,
+          'createdAt': date.toIso8601String(),
+          'updatedAt': nowStr,
+          'userId': null,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+        final occId = '${ruleId}_${date.toIso8601String()}';
+        await db.insert('recurring_occurrences', {
+          'id': occId,
+          'ruleId': ruleId,
+          'scheduledDate': date.toIso8601String(),
+          'status': 'generated',
+          'transactionId': txnId,
+          'generatedAt': date.toIso8601String(),
+          'updatedAt': nowStr,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+        await db.update(
+          'transactions',
+          {
+            'recurringRuleId': ruleId,
+            'occurrenceDate': date.toIso8601String(),
+          },
+          where: 'id = ?',
+          whereArgs: [txnId],
+        );
+      }
+    } catch (e) {
+      AppLogger.error('Failed to backfill legacy recurring transactions', error: e, label: 'DB');
     }
   }
 

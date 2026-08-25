@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/providers/transaction_provider.dart';
+import 'package:pet/providers/recurring_transaction_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/color_tokens.dart';
@@ -41,6 +42,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
   PaymentMethod _paymentMethod = PaymentMethod.upi;
   bool _isRecurring = false;
   RecurringFrequency _recurringFrequency = RecurringFrequency.monthly;
+  bool _updateFutureRecurrences = false;
   String? _taxCategory;
 
   bool get _isEditing => widget.transaction != null;
@@ -271,6 +273,52 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                               selectedColor: AppTheme.accentTeal.withAlpha(50),
                             );
                           }).toList(),
+                        ),
+                      ],
+                      if (_isEditing && widget.transaction?.recurringRuleId != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppTheme.surfaceDark : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Apply changes to:',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ChoiceChip(
+                                      label: const Text('This occurrence only', style: TextStyle(fontSize: 12)),
+                                      selected: !_updateFutureRecurrences,
+                                      onSelected: (_) => setState(() => _updateFutureRecurrences = false),
+                                      selectedColor: AppTheme.accentTeal.withAlpha(50),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ChoiceChip(
+                                      label: const Text('All future recurrences', style: TextStyle(fontSize: 12)),
+                                      selected: _updateFutureRecurrences,
+                                      onSelected: (_) => setState(() => _updateFutureRecurrences = true),
+                                      selectedColor: AppTheme.accentTeal.withAlpha(50),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ],
@@ -555,6 +603,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
     final txnProvider = context.read<TransactionProvider>();
     final messenger = ScaffoldMessenger.of(context);
     final catProvider = context.read<CategoryProvider>();
+    final recurringProvider = context.read<RecurringTransactionProvider>();
 
     // Only check on new expense transactions, not edits (editing implies intent).
     if (!_isEditing && _type == TransactionType.expense) {
@@ -584,31 +633,123 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
 
     try {
       if (_isEditing) {
-        await txnProvider.updateTransaction(
-          widget.transaction!.copyWith(
+        final existingTxn = widget.transaction!;
+        if (_isRecurring && existingTxn.recurringRuleId != null) {
+          await txnProvider.updateTransaction(
+            existingTxn.copyWith(
+              amount: amount,
+              type: _type,
+              categoryId: _selectedCategoryId,
+              date: _selectedDate,
+              note: _noteController.text,
+              paymentMethod: _paymentMethod,
+              isRecurring: _isRecurring,
+              recurringFrequency: _recurringFrequency,
+              taxCategory: _taxCategory,
+            ),
+          );
+          if (_updateFutureRecurrences) {
+            final rule = recurringProvider.allRules
+                .where((r) => r.id == existingTxn.recurringRuleId)
+                .firstOrNull;
+            if (rule != null) {
+              await recurringProvider.updateRule(
+                rule.copyWith(
+                  amount: amount,
+                  type: _type,
+                  categoryId: _selectedCategoryId,
+                  frequency: _recurringFrequency,
+                  note: _noteController.text,
+                  paymentMethod: _paymentMethod,
+                  taxCategory: _taxCategory,
+                ),
+              );
+            }
+          }
+        } else if (_isRecurring && existingTxn.recurringRuleId == null) {
+          final result = await recurringProvider.createRule(
             amount: amount,
             type: _type,
-            categoryId: _selectedCategoryId,
+            categoryId: _selectedCategoryId!,
+            frequency: _recurringFrequency,
+            startDate: _selectedDate,
+            note: _noteController.text,
+            paymentMethod: _paymentMethod,
+            taxCategory: _taxCategory,
+            generateFirstOccurrenceImmediately: false,
+          );
+          await txnProvider.updateTransaction(
+            existingTxn.copyWith(
+              amount: amount,
+              type: _type,
+              categoryId: _selectedCategoryId,
+              date: _selectedDate,
+              note: _noteController.text,
+              paymentMethod: _paymentMethod,
+              isRecurring: true,
+              recurringFrequency: _recurringFrequency,
+              taxCategory: _taxCategory,
+              recurringRuleId: result.rule.id,
+              occurrenceDate: _selectedDate,
+            ),
+          );
+        } else if (!_isRecurring && existingTxn.recurringRuleId != null) {
+          await recurringProvider.stopRule(existingTxn.recurringRuleId!);
+          await txnProvider.updateTransaction(
+            existingTxn.copyWith(
+              amount: amount,
+              type: _type,
+              categoryId: _selectedCategoryId,
+              date: _selectedDate,
+              note: _noteController.text,
+              paymentMethod: _paymentMethod,
+              isRecurring: false,
+              recurringFrequency: null,
+              taxCategory: _taxCategory,
+            ),
+          );
+        } else {
+          await txnProvider.updateTransaction(
+            existingTxn.copyWith(
+              amount: amount,
+              type: _type,
+              categoryId: _selectedCategoryId,
+              date: _selectedDate,
+              note: _noteController.text,
+              paymentMethod: _paymentMethod,
+              isRecurring: false,
+              recurringFrequency: null,
+              taxCategory: _taxCategory,
+            ),
+          );
+        }
+      } else {
+        if (_isRecurring) {
+          await recurringProvider.createRule(
+            amount: amount,
+            type: _type,
+            categoryId: _selectedCategoryId!,
+            frequency: _recurringFrequency,
+            startDate: _selectedDate,
+            note: _noteController.text,
+            paymentMethod: _paymentMethod,
+            taxCategory: _taxCategory,
+            generateFirstOccurrenceImmediately: true,
+          );
+          await txnProvider.loadTransactions();
+        } else {
+          await txnProvider.addTransaction(
+            amount: amount,
+            type: _type,
+            categoryId: _selectedCategoryId!,
             date: _selectedDate,
             note: _noteController.text,
             paymentMethod: _paymentMethod,
-            isRecurring: _isRecurring,
-            recurringFrequency: _isRecurring ? _recurringFrequency : null,
+            isRecurring: false,
+            recurringFrequency: null,
             taxCategory: _taxCategory,
-          ),
-        );
-      } else {
-        await txnProvider.addTransaction(
-          amount: amount,
-          type: _type,
-          categoryId: _selectedCategoryId!,
-          date: _selectedDate,
-          note: _noteController.text,
-          paymentMethod: _paymentMethod,
-          isRecurring: _isRecurring,
-          recurringFrequency: _isRecurring ? _recurringFrequency : null,
-          taxCategory: _taxCategory,
-        );
+          );
+        }
       }
 
       if (!mounted) return;

@@ -11,6 +11,12 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.annotation.GuardedBy
 import androidx.annotation.VisibleForTesting
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequest
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkManager
+import dev.fluttercommunity.workmanager.BackgroundWorker
 import io.flutter.plugin.common.EventChannel
 
 /**
@@ -25,11 +31,16 @@ import io.flutter.plugin.common.EventChannel
  *   If the sink was cancelled or replaced while the task was enqueued on the Main Looper, the task
  *   never invokes [EventChannel.EventSink.success] on a stale sink (preventing [IllegalStateException]),
  *   and instead safely delivers to any newly active sink or persists to [EncryptedNotificationCache].
+ * - When persisting to [EncryptedNotificationCache] while the app is closed / engine unattached,
+ *   an expedited [OneTimeWorkRequest] is enqueued to process the notification and evaluate budget/anomaly
+ *   alerts in a background Dart isolate within seconds.
  */
 class TransactionNotificationListener : NotificationListenerService() {
 
     companion object {
         private const val TAG = "PET-NotifListener"
+        const val TASK_PROCESS_NOTIFICATIONS = "com.pet.tracker.processNotifications"
+        const val WORK_NAME_EXPEDITED_NOTIF = "com.pet.tracker.processNotifications.immediate"
 
         private val sinkLock = Any()
 
@@ -131,10 +142,41 @@ class TransactionNotificationListener : NotificationListenerService() {
         }
 
         /**
-         * Save notification data to SharedPreferences cache when the app is in background or closed.
+         * Save notification data to SharedPreferences cache when the app is in background or closed,
+         * and enqueue an expedited WorkManager request for immediate background Dart isolate execution.
          */
         fun saveNotificationToCache(context: Context, data: Map<String, Any?>) {
             EncryptedNotificationCache.saveNotification(context, data)
+            enqueueExpeditedNotificationProcessing(context)
+        }
+
+        /**
+         * Enqueue an expedited WorkManager one-off task to process cached notifications.
+         */
+        fun enqueueExpeditedNotificationProcessing(context: Context) {
+            try {
+                val inputData = Data.Builder()
+                    .putString(BackgroundWorker.DART_TASK_KEY, TASK_PROCESS_NOTIFICATIONS)
+                    .build()
+
+                val workRequestBuilder = OneTimeWorkRequest.Builder(BackgroundWorker::class.java)
+                    .setInputData(inputData)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    workRequestBuilder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                }
+
+                val workRequest = workRequestBuilder.build()
+
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    WORK_NAME_EXPEDITED_NOTIF,
+                    ExistingWorkPolicy.REPLACE,
+                    workRequest
+                )
+                SafeLog.d(TAG, "Enqueued expedited WorkManager task ($WORK_NAME_EXPEDITED_NOTIF)")
+            } catch (e: Exception) {
+                SafeLog.e(TAG, "Failed to enqueue expedited notification processing: ${e.message}", e)
+            }
         }
     }
 

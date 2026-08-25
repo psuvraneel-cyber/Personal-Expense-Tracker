@@ -21,7 +21,7 @@ class RateLimitResult {
 ///   Per-user sliding window
 ///   • 10 requests / minute
 ///   • 50 requests / hour
-///   • 150 requests / day
+///   • 200 requests / day
 ///
 ///   Burst control
 ///   • first 3 consecutive rapid messages → pass through
@@ -37,7 +37,7 @@ class AiRateLimiter {
   // ── Per-user limits ────────────────────────────────────────────────────────
   static const int _maxPerMinute = 10;
   static const int _maxPerHour = 50;
-  static const int _maxPerDay = 150;
+  static const int _maxPerDay = 200;
 
   // ── Burst control ──────────────────────────────────────────────────────────
   static const int _burstThreshold = 3; // free rapid messages

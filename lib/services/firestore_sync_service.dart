@@ -8,6 +8,8 @@ import 'package:flutter/widgets.dart' show IconData;
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/data/models/category.dart' as cat_model;
 import 'package:pet/data/models/budget.dart';
+import 'package:pet/data/models/recurring_occurrence.dart';
+import 'package:pet/data/models/recurring_rule.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 
 /// Firestore sync service for transactions, categories, and budgets.
@@ -71,6 +73,12 @@ class FirestoreSyncService {
 
   CollectionReference<Map<String, dynamic>> get _budgetCollection =>
       _db.collection('users').doc(_uid).collection('budgets');
+
+  CollectionReference<Map<String, dynamic>> get _recurringRulesCollection =>
+      _db.collection('users').doc(_uid).collection('recurring_rules');
+
+  CollectionReference<Map<String, dynamic>> get _recurringOccurrencesCollection =>
+      _db.collection('users').doc(_uid).collection('recurring_occurrences');
 
   // ── Transaction Write Operations ─────────────────────────────────────
 
@@ -377,6 +385,126 @@ class FirestoreSyncService {
         .handleError((Object e) {
           AppLogger.debug('[Firestore] tombstonesStream error: $e');
           return <Map<String, dynamic>>[];
+        });
+  }
+
+  // ── Recurring Rules Sync ─────────────────────────────────────────────
+
+  Future<void> upsertRecurringRule(RecurringRule rule) async {
+    try {
+      await _recurringRulesCollection
+          .doc(rule.id)
+          .set(rule.toFirestore(), SetOptions(merge: true));
+    } on FirebaseException catch (e) {
+      AppLogger.debug('[Firestore] upsertRecurringRule error: ${e.message}');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteRecurringRule(String ruleId) async {
+    try {
+      await _recurringRulesCollection.doc(ruleId).delete();
+    } on FirebaseException catch (e) {
+      AppLogger.debug('[Firestore] deleteRecurringRule error: ${e.message}');
+      rethrow;
+    }
+  }
+
+  Stream<List<RecurringRule>> recurringRulesStream() {
+    if (_auth.currentUserId == null) return Stream.value([]);
+    return _recurringRulesCollection
+        .snapshots()
+        .map((snap) {
+          return snap.docs
+              .map((doc) {
+                try {
+                  return RecurringRule.fromFirestore(
+                    doc.id,
+                    doc.data(),
+                  );
+                } catch (e) {
+                  AppLogger.debug('[Firestore] Failed to parse rule ${doc.id}: $e');
+                  return null;
+                }
+              })
+              .whereType<RecurringRule>()
+              .toList();
+        })
+        .handleError((Object e) {
+          AppLogger.debug('[Firestore] recurringRulesStream error: $e');
+          return <RecurringRule>[];
+        });
+  }
+
+  Future<List<RecurringRule>> fetchAllRecurringRules() async {
+    if (_auth.currentUserId == null) return [];
+    try {
+      final snap = await _recurringRulesCollection.get();
+      return snap.docs
+          .map((doc) {
+            try {
+              return RecurringRule.fromFirestore(
+                doc.id,
+                doc.data(),
+              );
+            } catch (e) {
+              AppLogger.debug('[Firestore] Failed to parse rule ${doc.id}: $e');
+              return null;
+            }
+          })
+          .whereType<RecurringRule>()
+          .toList();
+    } catch (e) {
+      AppLogger.debug('[Firestore] fetchAllRecurringRules error: $e');
+      return [];
+    }
+  }
+
+  // ── Recurring Occurrences Sync ───────────────────────────────────────
+
+  Future<void> upsertRecurringOccurrence(RecurringOccurrence occurrence) async {
+    try {
+      await _recurringOccurrencesCollection
+          .doc(occurrence.id)
+          .set(occurrence.toFirestore(), SetOptions(merge: true));
+    } on FirebaseException catch (e) {
+      AppLogger.debug('[Firestore] upsertRecurringOccurrence error: ${e.message}');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteRecurringOccurrence(String occurrenceId) async {
+    try {
+      await _recurringOccurrencesCollection.doc(occurrenceId).delete();
+    } on FirebaseException catch (e) {
+      AppLogger.debug('[Firestore] deleteRecurringOccurrence error: ${e.message}');
+      rethrow;
+    }
+  }
+
+  Stream<List<RecurringOccurrence>> recurringOccurrencesStream() {
+    if (_auth.currentUserId == null) return Stream.value([]);
+    return _recurringOccurrencesCollection
+        .snapshots()
+        .map((snap) {
+          return snap.docs
+              .map((doc) {
+                try {
+                  return RecurringOccurrence.fromFirestore(
+                    doc.id,
+                    doc.data(),
+                  );
+                } catch (e) {
+                  AppLogger.debug('[Firestore] Failed to parse occurrence ${doc.id}: $e');
+                  return null;
+                }
+              })
+              .whereType<RecurringOccurrence>()
+              .toList();
+        })
+        .handleError((Object e) {
+          AppLogger.debug('[Firestore] recurringOccurrencesStream error: $e');
+          return <RecurringOccurrence>[];
         });
   }
 }

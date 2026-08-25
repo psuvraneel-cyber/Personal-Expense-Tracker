@@ -10,6 +10,7 @@ import 'package:pet/data/models/transaction.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
+import 'package:pet/services/recurring_transaction_service.dart';
 import 'package:uuid/uuid.dart';
 
 /// Sync status exposed to the UI for the sync indicator chip.
@@ -18,13 +19,16 @@ enum SyncStatus { idle, syncing, synced, error }
 class TransactionProvider extends ChangeNotifier {
   final TransactionRepository _repository;
   final FirestoreSyncService _firestoreSync;
+  final RecurringTransactionService? _recurringService;
   final Uuid _uuid = const Uuid();
 
   TransactionProvider({
     TransactionRepository? repository,
     FirestoreSyncService? firestoreSync,
+    RecurringTransactionService? recurringService,
   })  : _repository = repository ?? TransactionRepository(),
-        _firestoreSync = firestoreSync ?? FirestoreSyncService() {
+        _firestoreSync = firestoreSync ?? FirestoreSyncService(),
+        _recurringService = recurringService {
     _loadLastSyncAt();
   }
 
@@ -153,6 +157,9 @@ class TransactionProvider extends ChangeNotifier {
         _transactions = await _repository.getAllTransactions();
         _invalidateAggregates();
         _applyFiltersAndSort();
+
+        // Check and generate any due recurring occurrences
+        await checkRecurringOccurrences(reloadIfGenerated: false);
       } catch (e) {
         AppLogger.error('Error loading transactions from SQLite', error: e, label: 'TransactionProvider');
       }
@@ -164,6 +171,31 @@ class TransactionProvider extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Checks for due recurring transactions and generates them if any are due.
+  Future<List<TransactionRecord>> checkRecurringOccurrences({
+    bool reloadIfGenerated = true,
+  }) async {
+    if (kIsWeb) return [];
+    if (_repository.runtimeType != TransactionRepository && _recurringService == null) {
+      return [];
+    }
+    try {
+      final userId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
+      final service = _recurringService ?? RecurringTransactionService();
+      final generated = await service.generateDueOccurrences(userId: userId);
+      if (generated.isNotEmpty && reloadIfGenerated) {
+        _transactions = await _repository.getAllTransactions();
+        _invalidateAggregates();
+        _applyFiltersAndSort();
+        notifyListeners();
+      }
+      return generated;
+    } catch (e) {
+      AppLogger.error('Error generating due recurring transactions', error: e, label: 'TransactionProvider');
+      return [];
+    }
   }
 
   /// Subscribe to the Firestore real-time stream.

@@ -11,9 +11,24 @@ import 'package:pet/services/account_deletion_service.dart';
 import 'package:uuid/uuid.dart';
 
 class CategoryProvider extends ChangeNotifier {
-  final CategoryRepository _repository = CategoryRepository();
-  final FirestoreSyncService _firestoreSync = FirestoreSyncService();
+  final CategoryRepository _repository;
+  final FirestoreSyncService? _firestoreSync;
   final Uuid _uuid = const Uuid();
+
+  CategoryProvider({
+    CategoryRepository? repository,
+    FirestoreSyncService? firestoreSync,
+  })  : _repository = repository ?? CategoryRepository(),
+        _firestoreSync = firestoreSync;
+
+  FirestoreSyncService? get _syncService {
+    if (_firestoreSync != null) return _firestoreSync;
+    try {
+      return FirestoreSyncService();
+    } catch (_) {
+      return null;
+    }
+  }
 
   List<Category> _categories = [];
   bool _isLoading = false;
@@ -68,7 +83,9 @@ class CategoryProvider extends ChangeNotifier {
     }
     _firestoreSubscription?.cancel();
     try {
-      _firestoreSubscription = _firestoreSync.categoriesStream().listen(
+      final sync = _syncService;
+      if (sync == null) return;
+      _firestoreSubscription = sync.categoriesStream().listen(
         (remoteCustomCats) {
           // Keep default categories, replace/add custom ones from Firestore.
           final defaultIds = defaultCategories.map((c) => c.id).toSet();
@@ -128,8 +145,8 @@ class CategoryProvider extends ChangeNotifier {
     notifyListeners();
 
     // Mirror to Firestore in background.
-    _firestoreSync
-        .upsertCategory(category)
+    _syncService
+        ?.upsertCategory(category)
         .catchError((Object e) => AppLogger.error('category upsert failed', error: e, label: 'Sync'));
   }
 
@@ -147,8 +164,8 @@ class CategoryProvider extends ChangeNotifier {
       notifyListeners();
     }
 
-    _firestoreSync
-        .upsertCategory(category)
+    _syncService
+        ?.upsertCategory(category)
         .catchError((Object e) => AppLogger.error('category update failed', error: e, label: 'Sync'));
   }
 
@@ -163,8 +180,8 @@ class CategoryProvider extends ChangeNotifier {
     _categories.removeWhere((c) => c.id == id);
     notifyListeners();
 
-    _firestoreSync
-        .deleteCategory(id)
+    _syncService
+        ?.deleteCategory(id)
         .catchError((Object e) => AppLogger.error('category delete failed', error: e, label: 'Sync'));
   }
 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
+import 'package:pet/premium/models/notification_category.dart';
 import 'package:pet/premium/repositories/recurring_payment_repository.dart';
+import 'package:pet/premium/services/bill_reminder_scheduler.dart';
 import 'package:pet/premium/services/recurring_detection_service.dart';
 import 'package:pet/premium/models/budget_alert.dart';
 import 'package:pet/premium/repositories/alert_repository.dart';
@@ -25,7 +27,7 @@ class RecurringProvider extends ChangeNotifier {
     notifyListeners();
 
     _recurring = await _repository.getAll();
-    await _scheduleUpcomingReminders(_recurring);
+    await BillReminderScheduler.scheduleReminders(_recurring);
 
     _isLoading = false;
     notifyListeners();
@@ -52,7 +54,7 @@ class RecurringProvider extends ChangeNotifier {
     );
     await _repository.upsert(payment);
     _recurring.insert(0, payment);
-    await _scheduleUpcomingReminders([payment]);
+    await BillReminderScheduler.scheduleReminders([payment]);
     notifyListeners();
   }
 
@@ -75,7 +77,7 @@ class RecurringProvider extends ChangeNotifier {
     final updated = bill.copyWith(nextDueAt: bill.nextDueAt.add(cycle));
     _recurring[index] = updated;
     await _repository.upsert(updated);
-    await _scheduleUpcomingReminders([updated]);
+    await BillReminderScheduler.scheduleReminders([updated]);
     notifyListeners();
   }
 
@@ -92,7 +94,7 @@ class RecurringProvider extends ChangeNotifier {
     notifyListeners();
 
     final detected = RecurringDetectionService.detect(sms);
-    
+
     final existing = await _repository.getAll();
     final manuals = existing.where((r) => r.source == 'manual').toList();
 
@@ -128,35 +130,17 @@ class RecurringProvider extends ChangeNotifier {
       );
       await _alertRepository.insert(alert);
 
+      final payload = 'bill:${item.id}';
+
       await NotificationService.showInstant(
         id: NotificationService.collisionSafeId(alertKey),
         title: alert.title,
         body: alert.message,
+        category: NotificationCategory.bill,
+        payload: payload,
       );
     }
-    await _scheduleUpcomingReminders(recurring);
-  }
-
-  Future<void> _scheduleUpcomingReminders(List<RecurringPayment> recurring) async {
-    final now = DateTime.now();
-    for (final item in recurring) {
-      // Schedule a notification 3 days before the due date at 10 AM.
-      final scheduleDate = DateTime(
-        item.nextDueAt.year,
-        item.nextDueAt.month,
-        item.nextDueAt.day - 3,
-        10, 0, 0,
-      );
-      
-      if (scheduleDate.isAfter(now)) {
-        await NotificationService.scheduleNotification(
-          id: NotificationService.collisionSafeId('sched_${item.id}_${item.nextDueAt.toIso8601String()}'),
-          title: 'Upcoming bill reminder',
-          body: '${item.merchantName} is due in 3 days.',
-          scheduledDate: scheduleDate,
-        );
-      }
-    }
+    await BillReminderScheduler.scheduleReminders(recurring);
   }
 
   void clearData() {

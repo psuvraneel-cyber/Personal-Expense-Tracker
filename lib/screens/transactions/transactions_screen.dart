@@ -7,6 +7,7 @@ import 'package:pet/core/theme/spacing.dart';
 import 'package:pet/core/widgets/expense_card.dart';
 import 'package:pet/core/widgets/gradient_background.dart';
 import 'package:pet/screens/transactions/add_edit_transaction_screen.dart';
+import 'package:pet/screens/transactions/recurring_transactions_screen.dart';
 import 'package:pet/widgets/empty_state_widget.dart';
 import 'package:intl/intl.dart';
 
@@ -82,6 +83,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _buildRecurringButton(context, isDark),
                     const SizedBox(width: 8),
                     _buildFilterButton(context, txnProvider, isDark),
                     const SizedBox(width: 8),
@@ -371,6 +374,36 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
         ),
         child: const Icon(Icons.sort, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildRecurringButton(BuildContext context, bool isDark) {
+    return Tooltip(
+      message: 'Recurring Rules',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const RecurringTransactionsScreen(),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.cardDark : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withAlpha(15)
+                  : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: const Icon(Icons.repeat, size: 20, color: AppTheme.accentTeal),
+        ),
       ),
     );
   }

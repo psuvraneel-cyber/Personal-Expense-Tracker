@@ -227,6 +227,30 @@ class NativeSmsReader {
     }
   }
 
+  /// Read and clear any pending encrypted notifications from the native cache.
+  Future<List<NativeSmsMessage>> popPendingNotifications() async {
+    if (!isSupported) return [];
+    try {
+      final List<dynamic>? result = await _methodChannel.invokeMethod(
+        'popPendingNotifications',
+      );
+      if (result == null) return [];
+      return result
+          .map(
+            (item) => NativeSmsMessage.fromMap(item as Map<dynamic, dynamic>),
+          )
+          .toList();
+    } on PlatformException catch (e) {
+      AppLogger.debug(
+        '[NativeSmsReader] Platform error popping pending notifications: ${e.message}',
+      );
+      return [];
+    } catch (e) {
+      AppLogger.debug('[NativeSmsReader] Error popping pending notifications: $e');
+      return [];
+    }
+  }
+
   // ─── Reconciliation Query ────────────────────────────────────────
 
   /// Read SMS since an absolute timestamp (epoch millis) for reconciliation.

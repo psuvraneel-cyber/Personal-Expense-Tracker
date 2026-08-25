@@ -482,6 +482,18 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
           );
         });
       }
+    } on AuthErrorException catch (e) {
+      if (mounted) {
+        setState(() {
+          _messages.add(
+            CopilotMessage(
+              role: 'assistant',
+              content: '🔑 ${e.isRetryable ? "Your session has expired. Please sign out and sign in again." : e.message}',
+              createdAt: DateTime.now(),
+            ),
+          );
+        });
+      }
     } on ClientErrorException catch (e) {
       if (mounted) {
         setState(() {
@@ -499,7 +511,7 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       String friendlyMsg;
       if (errorMsg.contains('401') || errorMsg.contains('Unauthorized')) {
         friendlyMsg =
-            '🔑 Unauthorized. Please ensure your Cloudflare worker is configured correctly with the GROQ_API_KEY secret.';
+            '🔑 Authentication failed. Please sign out and sign in again.';
       } else if (errorMsg.contains('SocketException') ||
           errorMsg.contains('network') ||
           errorMsg.contains('timeout')) {

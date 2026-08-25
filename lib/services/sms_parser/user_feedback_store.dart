@@ -27,7 +27,7 @@
 /// No raw SMS body, no amounts, no names, no phone numbers.
 ///
 /// ## Serverless Collection (opt-in)
-/// A Firebase Cloud Function or Supabase Edge Function can accept these
+/// A Firebase Cloud Function can accept these
 /// anonymized records. Batch upload weekly. The function validates the
 /// schema and stores in a BigQuery table for offline analysis.
 ///

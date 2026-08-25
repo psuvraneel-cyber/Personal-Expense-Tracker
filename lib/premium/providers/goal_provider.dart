@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:pet/premium/models/notification_category.dart';
 import 'package:pet/premium/models/saving_goal.dart';
 import 'package:pet/premium/repositories/saving_goal_repository.dart';
+import 'package:pet/premium/services/notification_service.dart';
 import 'package:uuid/uuid.dart';
 
 class GoalProvider extends ChangeNotifier {
@@ -46,22 +48,50 @@ class GoalProvider extends ChangeNotifier {
   Future<void> updateProgress(String id, double amount) async {
     final index = _goals.indexWhere((g) => g.id == id);
     if (index == -1) return;
+
+    final wasAchieved =
+        _goals[index].currentAmount >= _goals[index].targetAmount;
     final updated = _goals[index].copyWith(currentAmount: amount);
+    final isNowAchieved = updated.currentAmount >= updated.targetAmount;
+
     _goals[index] = updated;
     await _repository.upsert(updated);
     notifyListeners();
+
+    if (!wasAchieved && isNowAchieved) {
+      await _checkAndSendAchievementNotification(updated);
+    }
   }
 
   /// Add [amount] to a goal's current progress (e.g. from a "Top Up" action).
   Future<void> topUpGoal(String id, double amount) async {
     final index = _goals.indexWhere((g) => g.id == id);
     if (index == -1) return;
+
+    final wasAchieved =
+        _goals[index].currentAmount >= _goals[index].targetAmount;
     final updated = _goals[index].copyWith(
       currentAmount: _goals[index].currentAmount + amount,
     );
+    final isNowAchieved = updated.currentAmount >= updated.targetAmount;
+
     _goals[index] = updated;
     await _repository.upsert(updated);
     notifyListeners();
+
+    if (!wasAchieved && isNowAchieved) {
+      await _checkAndSendAchievementNotification(updated);
+    }
+  }
+
+  Future<void> _checkAndSendAchievementNotification(SavingGoal goal) async {
+    await NotificationService.showInstant(
+      id: NotificationService.collisionSafeId('goal_${goal.id}'),
+      title: '🎉 Goal Achieved!',
+      body: 'Congratulations! You reached your saving goal: ${goal.name}',
+      category: NotificationCategory.goalProgress,
+      payload: 'goal:${goal.id}',
+    );
   }
 
   /// Toggle pause state on a goal.

@@ -14,6 +14,9 @@ import 'package:pet/core/theme/spacing.dart';
 import 'package:pet/core/theme/typography.dart';
 import 'package:pet/core/widgets/gradient_background.dart';
 import 'package:pet/core/widgets/hero_greeting_card.dart';
+import 'package:pet/core/widgets/notification_permission_banner.dart';
+import 'package:pet/core/widgets/oem_battery_dialog.dart';
+import 'package:pet/premium/services/oem_optimization_service.dart';
 import 'package:pet/core/widgets/metric_pill_row.dart';
 import 'package:pet/core/widgets/category_progress_bar_new.dart';
 import 'package:pet/core/widgets/spend_health_card.dart';
@@ -89,6 +92,19 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
     _fadeController.forward();
     _loadUserName();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final oemService = OemOptimizationService.instance;
+      final isAggressive = await oemService.isAggressiveOem();
+      final hasShown = await oemService.hasPromptBeenShown();
+
+      if (isAggressive && !hasShown && mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => const OemBatteryDialog(),
+        );
+      }
+    });
   }
 
   Future<void> _loadUserName() async {
@@ -285,6 +301,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
+                        const NotificationPermissionBanner(),
                         // ── Hero Greeting Card
                         HeroGreetingCard(
                           greeting: _getGreeting(),
