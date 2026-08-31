@@ -85,22 +85,126 @@ class PremiumEntitlementService {
     _debugPremiumOverride = true;
   }
 
+  /// Safe diagnostic string identifying the key type without leaking the key.
+  static String getKeyDiagnostic(String apiKey) {
+    if (apiKey.isEmpty || apiKey == 'REPLACE_ME') {
+      return 'Unconfigured';
+    }
+    if (apiKey.startsWith('test_')) {
+      return 'Test Store';
+    }
+    if (apiKey.startsWith('goog_')) {
+      return 'Android production';
+    }
+    if (apiKey.startsWith('appl_')) {
+      return 'iOS production';
+    }
+    if (apiKey.startsWith('sk_') || apiKey.startsWith('rc_')) {
+      return 'Secret Key (UNSAFE)';
+    }
+    return 'Custom / Other';
+  }
+
+  /// Resolves the appropriate RevenueCat public SDK key based on build mode
+  /// and validates security invariants.
+  ///
+  /// Invariants:
+  /// - Debug builds select `REVENUECAT_TEST_STORE_API_KEY` (or fallback).
+  /// - Release builds select `REVENUECAT_ANDROID_API_KEY`.
+  /// - Test Store keys (`test_*`) are STRICTLY FORBIDDEN in release builds and throw [StateError].
+  /// - Secret API keys (`sk_*` / `rc_*`) are STRICTLY FORBIDDEN in client apps and throw [StateError].
+  /// - Release builds without a configured production key throw [StateError].
+  ///
+  /// The [isDebugOverride], [isReleaseOverride], [testStoreKeyOverride], and
+  /// [androidKeyOverride] parameters exist solely for unit testing.
+  static String resolveApiKey({
+    @visibleForTesting bool? isDebugOverride,
+    @visibleForTesting bool? isReleaseOverride,
+    @visibleForTesting String? testStoreKeyOverride,
+    @visibleForTesting String? androidKeyOverride,
+  }) {
+    final release = isReleaseOverride ?? kReleaseMode;
+    final debug = isDebugOverride ?? kDebugMode;
+
+    final testKey = (testStoreKeyOverride ?? AppEnv.revenueCatTestStoreApiKey).trim();
+    final androidKey = (androidKeyOverride ?? AppEnv.revenueCatAndroidApiKey).trim();
+
+    // Critical invariant: Secret API keys must NEVER exist in client apps
+    if (testKey.startsWith('sk_') ||
+        testKey.startsWith('rc_') ||
+        androidKey.startsWith('sk_') ||
+        androidKey.startsWith('rc_')) {
+      throw StateError(
+        'CRITICAL SECURITY ERROR: RevenueCat Secret API key detected in client app. '
+        'Mobile apps must only use public SDK keys (test_* or goog_*). Never embed secret keys.',
+      );
+    }
+
+    if (release || !debug) {
+      // ── RELEASE BUILD VALIDATION ──────────────────────────────────────────
+      if (androidKey.isEmpty || androidKey == 'REPLACE_ME') {
+        throw StateError(
+          'Release build configuration error: Missing or unconfigured REVENUECAT_ANDROID_API_KEY. '
+          'A valid Google Play production public SDK key (goog_*) is required for release builds.',
+        );
+      }
+
+      if (androidKey.startsWith('test_')) {
+        throw StateError(
+          'RELEASE BUILD SECURITY ERROR: RevenueCat Test Store key cannot be used in release builds. '
+          'Configure REVENUECAT_ANDROID_API_KEY with a valid Google Play production key (goog_*).',
+        );
+      }
+
+      return androidKey;
+    } else {
+      // ── DEBUG / DEVELOPMENT BUILD RESOLUTION ──────────────────────────────
+      if (testKey.isNotEmpty && testKey != 'REPLACE_ME') {
+        if (testKey.startsWith('goog_')) {
+          AppLogger.warn(
+            'RevenueCat key type: Android production key provided in REVENUECAT_TEST_STORE_API_KEY. '
+            'Test Store key (test_*) is recommended for sandbox testing.',
+            label: 'PremiumEntitlementService',
+          );
+        }
+        return testKey;
+      }
+
+      // Fallback in debug if test store key was not specified but android key was
+      if (androidKey.isNotEmpty && androidKey != 'REPLACE_ME') {
+        AppLogger.warn(
+          'REVENUECAT_TEST_STORE_API_KEY is unset; falling back to REVENUECAT_ANDROID_API_KEY in debug mode.',
+          label: 'PremiumEntitlementService',
+        );
+        return androidKey;
+      }
+
+      AppLogger.warn(
+        'RevenueCat API key is unconfigured (empty or placeholder). In-app purchases will not work.',
+        label: 'PremiumEntitlementService',
+      );
+      return '';
+    }
+  }
+
   static Future<void> init() async {
     // Only enable debug logging in debug builds — never leak purchase info
     // in production device logs.
     await Purchases.setLogLevel(kDebugMode ? LogLevel.debug : LogLevel.warn);
 
-    PurchasesConfiguration? configuration;
-    final apiKey = AppEnv.revenueCatGoogleApiKey;
+    final apiKey = resolveApiKey();
+    final keyType = getKeyDiagnostic(apiKey);
+
+    AppLogger.info(
+      'RevenueCat key type: $keyType',
+      label: 'PremiumEntitlementService',
+    );
 
     if (apiKey.isEmpty) {
-      AppLogger.warn(
-        'REVENUECAT_GOOGLE_API_KEY is empty. Premium features will not work.',
-        label: 'PremiumEntitlementService',
-      );
       return;
     }
 
+    PurchasesConfiguration? configuration;
     if (Platform.isAndroid) {
       configuration = PurchasesConfiguration(apiKey);
     }

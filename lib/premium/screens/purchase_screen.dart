@@ -51,8 +51,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     if (_selectedPackage == null) return;
     setState(() => _isLoading = true);
     try {
-      final customerInfo = await Purchases.purchasePackage(_selectedPackage!);
-      if (customerInfo.entitlements.all["P.E.T Premium"]?.isActive == true) {
+      final result = await Purchases.purchase(PurchaseParams.package(_selectedPackage!));
+      if (result.customerInfo.entitlements.all["P.E.T Premium"]?.isActive == true) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
