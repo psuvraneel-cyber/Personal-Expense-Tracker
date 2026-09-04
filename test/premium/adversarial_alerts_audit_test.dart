@@ -747,4 +747,201 @@ void main() {
       expect(resolved.resolvedAt, isNotNull);
     });
   });
+
+  group('Adversarial Audit 8: Final Release-Gate Lifecycle & Regression Invariants', () {
+    test('transaction deletion of first transaction (t1) in duplicate pair auto-resolves duplicate alert', () async {
+      final ctx = await createTestContext();
+      final repo = ctx.repo;
+      final coordinator = ctx.coordinator;
+
+      final t1 = TransactionRecord(
+        id: 'dup_txn_alpha',
+        amount: 500,
+        date: now,
+        categoryId: 'shopping',
+        type: TransactionType.expense,
+        merchantName: 'Amazon',
+      );
+      final t2 = TransactionRecord(
+        id: 'dup_txn_beta',
+        amount: 500,
+        date: now.add(const Duration(minutes: 2)),
+        categoryId: 'shopping',
+        type: TransactionType.expense,
+        merchantName: 'Amazon',
+      );
+
+      // 1. Initially both exist -> duplicate alert generated
+      await coordinator.onTransactionsChanged([t1, t2], now: now);
+
+      final activeAlertsInitial = await repo.getPage();
+      expect(activeAlertsInitial.any((a) => a.type == AppAlertType.duplicateTransaction), isTrue);
+      final dupAlert = activeAlertsInitial.firstWhere((a) => a.type == AppAlertType.duplicateTransaction);
+      expect(dupAlert.alertKey, equals('dup_txn:dup_txn_alpha_dup_txn_beta'));
+
+      // 2. User deletes t1 (the first transaction of the pair)
+      await coordinator.onTransactionsChanged([t2], now: now);
+
+      // 3. Duplicate alert must be auto-resolved
+      final resolvedAlert = await repo.getById(dupAlert.id);
+      expect(resolvedAlert!.isDismissed, isTrue, reason: 'Deleting either transaction in duplicate pair must resolve duplicate alert');
+      expect(resolvedAlert.resolvedAt, isNotNull);
+      final activeAlertsAfter = await repo.getPage();
+      expect(activeAlertsAfter.any((a) => a.id == dupAlert.id), isFalse);
+    });
+
+    test('downward spend recalibration from 105% to 95% dismisses exceeded alert and activates warning alert', () async {
+      final ctx = await createTestContext();
+      final repo = ctx.repo;
+      final coordinator = ctx.coordinator;
+
+      // 1. Spend is at 105% (₹1,050 / ₹1,000) -> exceeded alert active
+      await coordinator.onTransactionsChanged(
+        [
+          TransactionRecord(
+            id: 'tx1',
+            amount: 1050,
+            date: now,
+            categoryId: 'groceries',
+            type: TransactionType.expense,
+          ),
+        ],
+        budgets: {'groceries': 1000.0},
+        spent: {'groceries': 1050.0},
+        now: now,
+      );
+
+      var alerts = await repo.getPage();
+      expect(alerts.any((a) => a.stage == AppAlertStage.exceeded), isTrue);
+      final exceededAlert = alerts.firstWhere((a) => a.stage == AppAlertStage.exceeded);
+
+      // 2. Spending drops to 95% (₹950 / ₹1,000)
+      await coordinator.onTransactionsChanged(
+        [
+          TransactionRecord(
+            id: 'tx1',
+            amount: 950,
+            date: now,
+            categoryId: 'groceries',
+            type: TransactionType.expense,
+          ),
+        ],
+        budgets: {'groceries': 1000.0},
+        spent: {'groceries': 950.0},
+        now: now,
+      );
+
+      // 3. Exceeded alert must be dismissed/resolved, and warning alert active
+      final oldExceeded = await repo.getById(exceededAlert.id);
+      expect(oldExceeded!.isDismissed, isTrue, reason: 'Exceeded alert must be auto-resolved when spend drops to 95%');
+
+      alerts = await repo.getPage();
+      expect(alerts.any((a) => a.stage == AppAlertStage.warning), isTrue);
+      expect(alerts.any((a) => a.stage == AppAlertStage.exceeded), isFalse);
+    });
+
+    test('re-evaluation after auto-resolve reactivates alert when threshold re-breached (new -> resolved -> re-evaluate)', () async {
+      final ctx = await createTestContext();
+      final repo = ctx.repo;
+      final coordinator = ctx.coordinator;
+
+      // 1. Initial spend at 95% -> warning alert generated
+      await coordinator.onTransactionsChanged(
+        [
+          TransactionRecord(
+            id: 'tx1',
+            amount: 950,
+            date: now,
+            categoryId: 'dining',
+            type: TransactionType.expense,
+          ),
+        ],
+        budgets: {'dining': 1000.0},
+        spent: {'dining': 950.0},
+        now: now,
+      );
+
+      var active = await repo.getPage();
+      final warningAlert = active.firstWhere((a) => a.stage == AppAlertStage.warning);
+      final warningAlertId = warningAlert.id;
+
+      // 2. Spend drops to 80% (₹800 / ₹1,000) -> warning alert auto-resolved
+      await coordinator.onTransactionsChanged(
+        [
+          TransactionRecord(
+            id: 'tx1',
+            amount: 800,
+            date: now,
+            categoryId: 'dining',
+            type: TransactionType.expense,
+          ),
+        ],
+        budgets: {'dining': 1000.0},
+        spent: {'dining': 800.0},
+        now: now,
+      );
+
+      var resolved = await repo.getById(warningAlertId);
+      expect(resolved!.isDismissed, isTrue);
+      expect(resolved.resolvedAt, isNotNull);
+
+      // 3. Spend climbs back up to 95% -> warning alert must reactivate
+      await coordinator.onTransactionsChanged(
+        [
+          TransactionRecord(
+            id: 'tx1',
+            amount: 800,
+            date: now,
+            categoryId: 'dining',
+            type: TransactionType.expense,
+          ),
+          TransactionRecord(
+            id: 'tx2',
+            amount: 150,
+            date: now,
+            categoryId: 'dining',
+            type: TransactionType.expense,
+          ),
+        ],
+        budgets: {'dining': 1000.0},
+        spent: {'dining': 950.0},
+        now: now,
+      );
+
+      final reactivated = await repo.getById(warningAlertId);
+      expect(reactivated!.isDismissed, isFalse, reason: 'Auto-resolved alert must be reactivated when condition re-occurs');
+      expect(reactivated.resolvedAt, isNull);
+      expect(reactivated.amount, equals(950.0));
+    });
+
+    test('onBudgetsChanged auto-resolves exceeded alert when budget is adjusted upward', () async {
+      final ctx = await createTestContext();
+      final repo = ctx.repo;
+      final coordinator = ctx.coordinator;
+
+      // 1. Spend is ₹1,050 with ₹1,000 budget (105%) -> exceeded alert active
+      await coordinator.onBudgetsChanged(
+        budgets: {'entertainment': 1000.0},
+        spent: {'entertainment': 1050.0},
+        now: now,
+      );
+
+      var active = await repo.getPage();
+      expect(active.any((a) => a.stage == AppAlertStage.exceeded), isTrue);
+      final exceededAlert = active.firstWhere((a) => a.stage == AppAlertStage.exceeded);
+
+      // 2. User adjusts budget upward to ₹2,000 (spent is now 1,050 / 2,000 = 52.5% < 90%)
+      await coordinator.onBudgetsChanged(
+        budgets: {'entertainment': 2000.0},
+        spent: {'entertainment': 1050.0},
+        now: now,
+      );
+
+      // 3. Exceeded alert must be dismissed
+      final oldAlert = await repo.getById(exceededAlert.id);
+      expect(oldAlert!.isDismissed, isTrue, reason: 'Budget adjustment upward must auto-resolve exceeded alert');
+      expect(oldAlert.resolvedAt, isNotNull);
+      expect(await repo.getActiveCount(), equals(0));
+    });
+  });
 }

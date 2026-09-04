@@ -110,7 +110,10 @@ class BudgetProvider extends ChangeNotifier {
     unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
       budgets: {for (final b in _budgets) b.categoryId: b.amount},
       spent: _spentAmounts,
-    ).catchError((_) {}));
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error('Alert evaluation failed in setBudget',
+          error: e, stack: st, label: 'AlertCoordinator');
+    }));
   }
 
   Future<void> deleteBudget(String categoryId) async {
@@ -146,7 +149,10 @@ class BudgetProvider extends ChangeNotifier {
     unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
       budgets: {for (final b in _budgets) b.categoryId: b.amount},
       spent: _spentAmounts,
-    ).catchError((_) {}));
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error('Alert evaluation failed in deleteBudget',
+          error: e, stack: st, label: 'AlertCoordinator');
+    }));
   }
 
   double getSpentForCategory(String categoryId) {
@@ -199,7 +205,13 @@ class BudgetProvider extends ChangeNotifier {
     unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
       budgets: {for (final b in _budgets) b.categoryId: b.amount},
       spent: _spentAmounts,
-    ).catchError((_) {}));
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error(
+          'Alert evaluation failed in refreshSpentFromTransactions',
+          error: e,
+          stack: st,
+          label: 'AlertCoordinator');
+    }));
   }
 
   /// Clear all in-memory state and wipe budgets from SQLite.

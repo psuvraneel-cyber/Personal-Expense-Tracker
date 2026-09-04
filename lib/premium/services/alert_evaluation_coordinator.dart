@@ -86,32 +86,55 @@ class AlertEvaluationCoordinator {
         } catch (_) {}
       }
 
-      final baseline = AlertEvaluator.computeBaseline(
-        transactions,
-        now: referenceTime,
-      );
+      List<AppAlert> anomalyAlerts = [];
+      try {
+        final baseline = AlertEvaluator.computeBaseline(
+          transactions,
+          now: referenceTime,
+        );
+        anomalyAlerts = AlertEvaluator.evaluateAnomalies(
+          transactions: transactions,
+          baseline: baseline,
+          now: referenceTime,
+        );
+      } catch (e, st) {
+        AppLogger.error('Anomaly evaluation error in AlertCoordinator',
+            error: e, stack: st, label: 'AlertCoordinator');
+      }
 
-      final anomalyAlerts = AlertEvaluator.evaluateAnomalies(
-        transactions: transactions,
-        baseline: baseline,
-        now: referenceTime,
-      );
+      List<AppAlert> largeTxnAlerts = [];
+      try {
+        largeTxnAlerts = AlertEvaluator.evaluateLargeTransactions(
+          transactions: transactions,
+          categoryBudgets: resolvedBudgets,
+          now: referenceTime,
+        );
+      } catch (e, st) {
+        AppLogger.error('Large transaction evaluation error in AlertCoordinator',
+            error: e, stack: st, label: 'AlertCoordinator');
+      }
 
-      final largeTxnAlerts = AlertEvaluator.evaluateLargeTransactions(
-        transactions: transactions,
-        categoryBudgets: resolvedBudgets,
-        now: referenceTime,
-      );
+      List<AppAlert> duplicateAlerts = [];
+      try {
+        duplicateAlerts = AlertEvaluator.evaluateDuplicateTransactions(
+          transactions: transactions,
+          now: referenceTime,
+        );
+      } catch (e, st) {
+        AppLogger.error('Duplicate transaction evaluation error in AlertCoordinator',
+            error: e, stack: st, label: 'AlertCoordinator');
+      }
 
-      final duplicateAlerts = AlertEvaluator.evaluateDuplicateTransactions(
-        transactions: transactions,
-        now: referenceTime,
-      );
-
-      final cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
-        transactions: transactions,
-        now: referenceTime,
-      );
+      AppAlert? cashflowAlert;
+      try {
+        cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
+          transactions: transactions,
+          now: referenceTime,
+        );
+      } catch (e, st) {
+        AppLogger.error('Cashflow evaluation error in AlertCoordinator',
+            error: e, stack: st, label: 'AlertCoordinator');
+      }
 
       final alerts = [
         ...anomalyAlerts,
@@ -147,37 +170,46 @@ class AlertEvaluationCoordinator {
         alerts.addAll(budgetAlerts);
         alerts.addAll(pacingAlerts);
 
-        // Auto-resolve active budget alerts if spending drops below 90% (e.g. transaction deleted/reduced)
         final period =
             '${referenceTime.year}-${referenceTime.month.toString().padLeft(2, '0')}';
-        for (final entry in resolvedBudgets.entries) {
-          final categoryId = entry.key;
-          final budgetAmt = entry.value;
-          final spentAmt = resolvedSpent[categoryId] ?? 0.0;
-          if (budgetAmt > 0 && (spentAmt / budgetAmt) < 0.90) {
-            await _repository.dismissWhere(
-              'alertKey LIKE ?',
-              ['budget:$categoryId:$period:%'],
-            );
-            _alertProvider?.removeAlertsWhere((a) =>
-                a.type == AppAlertType.budget &&
-                a.categoryId == categoryId &&
-                a.period == period);
-          }
-        }
+        await _reconcileBudgetAlerts(
+          budgets: resolvedBudgets,
+          spent: resolvedSpent,
+          period: period,
+        );
       }
 
       // If transactions were deleted, resolve alerts tied to deleted transactions
       final activeTxnIds = transactions.map((t) => t.id).toSet();
       try {
-        final activeAlerts = await _repository.getPage(limit: 100);
+        final activeAlerts = await _repository.getPage(limit: 500);
         for (final a in activeAlerts) {
-          if ((a.type == AppAlertType.largeTransaction ||
-                  a.type == AppAlertType.duplicateTransaction) &&
+          if (a.type == AppAlertType.largeTransaction &&
               a.transactionId != null &&
               !activeTxnIds.contains(a.transactionId)) {
             await _repository.dismissWhere('id = ?', [a.id]);
             _alertProvider?.removeAlertsWhere((al) => al.id == a.id);
+          } else if (a.type == AppAlertType.duplicateTransaction &&
+              a.alertKey != null &&
+              a.alertKey!.startsWith('dup_txn:')) {
+            final keyContent = a.alertKey!.substring('dup_txn:'.length);
+            String? otherId;
+            if (a.transactionId != null) {
+              if (keyContent.startsWith('${a.transactionId}_')) {
+                otherId = keyContent.substring(a.transactionId!.length + 1);
+              } else if (keyContent.endsWith('_${a.transactionId}')) {
+                otherId = keyContent.substring(
+                    0, keyContent.length - a.transactionId!.length - 1);
+              }
+            }
+            final t1Missing = a.transactionId == null ||
+                !activeTxnIds.contains(a.transactionId);
+            final t2Missing =
+                otherId != null && !activeTxnIds.contains(otherId);
+            if (t1Missing || t2Missing) {
+              await _repository.dismissWhere('id = ?', [a.id]);
+              _alertProvider?.removeAlertsWhere((al) => al.id == a.id);
+            }
           }
         }
       } catch (_) {}
@@ -215,6 +247,14 @@ class AlertEvaluationCoordinator {
         now: referenceTime,
       );
 
+      final period =
+          '${referenceTime.year}-${referenceTime.month.toString().padLeft(2, '0')}';
+      await _reconcileBudgetAlerts(
+        budgets: budgets,
+        spent: spent,
+        period: period,
+      );
+
       await processAndDispatch([...budgetAlerts, ...pacingAlerts]);
     } catch (e, stack) {
       AppLogger.error(
@@ -223,6 +263,80 @@ class AlertEvaluationCoordinator {
         stack: stack,
         label: 'AlertCoordinator',
       );
+    }
+  }
+
+  /// Reconciles active budget and pacing alerts against current spending ratios.
+  /// Dismisses obsolete stages to prevent duplicate or contradictory alerts.
+  Future<void> _reconcileBudgetAlerts({
+    required Map<String, double> budgets,
+    required Map<String, double> spent,
+    required String period,
+  }) async {
+    for (final entry in budgets.entries) {
+      final categoryId = entry.key;
+      final budgetAmt = entry.value;
+      final spentAmt = spent[categoryId] ?? 0.0;
+
+      if (budgetAmt <= 0 || (spentAmt / budgetAmt) < 0.90) {
+        // Below 90% or zero budget: auto-resolve all active budget alerts for this category
+        await _repository.dismissWhere(
+          'alertKey LIKE ? OR alertKey = ?',
+          ['budget:$categoryId:$period:%', 'budget_pacing:$categoryId:$period'],
+        );
+        _alertProvider?.removeAlertsWhere((a) =>
+            a.type == AppAlertType.budget &&
+            a.categoryId == categoryId &&
+            a.period == period);
+      } else {
+        final progress = spentAmt / budgetAmt;
+        if (progress >= 1.25) {
+          // Critical stage: dismiss earlier warning and exceeded stages
+          await _repository.dismissWhere(
+            'alertKey IN (?, ?)',
+            [
+              'budget:$categoryId:$period:warning',
+              'budget:$categoryId:$period:exceeded',
+            ],
+          );
+          _alertProvider?.removeAlertsWhere((a) =>
+              a.type == AppAlertType.budget &&
+              a.categoryId == categoryId &&
+              a.period == period &&
+              (a.stage == AppAlertStage.warning ||
+                  a.stage == AppAlertStage.exceeded));
+        } else if (progress >= 1.0) {
+          // Exceeded stage: dismiss warning and any previous critical
+          await _repository.dismissWhere(
+            'alertKey IN (?, ?)',
+            [
+              'budget:$categoryId:$period:warning',
+              'budget:$categoryId:$period:critical',
+            ],
+          );
+          _alertProvider?.removeAlertsWhere((a) =>
+              a.type == AppAlertType.budget &&
+              a.categoryId == categoryId &&
+              a.period == period &&
+              (a.stage == AppAlertStage.warning ||
+                  a.stage == AppAlertStage.critical));
+        } else {
+          // Warning stage: dismiss any previous exceeded or critical stages
+          await _repository.dismissWhere(
+            'alertKey IN (?, ?)',
+            [
+              'budget:$categoryId:$period:exceeded',
+              'budget:$categoryId:$period:critical',
+            ],
+          );
+          _alertProvider?.removeAlertsWhere((a) =>
+              a.type == AppAlertType.budget &&
+              a.categoryId == categoryId &&
+              a.period == period &&
+              (a.stage == AppAlertStage.exceeded ||
+                  a.stage == AppAlertStage.critical));
+        }
+      }
     }
   }
 
@@ -313,11 +427,7 @@ class AlertEvaluationCoordinator {
 
     final newAlerts = <AppAlert>[];
     for (final alert in alerts) {
-      if (alert.alertKey != null) {
-        final exists = await _repository.existsByKey(alert.alertKey!);
-        if (exists) continue;
-      }
-      // Insert into repository safely
+      // Insert or reactivate into repository safely
       final inserted = await _repository.insert(alert);
       if (inserted) {
         newAlerts.add(alert);

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/repositories/budget_repository.dart';
@@ -33,6 +34,7 @@ const String kAlertEvaluationTask = 'com.pet.tracker.alertEvaluation';
 /// on the last processed timestamp stored in SharedPreferences.
 @pragma('vm:entry-point')
 void smsCallbackDispatcher() {
+  WidgetsFlutterBinding.ensureInitialized();
   Workmanager().executeTask((taskName, inputData) async {
     AppLogger.debug('[PET-BG] Background task started: $taskName');
 

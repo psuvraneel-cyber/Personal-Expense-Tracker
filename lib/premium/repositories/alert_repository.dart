@@ -118,15 +118,69 @@ class AlertRepository {
   }
 
   /// Conflict-safe insert for a single alert.
-  /// Returns true if the alert was actually inserted, or false if ignored due to conflict.
+  /// If an alert with the same alertKey was previously auto-resolved (isDismissed == 1 and resolvedAt != null),
+  /// it is reactivated (un-dismissed) and updated with fresh amounts.
+  /// Returns true if the alert was inserted or reactivated, false if already active or manually dismissed.
   Future<bool> insert(AppAlert alert) async {
     final db = await _db;
-    final rowId = await db.insert(
+    if (alert.alertKey == null) {
+      final rowId = await db.insert(
+        'alerts',
+        alert.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      return rowId > 0;
+    }
+
+    final existing = await db.query(
       'alerts',
-      alert.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.ignore,
+      where: 'alertKey = ?',
+      whereArgs: [alert.alertKey],
+      limit: 1,
     );
-    return rowId > 0;
+
+    if (existing.isEmpty) {
+      final rowId = await db.insert(
+        'alerts',
+        alert.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      return rowId > 0;
+    }
+
+    final row = existing.first;
+    final isDismissed = (row['isDismissed'] as int? ?? 0) == 1;
+    final resolvedAt = row['resolvedAt'] as String?;
+
+    // If already active, it's a no-op (idempotent)
+    if (!isDismissed) {
+      return false;
+    }
+
+    // If manually dismissed by user (resolvedAt is null), honor user dismissal
+    if (resolvedAt == null) {
+      return false;
+    }
+
+    // Previously auto-resolved by system, but condition has re-occurred: reactivate
+    final nowStr = DateTime.now().toIso8601String();
+    final updated = await db.update(
+      'alerts',
+      {
+        'isDismissed': 0,
+        'isRead': 0,
+        'resolvedAt': null,
+        'updatedAt': nowStr,
+        if (alert.amount != null) 'amount': alert.amount,
+        if (alert.targetAmount != null) 'targetAmount': alert.targetAmount,
+        if (alert.ratio != null) 'ratio': alert.ratio,
+        'message': alert.message,
+        'title': alert.title,
+      },
+      where: 'alertKey = ?',
+      whereArgs: [alert.alertKey],
+    );
+    return updated > 0;
   }
 
   /// Dismiss/resolve alerts matching a custom WHERE condition.

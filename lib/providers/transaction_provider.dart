@@ -429,7 +429,10 @@ class TransactionProvider extends ChangeNotifier {
     unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
       _transactions,
       now: transaction.date,
-    ).catchError((_) {}));
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error('Alert evaluation failed in addTransaction',
+          error: e, stack: st, label: 'AlertCoordinator');
+    }));
   }
 
   Future<void> updateTransaction(TransactionRecord transaction) async {
@@ -478,7 +481,10 @@ class TransactionProvider extends ChangeNotifier {
     unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
       _transactions,
       now: updatedTxn.date,
-    ).catchError((_) {}));
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error('Alert evaluation failed in updateTransaction',
+          error: e, stack: st, label: 'AlertCoordinator');
+    }));
   }
 
   Future<void> deleteTransaction(String id) async {
@@ -532,7 +538,10 @@ class TransactionProvider extends ChangeNotifier {
 
     unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
       _transactions,
-    ).catchError((_) {}));
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error('Alert evaluation failed in deleteTransaction',
+          error: e, stack: st, label: 'AlertCoordinator');
+    }));
   }
 
   void _setSyncStatus(SyncStatus status, {String? error}) {
