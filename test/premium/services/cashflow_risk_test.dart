@@ -26,8 +26,8 @@ void main() {
       );
 
       expect(alert, isNotNull);
-      expect(alert!.type, equals('cashflow'));
-      expect(alert.alertKey, equals('cashflow_2026_7'));
+      expect(alert!.type.value, equals('cashflow'));
+      expect(alert.alertKey, equals('cashflow:2026-07'));
       expect(alert.title, contains('Cashflow Risk Warning'));
     });
 

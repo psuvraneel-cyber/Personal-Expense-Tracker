@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:pet/core/utils/app_logger.dart';
@@ -7,6 +8,7 @@ import 'package:pet/data/repositories/budget_repository.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/services/firestore_sync_service.dart';
+import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:uuid/uuid.dart';
 
 class BudgetProvider extends ChangeNotifier {
@@ -94,9 +96,9 @@ class BudgetProvider extends ChangeNotifier {
     }
 
     if (existingIndex >= 0) {
-      _budgets[existingIndex] = budget;
+      _budgets = List<Budget>.from(_budgets)..[existingIndex] = budget;
     } else {
-      _budgets.add(budget);
+      _budgets = [..._budgets, budget];
     }
     notifyListeners();
 
@@ -104,6 +106,11 @@ class BudgetProvider extends ChangeNotifier {
     _firestoreSync
         .upsertBudget(budget)
         .catchError((Object e) => AppLogger.error('budget upsert failed', error: e, label: 'Sync'));
+
+    unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
+      budgets: {for (final b in _budgets) b.categoryId: b.amount},
+      spent: _spentAmounts,
+    ).catchError((_) {}));
   }
 
   Future<void> deleteBudget(String categoryId) async {
@@ -126,7 +133,7 @@ class BudgetProvider extends ChangeNotifier {
           );
     }
 
-    _budgets.removeWhere((b) => b.categoryId == categoryId);
+    _budgets = _budgets.where((b) => b.categoryId != categoryId).toList();
     _spentAmounts.remove(categoryId);
     notifyListeners();
 
@@ -135,6 +142,11 @@ class BudgetProvider extends ChangeNotifier {
           .deleteBudget(budget.id)
           .catchError((Object e) => AppLogger.error('budget delete failed', error: e, label: 'Sync'));
     }
+
+    unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
+      budgets: {for (final b in _budgets) b.categoryId: b.amount},
+      spent: _spentAmounts,
+    ).catchError((_) {}));
   }
 
   double getSpentForCategory(String categoryId) {
@@ -183,6 +195,11 @@ class BudgetProvider extends ChangeNotifier {
 
     _spentAmounts = spent;
     notifyListeners();
+
+    unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
+      budgets: {for (final b in _budgets) b.categoryId: b.amount},
+      spent: _spentAmounts,
+    ).catchError((_) {}));
   }
 
   /// Clear all in-memory state and wipe budgets from SQLite.

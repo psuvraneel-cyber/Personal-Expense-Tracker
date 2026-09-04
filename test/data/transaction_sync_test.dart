@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/recurring_rule.dart';
@@ -220,8 +223,21 @@ class FakeRecurringTransactionRepoForSyncTest extends RecurringTransactionReposi
   Future<List<RecurringRule>> getAllRules({String? userId}) async => [];
 }
 
+class MockPathProviderPlatform extends PathProviderPlatform {
+  @override
+  Future<String?> getApplicationDocumentsPath() async {
+    return Directory.systemTemp.path;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    PathProviderPlatform.instance = MockPathProviderPlatform();
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
 
   late FakeTransactionRepository repository;
   late FakeFirestoreSyncService firestoreSync;

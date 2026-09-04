@@ -24,6 +24,16 @@ import 'package:pet/services/platform_stub.dart'
 import 'package:pet/screens/settings/account_deletion_sheet.dart';
 import 'package:pet/screens/settings/notification_settings_screen.dart';
 import 'package:pet/core/widgets/oem_battery_dialog.dart';
+import 'package:pet/premium/providers/recurring_provider.dart';
+import 'package:pet/premium/providers/goal_provider.dart';
+import 'package:pet/premium/providers/alert_provider.dart';
+import 'package:pet/premium/providers/linked_account_provider.dart';
+import 'package:pet/premium/providers/family_provider.dart';
+import 'package:pet/premium/providers/tax_provider.dart';
+import 'package:pet/premium/providers/weekly_planner_provider.dart';
+import 'package:pet/providers/dashboard_config_provider.dart';
+import 'package:pet/providers/recurring_transaction_provider.dart';
+import 'package:pet/premium/services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -1221,6 +1231,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final categoryProvider = context.read<CategoryProvider>();
       final budgetProvider = context.read<BudgetProvider>();
       final premiumProvider = context.read<PremiumProvider>();
+      final recurringProvider = context.read<RecurringProvider>();
+      final goalProvider = context.read<GoalProvider>();
+      final familyProvider = context.read<FamilyProvider>();
+      final taxProvider = context.read<TaxProvider>();
+      final alertProvider = context.read<AlertProvider>();
+      final linkedAccountProvider = context.read<LinkedAccountProvider>();
+      final weeklyPlannerProvider = context.read<WeeklyPlannerProvider>();
+      final recurringTxnProvider = context.read<RecurringTransactionProvider>();
+      final smsProvider = context.read<SmsTransactionProvider>();
+      final dashboardConfigProvider = context.read<DashboardConfigProvider>();
 
       // Clear all provider state BEFORE signing out so no stale data
       // remains in memory or SQLite when a different account signs in.
@@ -1228,6 +1248,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await categoryProvider.clearData();
       await budgetProvider.clearData();
       await premiumProvider.clearData();
+      recurringProvider.clearData();
+      goalProvider.clearData();
+      familyProvider.clearData();
+      taxProvider.clearData();
+      alertProvider.clearData();
+      linkedAccountProvider.clearData();
+      weeklyPlannerProvider.clearData();
+      dashboardConfigProvider.clearData();
+      recurringTxnProvider.clearData();
+      smsProvider.clearData();
+
+      await NotificationService.cancelAllNotifications();
 
       await AuthService.signOut();
 

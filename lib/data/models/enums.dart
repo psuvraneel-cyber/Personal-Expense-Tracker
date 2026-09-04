@@ -81,11 +81,13 @@ enum TransactionSource {
   }
 }
 
-/// Recurring frequency for scheduled/repeating transactions.
+/// Recurring frequency for scheduled/repeating transactions and bills.
 enum RecurringFrequency {
   daily,
   weekly,
   monthly,
+  quarterly,
+  semiannual,
   yearly;
 
   /// Serialize to string.
@@ -96,15 +98,45 @@ enum RecurringFrequency {
     RecurringFrequency.daily => 'Daily',
     RecurringFrequency.weekly => 'Weekly',
     RecurringFrequency.monthly => 'Monthly',
+    RecurringFrequency.quarterly => 'Every 3 months',
+    RecurringFrequency.semiannual => 'Every 6 months',
     RecurringFrequency.yearly => 'Yearly',
   };
 
   /// Deserialize from string, returning null if input is null.
   static RecurringFrequency? fromJson(String? value) {
     if (value == null) return null;
+    final normalized = value.toLowerCase().trim();
+    if (normalized == 'every 3 months' || normalized == '3months') return RecurringFrequency.quarterly;
+    if (normalized == 'every 6 months' || normalized == '6months') return RecurringFrequency.semiannual;
     return RecurringFrequency.values.firstWhere(
-      (e) => e.name == value,
+      (e) => e.name == normalized,
       orElse: () => RecurringFrequency.monthly,
     );
   }
 }
+
+/// Lifecycle status for recurring financial commitments / bills.
+enum RecurringStatus {
+  detected,
+  confirmed,
+  cancelled;
+
+  /// Serialize to string.
+  String toJson() => name;
+
+  /// User-facing display name.
+  String get displayName => switch (this) {
+    RecurringStatus.detected => 'Detected',
+    RecurringStatus.confirmed => 'Confirmed',
+    RecurringStatus.cancelled => 'Cancelled',
+  };
+
+  /// Deserialize from string, defaulting to [confirmed].
+  static RecurringStatus fromJson(String? value) {
+    if (value == 'detected') return RecurringStatus.detected;
+    if (value == 'cancelled') return RecurringStatus.cancelled;
+    return RecurringStatus.confirmed;
+  }
+}
+

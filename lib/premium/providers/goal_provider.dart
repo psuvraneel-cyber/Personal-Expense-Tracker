@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pet/premium/models/notification_category.dart';
 import 'package:pet/premium/models/saving_goal.dart';
 import 'package:pet/premium/repositories/saving_goal_repository.dart';
+import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:uuid/uuid.dart';
 
@@ -11,15 +12,19 @@ class GoalProvider extends ChangeNotifier {
 
   List<SavingGoal> _goals = [];
   bool _isLoading = false;
+  bool _isLoaded = false;
 
   List<SavingGoal> get goals => _goals;
   bool get isLoading => _isLoading;
+  bool get isLoaded => _isLoaded;
 
-  Future<void> load() async {
+  Future<void> load({bool force = false}) async {
+    if (_isLoaded && !force) return;
     _isLoading = true;
     notifyListeners();
 
     _goals = await _repository.getAll();
+    _isLoaded = true;
 
     _isLoading = false;
     notifyListeners();
@@ -41,7 +46,7 @@ class GoalProvider extends ChangeNotifier {
       emoji: emoji,
     );
     await _repository.upsert(goal);
-    _goals.insert(0, goal);
+    _goals = [goal, ..._goals];
     notifyListeners();
   }
 
@@ -54,7 +59,7 @@ class GoalProvider extends ChangeNotifier {
     final updated = _goals[index].copyWith(currentAmount: amount);
     final isNowAchieved = updated.currentAmount >= updated.targetAmount;
 
-    _goals[index] = updated;
+    _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     await _repository.upsert(updated);
     notifyListeners();
 
@@ -75,7 +80,7 @@ class GoalProvider extends ChangeNotifier {
     );
     final isNowAchieved = updated.currentAmount >= updated.targetAmount;
 
-    _goals[index] = updated;
+    _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     await _repository.upsert(updated);
     notifyListeners();
 
@@ -92,6 +97,9 @@ class GoalProvider extends ChangeNotifier {
       category: NotificationCategory.goalProgress,
       payload: 'goal:${goal.id}',
     );
+    try {
+      await AlertEvaluationCoordinator().onGoalsChanged([goal]);
+    } catch (_) {}
   }
 
   /// Toggle pause state on a goal.
@@ -99,20 +107,22 @@ class GoalProvider extends ChangeNotifier {
     final index = _goals.indexWhere((g) => g.id == id);
     if (index == -1) return;
     final updated = _goals[index].copyWith(isPaused: !_goals[index].isPaused);
-    _goals[index] = updated;
+    _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     await _repository.upsert(updated);
     notifyListeners();
   }
 
   Future<void> deleteGoal(String id) async {
     await _repository.delete(id);
-    _goals.removeWhere((g) => g.id == id);
+    _goals = _goals.where((g) => g.id != id).toList();
+    AlertEvaluationCoordinator().onGoalDeleted(id);
     notifyListeners();
   }
 
   void clearData() {
     _goals = [];
     _isLoading = false;
+    _isLoaded = false;
     notifyListeners();
   }
 }

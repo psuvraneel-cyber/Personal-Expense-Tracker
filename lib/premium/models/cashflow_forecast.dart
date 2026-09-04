@@ -8,12 +8,16 @@ class CashflowForecast {
   /// meaning projections may be unreliable.
   final bool hasInsufficientData;
 
+  /// True when recorded expenses exceed recorded income, yielding a negative baseline.
+  final bool hasNegativeStartingBalance;
+
   CashflowForecast({
     required this.startingBalance,
     required this.projectedEndingBalance,
     required this.safeToSpend,
     required this.dailyPoints,
     this.hasInsufficientData = false,
+    this.hasNegativeStartingBalance = false,
   });
 }
 

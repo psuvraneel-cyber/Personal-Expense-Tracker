@@ -13,6 +13,7 @@ import 'package:pet/premium/screens/recurring_bills_screen.dart';
 import 'package:pet/premium/screens/cashflow_screen.dart';
 import 'package:pet/premium/screens/goals_screen.dart';
 import 'package:pet/premium/screens/ai_copilot_screen.dart';
+import 'package:pet/premium/providers/alert_provider.dart';
 import 'package:pet/premium/screens/alerts_screen.dart';
 import 'package:pet/premium/screens/spend_pause_screen.dart';
 import 'package:pet/premium/screens/tax_buckets_screen.dart';
@@ -150,6 +151,8 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
               ? null
               : '${recurringProvider.recurring.length} tracked';
 
+          final unreadAlerts = context.watch<AlertProvider>().unreadCount;
+
           final features = [
             (
               Icons.flag_rounded,
@@ -212,7 +215,7 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
               'Alerts Centre',
               'Budget & anomaly alerts',
               AppTheme.expenseRed,
-              null,
+              unreadAlerts > 0 ? '$unreadAlerts unread' : null,
               () => _push(context, const AlertsScreen()),
             ),
           ];

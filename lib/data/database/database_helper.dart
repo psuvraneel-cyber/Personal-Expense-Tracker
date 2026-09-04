@@ -38,18 +38,20 @@ class DatabaseHelper {
   Future<Database> get database async {
     if (_database != null) return _database!;
     
-    if (_dbCompleter == null) {
-      _dbCompleter = Completer<Database>();
-      try {
-        _database = await _initDatabase();
-        _dbCompleter!.complete(_database);
-      } catch (e) {
-        _dbCompleter!.completeError(e);
-        _dbCompleter = null;
-        rethrow;
-      }
+    if (_dbCompleter != null) {
+      return _dbCompleter!.future;
     }
-    return _dbCompleter!.future;
+
+    final completer = Completer<Database>();
+    _dbCompleter = completer;
+    try {
+      _database = await _initDatabase();
+      completer.complete(_database);
+      return _database!;
+    } catch (e) {
+      _dbCompleter = null;
+      rethrow;
+    }
   }
 
   /// Check if SQLCipher is supported at runtime.
@@ -126,7 +128,7 @@ class DatabaseHelper {
       final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
       return await openDatabase(
         path,
-        version: 15,
+        version: 17,
         password: password,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -139,7 +141,7 @@ class DatabaseHelper {
       AppLogger.warn('SQLCipher is not supported on this platform. Opening in plaintext.', label: 'DB');
       return await openDatabase(
         path,
-        version: 15,
+        version: 17,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
         onOpen: (db) async {
@@ -176,6 +178,11 @@ class DatabaseHelper {
   @visibleForTesting
   Future<void> onCreateForTesting(Database db, int version) async {
     await _onCreate(db, version);
+  }
+
+  @visibleForTesting
+  Future<void> onUpgradeForTesting(Database db, int oldVersion, int newVersion) async {
+    await _onUpgrade(db, oldVersion, newVersion);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -375,6 +382,12 @@ class DatabaseHelper {
     if (oldVersion < 15) {
       await _migrateToV15(db);
     }
+    if (oldVersion < 16) {
+      await _migrateToV16(db);
+    }
+    if (oldVersion < 17) {
+      await _migrateToV17(db);
+    }
   }
 
   /// Create recurring_rules and recurring_occurrences tables for recurring transaction scheduling.
@@ -567,6 +580,133 @@ class DatabaseHelper {
     ''');
   }
 
+  /// Migrate to v16: Recurring Financial Commitments upgrade (status, autopay, price changes, payment history).
+  Future<void> _migrateToV16(Database db) async {
+    try {
+      final cols = await db.rawQuery('PRAGMA table_info(recurring_payments)');
+      final colNames = cols.map((c) => c['name'] as String).toSet();
+
+      if (!colNames.contains('status')) {
+        await db.execute("ALTER TABLE recurring_payments ADD COLUMN status TEXT DEFAULT 'confirmed'");
+      }
+      if (!colNames.contains('isAutopay')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN isAutopay INTEGER DEFAULT 0');
+      }
+      if (!colNames.contains('previousAmount')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN previousAmount REAL');
+      }
+      if (!colNames.contains('priceChangeDetectedAt')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN priceChangeDetectedAt TEXT');
+      }
+      if (!colNames.contains('notes')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN notes TEXT');
+      }
+      if (!colNames.contains('createdAt')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN createdAt TEXT');
+        await db.execute('UPDATE recurring_payments SET createdAt = lastPaidAt WHERE createdAt IS NULL');
+      }
+      if (!colNames.contains('updatedAt')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN updatedAt TEXT');
+        await db.execute('UPDATE recurring_payments SET updatedAt = lastPaidAt WHERE updatedAt IS NULL');
+      }
+      if (!colNames.contains('detectionReason')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN detectionReason TEXT');
+      }
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS recurring_payment_history (
+          id TEXT PRIMARY KEY,
+          recurringPaymentId TEXT NOT NULL,
+          amount REAL NOT NULL,
+          paidAt TEXT NOT NULL,
+          source TEXT DEFAULT 'manual',
+          transactionId TEXT,
+          notes TEXT,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_rec_hist_payment_id
+        ON recurring_payment_history (recurringPaymentId)
+      ''');
+    } catch (e) {
+      AppLogger.error('Failed to run v16 database migration', error: e, label: 'DB');
+    }
+  }
+
+  /// Migrate to v17: Alerts Centre 2.0 (production-grade financial intelligence upgrade).
+  Future<void> _migrateToV17(Database db) async {
+    try {
+      final cols = await db.rawQuery('PRAGMA table_info(alerts)');
+      final colNames = cols.map((c) => c['name'] as String).toSet();
+
+      final newColumns = <String, String>{
+        'stage': 'TEXT',
+        'severity': "TEXT NOT NULL DEFAULT 'warning'",
+        'isDismissed': 'INTEGER DEFAULT 0',
+        'amount': 'REAL',
+        'targetAmount': 'REAL',
+        'ratio': 'REAL',
+        'transactionId': 'TEXT',
+        'recurringPaymentId': 'TEXT',
+        'goalId': 'TEXT',
+        'period': 'TEXT',
+        'actionType': 'TEXT',
+        'actionPayload': 'TEXT',
+        'updatedAt': 'TEXT',
+        'resolvedAt': 'TEXT',
+        'expiresAt': 'TEXT',
+      };
+
+      for (final entry in newColumns.entries) {
+        if (!colNames.contains(entry.key)) {
+          await db.execute('ALTER TABLE alerts ADD COLUMN ${entry.key} ${entry.value}');
+        }
+      }
+
+      // Backfill existing alerts with sensible defaults
+      await db.execute('''
+        UPDATE alerts 
+        SET severity = CASE 
+          WHEN type = 'budget' AND title LIKE '%exceeded%' THEN 'critical'
+          WHEN type = 'cashflow' THEN 'critical'
+          WHEN type = 'bill' THEN 'info'
+          ELSE 'warning'
+        END
+        WHERE severity IS NULL OR severity = ''
+      ''');
+
+      // Deduplicate any historical identical alertKeys before enforcing unique index
+      await db.execute('''
+        DELETE FROM alerts 
+        WHERE rowid NOT IN (
+          SELECT MIN(rowid) FROM alerts GROUP BY alertKey
+        ) AND alertKey IS NOT NULL AND alertKey != ''
+      ''');
+
+      // Drop old non-unique index and create unique index on alertKey
+      await db.execute('DROP INDEX IF EXISTS idx_alert_key');
+      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_key ON alerts (alertKey)');
+
+      // Create composite and filtering indexes
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_alerts_active 
+        ON alerts (isDismissed, isRead, createdAt DESC)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_alerts_type 
+        ON alerts (type, createdAt DESC)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_alerts_period 
+        ON alerts (period)
+      ''');
+    } catch (e) {
+      AppLogger.error('Failed to run v17 database migration', error: e, label: 'DB');
+    }
+  }
+
   Future<void> _createPremiumTables(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS recurring_payments (
@@ -578,8 +718,34 @@ class DatabaseHelper {
         nextDueAt TEXT NOT NULL,
         categoryId TEXT NOT NULL,
         confidence REAL DEFAULT 0.6,
-        source TEXT DEFAULT 'sms'
+        source TEXT DEFAULT 'sms',
+        status TEXT DEFAULT 'confirmed',
+        isAutopay INTEGER DEFAULT 0,
+        previousAmount REAL,
+        priceChangeDetectedAt TEXT,
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        detectionReason TEXT
       )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS recurring_payment_history (
+        id TEXT PRIMARY KEY,
+        recurringPaymentId TEXT NOT NULL,
+        amount REAL NOT NULL,
+        paidAt TEXT NOT NULL,
+        source TEXT DEFAULT 'manual',
+        transactionId TEXT,
+        notes TEXT,
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_rec_hist_payment_id
+      ON recurring_payment_history (recurringPaymentId)
     ''');
 
     await db.execute('''
@@ -599,18 +765,48 @@ class DatabaseHelper {
       CREATE TABLE IF NOT EXISTS alerts (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
+        stage TEXT,
+        severity TEXT NOT NULL DEFAULT 'warning',
         title TEXT NOT NULL,
         message TEXT NOT NULL,
+        alertKey TEXT UNIQUE,
         categoryId TEXT,
-        createdAt TEXT NOT NULL,
+        amount REAL,
+        targetAmount REAL,
+        ratio REAL,
+        transactionId TEXT,
+        recurringPaymentId TEXT,
+        goalId TEXT,
+        period TEXT,
         isRead INTEGER DEFAULT 0,
-        alertKey TEXT
+        isDismissed INTEGER DEFAULT 0,
+        actionType TEXT,
+        actionPayload TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT,
+        resolvedAt TEXT,
+        expiresAt TEXT
       )
     ''');
 
     await db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_alert_key
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_key
       ON alerts (alertKey)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_alerts_active
+      ON alerts (isDismissed, isRead, createdAt DESC)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_alerts_type
+      ON alerts (type, createdAt DESC)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_alerts_period
+      ON alerts (period)
     ''');
 
     await db.execute('''

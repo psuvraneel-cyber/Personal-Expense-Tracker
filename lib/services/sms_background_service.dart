@@ -4,9 +4,8 @@ import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/repositories/budget_repository.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/premium/models/notification_category.dart';
-import 'package:pet/premium/repositories/alert_repository.dart';
 import 'package:pet/premium/repositories/recurring_payment_repository.dart';
-import 'package:pet/premium/services/alert_evaluator.dart';
+import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:pet/premium/services/bill_reminder_scheduler.dart';
 import 'package:pet/premium/services/daily_reminder_evaluator.dart';
 import 'package:pet/premium/services/notification_preferences_service.dart';
@@ -35,7 +34,7 @@ const String kAlertEvaluationTask = 'com.pet.tracker.alertEvaluation';
 @pragma('vm:entry-point')
 void smsCallbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
-    AppLogger.debug('[PET-BG] Executing background task: $taskName');
+    AppLogger.debug('[PET-BG] Background task started: $taskName');
 
     if (taskName == kSmsInboxScanTask) {
       try {
@@ -67,7 +66,6 @@ void smsCallbackDispatcher() {
         final now = DateTime.now();
         final budgetRepo = BudgetRepository();
         final txnRepo = TransactionRepository();
-        final alertRepo = AlertRepository();
 
         final budgetsList = await budgetRepo.getBudgetsByMonth(
           now.month,
@@ -87,47 +85,12 @@ void smsCallbackDispatcher() {
 
         final transactions = await txnRepo.getAllTransactions();
 
-        final budgetAlerts = AlertEvaluator.evaluateBudgetAlerts(
+        await AlertEvaluationCoordinator().onTransactionsChanged(
+          transactions,
           budgets: budgetsMap,
           spent: spentMap,
           now: now,
         );
-
-        final anomalyAlerts = AlertEvaluator.evaluateAnomalies(
-          transactions: transactions,
-          now: now,
-        );
-
-        final cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
-          transactions: transactions,
-          now: now,
-        );
-
-        final allAlerts = [...budgetAlerts, ...anomalyAlerts, ?cashflowAlert];
-
-        for (final alert in allAlerts) {
-          if (alert.alertKey != null) {
-            final exists = await alertRepo.existsByKey(alert.alertKey!);
-            if (exists) continue;
-          }
-          await alertRepo.insert(alert);
-
-          final category = alert.type == 'anomaly'
-              ? NotificationCategory.anomaly
-              : alert.type == 'cashflow'
-              ? NotificationCategory.cashflow
-              : NotificationCategory.budget;
-
-          final payload = '${alert.type}:${alert.categoryId ?? alert.id}';
-
-          await NotificationService.showInstant(
-            id: NotificationService.collisionSafeId(alert.id),
-            title: alert.title,
-            body: alert.message,
-            category: category,
-            payload: payload,
-          );
-        }
 
         // Re-arm scheduled bill reminders for boot safety (P0-2)
         final recurringRepo = RecurringPaymentRepository();
@@ -178,7 +141,7 @@ void smsCallbackDispatcher() {
         }
 
         AppLogger.debug(
-          '[PET-BG] Background alert evaluation completed: evaluated ${allAlerts.length} alerts & re-armed bill reminders',
+          '[PET-BG] Background alert evaluation completed & re-armed bill reminders',
         );
       } catch (e) {
         AppLogger.debug('[PET-BG] Background alert evaluation error: $e');

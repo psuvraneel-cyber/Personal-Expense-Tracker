@@ -16,6 +16,7 @@ class WeeklyPlannerScreen extends StatefulWidget {
 
 class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
   final _fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
+  List<dynamic>? _lastSyncedTransactions;
 
   @override
   void initState() {
@@ -23,16 +24,19 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final planner = context.read<WeeklyPlannerProvider>();
       final txns = context.read<TransactionProvider>().allTransactions;
+      _lastSyncedTransactions = txns;
       planner.load().then((_) => planner.refreshFromTransactions(txns));
     });
   }
 
-  // Called by the Consumer2 whenever TransactionProvider changes — but crucially
-  // NOT inline inside the build method (side-effects in builders are illegal).
+  // Called by the Consumer2 whenever TransactionProvider changes.
   void _syncPlanner(
     WeeklyPlannerProvider planner,
     TransactionProvider txnProvider,
   ) {
+    if (identical(_lastSyncedTransactions, txnProvider.allTransactions)) return;
+    _lastSyncedTransactions = txnProvider.allTransactions;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       planner.refreshFromTransactions(txnProvider.allTransactions);

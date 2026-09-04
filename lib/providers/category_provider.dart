@@ -141,7 +141,7 @@ class CategoryProvider extends ChangeNotifier {
             (Object e) => AppLogger.error('SQLite category insert failed', error: e, label: 'DB'),
           );
     }
-    _categories.add(category);
+    _categories = [..._categories, category];
     notifyListeners();
 
     // Mirror to Firestore in background.
@@ -160,7 +160,7 @@ class CategoryProvider extends ChangeNotifier {
     }
     final index = _categories.indexWhere((c) => c.id == category.id);
     if (index != -1) {
-      _categories[index] = category;
+      _categories = List<Category>.from(_categories)..[index] = category;
       notifyListeners();
     }
 
@@ -177,7 +177,7 @@ class CategoryProvider extends ChangeNotifier {
             (Object e) => AppLogger.error('SQLite category delete failed', error: e, label: 'DB'),
           );
     }
-    _categories.removeWhere((c) => c.id == id);
+    _categories = _categories.where((c) => c.id != id).toList();
     notifyListeners();
 
     _syncService

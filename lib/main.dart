@@ -271,6 +271,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<BudgetProvider>().clearData();
       ctx.read<SmsTransactionProvider>().clearData();
       ctx.read<PremiumProvider>().clearData();
+      ctx.read<RecurringProvider>().clearData();
       ctx.read<GoalProvider>().clearData();
       ctx.read<AlertProvider>().clearData();
       ctx.read<LinkedAccountProvider>().clearData();
@@ -279,6 +280,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<WeeklyPlannerProvider>().clearData();
       ctx.read<DashboardConfigProvider>().clearData();
       ctx.read<RecurringTransactionProvider>().clearData();
+      NotificationService.cancelAllNotifications();
       _lastUid = null;
     } else if (currentUserId != null && currentUserId != _lastUid) {
       AppLogger.debug(
@@ -397,27 +399,8 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
           },
         ),
         ChangeNotifierProvider(create: (_) => GoalProvider()..load()),
-        ChangeNotifierProxyProvider2<
-          TransactionProvider,
-          BudgetProvider,
-          AlertProvider
-        >(
+        ChangeNotifierProvider(
           create: (_) => AlertProvider()..load(),
-          update: (_, txnProvider, budgetProvider, alertProvider) {
-            if (txnProvider.allTransactions.isNotEmpty) {
-              alertProvider?.refreshAnomalies(txnProvider.allTransactions);
-            }
-            if (budgetProvider.budgets.isNotEmpty) {
-              final budgets = {
-                for (final b in budgetProvider.budgets) b.categoryId: b.amount,
-              };
-              alertProvider?.refreshBudgetAlerts(
-                budgets: budgets,
-                spent: budgetProvider.spentAmounts,
-              );
-            }
-            return alertProvider ?? AlertProvider();
-          },
         ),
         ChangeNotifierProvider(create: (_) => LinkedAccountProvider()..load()),
         ChangeNotifierProvider(create: (_) => FamilyProvider()..load()),

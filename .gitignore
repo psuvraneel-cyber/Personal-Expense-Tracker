@@ -85,5 +85,7 @@ app.*.map.json
 build_helper.ps1
 build.bat
 node_modules
-P E T _ T e c h n i c a l _ A u d i t _ R e p o r t . *  
- audit_report.md  
+
+# Stray audit/report exports (should never be committed)
+PET_Technical_Audit_Report.*
+*audit_report*.md

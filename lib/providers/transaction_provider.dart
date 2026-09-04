@@ -11,6 +11,7 @@ import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
 import 'package:pet/services/recurring_transaction_service.dart';
+import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:uuid/uuid.dart';
 
 /// Sync status exposed to the UI for the sync indicator chip.
@@ -388,8 +389,9 @@ class TransactionProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
-    // Optimistic local update
-    _transactions.insert(0, transaction);
+    // Optimistic local update — reassign so identical() reactivity checks
+    // elsewhere (e.g. dashboard_screen.dart) correctly detect the change.
+    _transactions = [transaction, ..._transactions];
     _invalidateAggregates();
     _applyFiltersAndSort();
     notifyListeners();
@@ -423,6 +425,11 @@ class TransactionProvider extends ChangeNotifier {
             _setSyncStatus(SyncStatus.error, error: e.toString());
           });
     }
+
+    unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
+      _transactions,
+      now: transaction.date,
+    ).catchError((_) {}));
   }
 
   Future<void> updateTransaction(TransactionRecord transaction) async {
@@ -432,7 +439,8 @@ class TransactionProvider extends ChangeNotifier {
     final updatedTxn = transaction.copyWith(updatedAt: DateTime.now());
     final index = _transactions.indexWhere((t) => t.id == updatedTxn.id);
     if (index != -1) {
-      _transactions[index] = updatedTxn;
+      _transactions = List<TransactionRecord>.from(_transactions)
+        ..[index] = updatedTxn;
       _invalidateAggregates();
       _applyFiltersAndSort();
       notifyListeners();
@@ -466,13 +474,18 @@ class TransactionProvider extends ChangeNotifier {
             _setSyncStatus(SyncStatus.error, error: e.toString());
           });
     }
+
+    unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
+      _transactions,
+      now: updatedTxn.date,
+    ).catchError((_) {}));
   }
 
   Future<void> deleteTransaction(String id) async {
     if (AccountDeletionService.isDeletionInProgress) {
       throw StateError('Account deletion in progress');
     }
-    _transactions.removeWhere((t) => t.id == id);
+    _transactions = _transactions.where((t) => t.id != id).toList();
     _invalidateAggregates();
     _applyFiltersAndSort();
     notifyListeners();
@@ -516,6 +529,10 @@ class TransactionProvider extends ChangeNotifier {
             _setSyncStatus(SyncStatus.error, error: e.toString());
           });
     }
+
+    unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
+      _transactions,
+    ).catchError((_) {}));
   }
 
   void _setSyncStatus(SyncStatus status, {String? error}) {

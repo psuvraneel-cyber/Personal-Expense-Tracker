@@ -112,7 +112,7 @@ class SmsTransactionProvider extends ChangeNotifier {
         if (smsPermission.isGranted) {
           _smsService.startListening(
             onNewTransaction: (transaction) {
-              _transactions.insert(0, transaction);
+              _transactions = [transaction, ..._transactions];
               _invalidateComputedCache();
               notifyListeners();
             },
@@ -287,7 +287,8 @@ class SmsTransactionProvider extends ChangeNotifier {
     await _repository.updateCategory(id, category);
     final index = _transactions.indexWhere((t) => t.id == id);
     if (index != -1) {
-      _transactions[index] = _transactions[index].copyWith(category: category);
+      _transactions = List<SmsTransaction>.from(_transactions)
+        ..[index] = _transactions[index].copyWith(category: category);
       notifyListeners();
     }
   }
@@ -295,8 +296,8 @@ class SmsTransactionProvider extends ChangeNotifier {
   /// Delete a transaction (false positive).
   Future<void> deleteTransaction(String id) async {
     await _repository.deleteSmsTransaction(id);
-    _transactions.removeWhere((t) => t.id == id);
-    _uncertainTransactions.removeWhere((t) => t.id == id);
+    _transactions = _transactions.where((t) => t.id != id).toList();
+    _uncertainTransactions = _uncertainTransactions.where((t) => t.id != id).toList();
     _invalidateComputedCache();
     notifyListeners();
   }
@@ -332,8 +333,8 @@ class SmsTransactionProvider extends ChangeNotifier {
     );
     await _repository.saveFeedback(feedback.toMap());
 
-    _uncertainTransactions.removeAt(index);
-    _transactions.insert(0, updated);
+    _uncertainTransactions = _uncertainTransactions.where((t) => t.id != id).toList();
+    _transactions = [updated, ..._transactions];
     notifyListeners();
   }
 
@@ -357,7 +358,7 @@ class SmsTransactionProvider extends ChangeNotifier {
       status: 'ignored',
       reason: 'pending_review_rejected',
     );
-    _uncertainTransactions.removeAt(index);
+    _uncertainTransactions = _uncertainTransactions.where((t) => t.id != id).toList();
     notifyListeners();
   }
 

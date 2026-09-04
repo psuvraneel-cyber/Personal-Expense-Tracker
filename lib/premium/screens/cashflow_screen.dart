@@ -11,6 +11,8 @@ import 'package:pet/premium/services/cashflow_forecast_service.dart';
 import 'package:pet/premium/widgets/premium_gate.dart';
 import 'package:pet/data/models/transaction.dart';
 
+import 'package:pet/premium/providers/recurring_provider.dart';
+
 class CashflowScreen extends StatefulWidget {
   const CashflowScreen({super.key});
 
@@ -24,6 +26,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RecurringProvider>().load();
+    });
   }
 
   String _computeIncomeRisk(List<TransactionRecord> transactions) {
@@ -58,13 +63,16 @@ class _CashflowScreenState extends State<CashflowScreen> {
       body: PremiumGate(
         title: 'Cash Flow Forecast',
         subtitle: 'See your next 30 days and safe-to-spend.',
-        child: Consumer<TransactionProvider>(
-          builder: (context, provider, _) {
+        child: Consumer2<TransactionProvider, RecurringProvider>(
+          builder: (context, provider, recurringProvider, _) {
             CashflowForecast forecast;
             String incomeRisk;
             
             try {
-              forecast = CashflowForecastService.forecast(provider.allTransactions);
+              forecast = CashflowForecastService.forecast(
+                provider.allTransactions,
+                confirmedBills: recurringProvider.confirmedBills,
+              );
               incomeRisk = _computeIncomeRisk(provider.allTransactions);
             } catch (e) {
               return _buildError(isDark, e.toString());
@@ -73,7 +81,39 @@ class _CashflowScreenState extends State<CashflowScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
               children: [
-                _buildSafeToSpendHero(forecast.safeToSpend, isDark),
+                _buildSafeToSpendHero(forecast.safeToSpend, forecast.hasNegativeStartingBalance, isDark),
+                if (forecast.hasNegativeStartingBalance) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.expenseRed.withAlpha(isDark ? 25 : 15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.expenseRed.withAlpha(isDark ? 50 : 30),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('⚠️ ', style: TextStyle(fontSize: 14)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Recorded expenses exceed recorded income by ${_fmt.format(forecast.startingBalance.abs())}. '
+                            'Safe-to-spend is paused at ₹0 until recorded cashflow becomes positive.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? AppTheme.textTertiary
+                                  : AppTheme.textSecondaryLight,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (forecast.hasInsufficientData) ...[
                   const SizedBox(height: 12),
                   Container(
@@ -87,12 +127,12 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Text('⚠️ ', style: TextStyle(fontSize: 14)),
+                        const Text('ℹ️ ', style: TextStyle(fontSize: 14)),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Less than 7 days of data — projections may be unreliable. '
-                            'Keep using the app to improve accuracy.',
+                            'Less than 7 days of recorded data — projections may be tentative. '
+                            'Continue logging transactions to increase projection accuracy.',
                             style: TextStyle(
                               fontSize: 11,
                               color: isDark
@@ -198,13 +238,13 @@ class _CashflowScreenState extends State<CashflowScreen> {
     );
   }
 
-  Widget _buildSafeToSpendHero(double amount, bool isDark) {
-    final isNegative = amount < 0;
+  Widget _buildSafeToSpendHero(double amount, bool hasNegativeBase, bool isDark) {
+    final isZeroOrNegative = amount <= 0 || hasNegativeBase;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: isNegative
+        gradient: isZeroOrNegative
             ? LinearGradient(
                 colors: [
                   AppTheme.expenseRed.withAlpha(isDark ? 60 : 40),
@@ -215,7 +255,7 @@ class _CashflowScreenState extends State<CashflowScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: (isNegative ? AppTheme.expenseRed : AppTheme.accentPurple)
+            color: (isZeroOrNegative ? AppTheme.expenseRed : AppTheme.accentPurple)
                 .withAlpha(50),
             blurRadius: 20,
             offset: const Offset(0, 6),
@@ -244,9 +284,11 @@ class _CashflowScreenState extends State<CashflowScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            isNegative
-                ? 'You\'re projected to exceed your balance'
-                : 'Estimated daily spending budget',
+            hasNegativeBase
+                ? 'Recorded deficit — reduce spend to recover'
+                : (amount <= 0
+                    ? 'No remaining daily spending budget'
+                    : 'Estimated daily spending budget'),
             style: const TextStyle(color: Colors.white60, fontSize: 12),
           ),
         ],
@@ -255,11 +297,12 @@ class _CashflowScreenState extends State<CashflowScreen> {
   }
 
   Widget _buildStatsRow(CashflowForecast forecast, String incomeRisk, bool isDark) {
+    final isStartingNegative = forecast.startingBalance < 0;
     final items = [
       (
-        'Starting balance',
+        'Recorded net',
         _fmt.format(forecast.startingBalance),
-        AppTheme.incomeGreen,
+        isStartingNegative ? AppTheme.expenseRed : AppTheme.incomeGreen,
       ),
       (
         'End of month',

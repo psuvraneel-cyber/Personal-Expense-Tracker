@@ -101,6 +101,7 @@ class AccountDeletionService {
       for (final collection in [
         'saving_goals',
         'recurring_payments',
+        'recurring_payment_history',
         'recurring_rules',
         'recurring_occurrences',
         'alerts',
@@ -214,6 +215,7 @@ class AccountDeletionService {
       'linked_accounts',
       'family_members',
       'alerts',
+      'recurring_payment_history',
       'recurring_payments',
       'recurring_occurrences',
       'recurring_rules',

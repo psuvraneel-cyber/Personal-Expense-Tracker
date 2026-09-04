@@ -114,7 +114,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                     controller: e.value,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: ' Limit',
+                      labelText: '${e.key} Limit',
                       prefixText: '₹ ',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -401,7 +401,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                         children: [
                           const Text('💰 ', style: TextStyle(fontSize: 12)),
                           Text(
-                            'Est. tax saved: ',
+                            'Est. tax saved: ${formatter.format(saved)}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -458,14 +458,14 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '% of total limit used',
+                      '${(overallProgress * 100).round()}% of total limit used',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 11,
                       ),
                     ),
                     Text(
-                      'Limit: ',
+                      'Limit: ${totalLimit.isFinite ? formatter.format(totalLimit) : 'No Limit'}',
                       style: const TextStyle(
                         color: Colors.white60,
                         fontSize: 11,
@@ -583,7 +583,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '%',
+                    '${(progress * 100).round()}%',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -646,7 +646,9 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                 ),
               ),
               Text(
-                limit.isFinite ? ' remaining' : 'No Limit',
+                limit.isFinite
+                    ? '${formatter.format((limit - claimed).clamp(0.0, double.infinity))} remaining'
+                    : 'No Limit',
                 style: const TextStyle(
                   fontSize: 11,
                   color: AppTheme.textTertiary,

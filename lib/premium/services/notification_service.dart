@@ -430,6 +430,32 @@ class NotificationService {
     );
   }
 
+  /// Cancels a specific pending or active notification by [id].
+  static Future<void> cancelNotification(int id) async {
+    try {
+      _pending.removeWhere((item) => item.id == id);
+      _pendingScheduled.removeWhere((item) => item.id == id);
+      if (!_isInitialized) return;
+      await _plugin.cancel(id);
+    } catch (e, st) {
+      AppLogger.debug('[NotificationService] cancelNotification error: $e');
+      _recordCrashlyticsError(e, st, reason: 'notification_cancel_failed');
+    }
+  }
+
+  /// Cancels all active and scheduled notifications.
+  static Future<void> cancelAllNotifications() async {
+    try {
+      _pending.clear();
+      _pendingScheduled.clear();
+      if (!_isInitialized) return;
+      await _plugin.cancelAll();
+    } catch (e, st) {
+      AppLogger.debug('[NotificationService] cancelAll error: $e');
+      _recordCrashlyticsError(e, st, reason: 'notification_cancel_all_failed');
+    }
+  }
+
   /// Derives a collision-safe 32-bit int ID from an arbitrary [String] key
   /// (e.g. alert UUID or alertKey). Two different strings will virtually never
   /// produce the same ID — unlike the old timestamp ÷ 1000 approach.

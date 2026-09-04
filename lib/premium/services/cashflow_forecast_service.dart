@@ -1,15 +1,19 @@
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/premium/models/cashflow_forecast.dart';
+import 'package:pet/premium/models/recurring_payment.dart';
+import 'package:pet/services/recurrence_calculator.dart';
 
 class CashflowForecastService {
   CashflowForecastService._();
 
   static CashflowForecast forecast(
     List<TransactionRecord> transactions, {
+    List<RecurringPayment>? confirmedBills,
     int days = 30,
+    DateTime? referenceDate,
   }) {
-    final now = DateTime.now();
+    final now = referenceDate ?? DateTime.now();
 
     // Filter out future-dated transactions — they shouldn't influence
     // historical averages or the starting balance.
@@ -30,46 +34,104 @@ class CashflowForecastService {
         _avgDailyAmount(pastTransactions, TransactionType.expense);
     final avgDailyIncome =
         _avgDailyAmount(pastTransactions, TransactionType.income);
-    final netDaily = avgDailyIncome - avgDailyExpense;
+
+    final hasNegativeStartingBalance = balance < 0;
 
     // Check if we have enough data for a reliable forecast
     final hasInsufficientData = _transactionDaySpan(pastTransactions) < 7;
 
-    if (balance < 0) {
-      balance = 0;
+    final activeBills = (confirmedBills ?? [])
+        .where((b) => b.status == RecurringStatus.confirmed)
+        .toList();
+
+    // Prevent double-counting: isolate variable daily expense by subtracting
+    // the daily equivalent of known recurring commitments from historical expense average.
+    final recurringMonthlyBurn = activeBills.fold(
+      0.0,
+      (sum, b) => sum + b.monthlyEquivalentAmount,
+    );
+    final recurringDailyBurn = recurringMonthlyBurn / 30.0;
+    final variableDailyExpense =
+        (avgDailyExpense - recurringDailyBurn).clamp(0.0, double.infinity);
+
+    // Pre-calculate all occurrences of active bills across the forecast window (days)
+    final billDeductionsByDate = <String, double>{};
+    final todayFloor = DateTime(now.year, now.month, now.day);
+    final windowEnd = DateTime(now.year, now.month, now.day + days);
+
+    for (final bill in activeBills) {
+      var occ = bill.nextDueAt;
+      var safety = 0;
+      while (!occ.isAfter(windowEnd) && safety < 100) {
+        safety++;
+        if (!occ.isBefore(todayFloor)) {
+          final key = '${occ.year}-${occ.month}-${occ.day}';
+          billDeductionsByDate[key] = (billDeductionsByDate[key] ?? 0.0) + bill.amount;
+        }
+        occ = RecurrenceCalculator.computeNextOccurrence(
+          anchorDate: bill.nextDueAt,
+          currentOccurrence: occ,
+          frequency: bill.frequencyEnum,
+        );
+      }
     }
 
+    final starting = balance;
     final dailyPoints = <CashflowPoint>[];
+    double rollingBalance = balance;
+
     for (var i = 0; i < days; i++) {
       final date = DateTime(now.year, now.month, now.day + i);
-      balance += netDaily;
-      // Clamp future balance to 0 if we keep spending and drop below 0
-      if (balance < 0) balance = 0;
-      dailyPoints.add(CashflowPoint(date: date, balance: balance));
+      final dateKey = '${date.year}-${date.month}-${date.day}';
+
+      if (activeBills.isNotEmpty) {
+        final billsDueToday = billDeductionsByDate[dateKey] ?? 0.0;
+        rollingBalance += (avgDailyIncome - variableDailyExpense) - billsDueToday;
+      } else {
+        final netDaily = avgDailyIncome - avgDailyExpense;
+        rollingBalance += netDaily;
+      }
+
+      dailyPoints.add(CashflowPoint(date: date, balance: rollingBalance));
     }
 
-    // safeToSpend: balance-aware formula — available balance divided by
-    // remaining days in the month, rather than the old misleading
-    // `avgDailyExpense * 0.9` which ignored actual balance.
+    // safeToSpend: balance-aware formula — available balance minus committed bills
+    // in current month, divided by remaining days. Clamped to 0 on deficit.
     final daysRemainingInMonth = _daysRemainingInMonth(now);
-    final currentBalance =
-        dailyPoints.isNotEmpty ? dailyPoints.first.balance : balance;
-    final safeToSpend = daysRemainingInMonth > 0
-        ? currentBalance / daysRemainingInMonth
-        : currentBalance;
+    final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+    double billsDueRemainingThisMonth = 0.0;
 
-    final starting = dailyPoints.isNotEmpty
-        ? dailyPoints.first.balance - netDaily
-        : balance;
+    for (final bill in activeBills) {
+      var occ = bill.nextDueAt;
+      var safety = 0;
+      while (!occ.isAfter(monthEnd) && safety < 50) {
+        safety++;
+        if (!occ.isBefore(todayFloor)) {
+          billsDueRemainingThisMonth += bill.amount;
+        }
+        occ = RecurrenceCalculator.computeNextOccurrence(
+          anchorDate: bill.nextDueAt,
+          currentOccurrence: occ,
+          frequency: bill.frequencyEnum,
+        );
+      }
+    }
+
+    final effectiveAvailable = (balance - billsDueRemainingThisMonth).clamp(0.0, double.infinity);
+    final safeToSpend = (effectiveAvailable > 0 && daysRemainingInMonth > 0)
+        ? effectiveAvailable / daysRemainingInMonth
+        : 0.0;
+
     final ending =
         dailyPoints.isNotEmpty ? dailyPoints.last.balance : balance;
 
     return CashflowForecast(
-      startingBalance: starting < 0 ? 0 : starting,
-      projectedEndingBalance: ending < 0 ? 0 : ending,
-      safeToSpend: safeToSpend < 0 ? 0 : safeToSpend,
+      startingBalance: starting,
+      projectedEndingBalance: ending,
+      safeToSpend: safeToSpend,
       dailyPoints: dailyPoints,
       hasInsufficientData: hasInsufficientData,
+      hasNegativeStartingBalance: hasNegativeStartingBalance,
     );
   }
 
