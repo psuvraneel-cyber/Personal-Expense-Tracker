@@ -448,12 +448,26 @@ class SmsTransactionRepository {
     );
   }
 
-  /// Update the transaction type (debit/credit).
-  Future<void> updateTransactionType(String id, String type) async {
+  /// Update transaction details with overrides upon confirmation.
+  Future<void> updateDetails(
+    String id, {
+    double? amount,
+    String? merchantName,
+    String? category,
+    String? transactionType,
+  }) async {
     final db = await _dbHelper.database;
+    final Map<String, dynamic> values = {
+      'isVerified': 1,
+      'confidence': 1.0,
+    };
+    if (amount != null) values['amount'] = amount;
+    if (merchantName != null) values['merchantName'] = merchantName;
+    if (category != null) values['category'] = category;
+    if (transactionType != null) values['transactionType'] = transactionType;
     await db.update(
       'sms_transactions',
-      {'transactionType': type},
+      values,
       where: 'id = ?',
       whereArgs: [id],
     );

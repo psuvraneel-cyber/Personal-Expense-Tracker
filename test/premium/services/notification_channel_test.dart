@@ -61,7 +61,7 @@ void main() {
   });
 
   group('NotificationService channel mapping & configuration', () {
-    test('channelIdFor maps all 7 categories correctly', () {
+    test('channelIdFor maps all 8 categories correctly', () {
       expect(
         NotificationService.channelIdFor(NotificationCategory.budget),
         equals('pet_budget_alerts'),
@@ -89,6 +89,10 @@ void main() {
       expect(
         NotificationService.channelIdFor(NotificationCategory.cashflow),
         equals('pet_cashflow_insights'),
+      );
+      expect(
+        NotificationService.channelIdFor(NotificationCategory.transactionDetected),
+        equals('pet_transactions'),
       );
     });
 
@@ -127,11 +131,16 @@ void main() {
       expect(cashflowCh.importance, equals(Importance.defaultImportance));
       expect(cashflowCh.playSound, isTrue);
       expect(cashflowCh.enableVibration, isFalse);
+
+      final txnCh = NotificationService.channelFor(NotificationCategory.transactionDetected);
+      expect(txnCh.importance, equals(Importance.high));
+      expect(txnCh.playSound, isTrue);
+      expect(txnCh.enableVibration, isTrue);
     });
 
-    test('allChannels contains 7 category channels + legacy channel', () {
+    test('allChannels contains 8 category channels + legacy channel', () {
       final channels = NotificationService.allChannels;
-      expect(channels.length, equals(8));
+      expect(channels.length, equals(9));
       final ids = channels.map((c) => c.id).toSet();
 
       expect(ids, contains('pet_budget_alerts'));
@@ -141,17 +150,18 @@ void main() {
       expect(ids, contains('pet_weekly_insights'));
       expect(ids, contains('pet_goal_progress'));
       expect(ids, contains('pet_cashflow_insights'));
+      expect(ids, contains('pet_transactions'));
       expect(ids, contains('pet_alerts')); // legacy channel
     });
 
-    test('initialize creates all 8 notification channels on Android', () async {
+    test('initialize creates all 9 notification channels on Android', () async {
       await NotificationService.initialize();
 
       final channelCalls = methodCalls
           .where((call) => call.method == 'createNotificationChannel')
           .toList();
 
-      expect(channelCalls.length, equals(8));
+      expect(channelCalls.length, equals(9));
       final createdIds = channelCalls.map((c) => c.arguments['id']).toSet();
 
       expect(createdIds, contains('pet_budget_alerts'));
@@ -161,6 +171,7 @@ void main() {
       expect(createdIds, contains('pet_weekly_insights'));
       expect(createdIds, contains('pet_goal_progress'));
       expect(createdIds, contains('pet_cashflow_insights'));
+      expect(createdIds, contains('pet_transactions'));
       expect(createdIds, contains('pet_alerts'));
     });
   });

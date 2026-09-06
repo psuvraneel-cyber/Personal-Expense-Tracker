@@ -9,6 +9,8 @@ import 'package:pet/services/sms_service.dart';
 import 'package:pet/services/sms_background_service.dart';
 import 'package:pet/services/reconciliation_service.dart';
 import 'package:pet/services/sms_parser/user_feedback_store.dart';
+import 'package:pet/data/models/enums.dart';
+import 'package:pet/services/financial_ingestion_service.dart';
 
 /// Provider for managing SMS-parsed transactions and the SMS scanning lifecycle.
 class SmsTransactionProvider extends ChangeNotifier {
@@ -296,6 +298,12 @@ class SmsTransactionProvider extends ChangeNotifier {
   /// Delete a transaction (false positive).
   Future<void> deleteTransaction(String id) async {
     await _repository.deleteSmsTransaction(id);
+    try {
+      await FinancialIngestionService().rejectObservation(
+        observationId: id,
+        reason: 'user_deleted_sms_transaction',
+      );
+    } catch (_) {}
     _transactions = _transactions.where((t) => t.id != id).toList();
     _uncertainTransactions = _uncertainTransactions.where((t) => t.id != id).toList();
     _invalidateComputedCache();
@@ -306,30 +314,59 @@ class SmsTransactionProvider extends ChangeNotifier {
   Future<void> acceptUncertainTransaction(
     String id, {
     String? overrideType,
+    double? overrideAmount,
+    String? overrideMerchant,
+    String? overrideCategoryId,
   }) async {
     final index = _uncertainTransactions.indexWhere((t) => t.id == id);
     if (index == -1) return;
 
     final txn = _uncertainTransactions[index];
+    final finalType = overrideType ?? txn.transactionType;
+    final finalAmount = overrideAmount ?? txn.amount;
+    final finalMerchant = overrideMerchant ?? txn.merchantName;
+    final finalCategory = overrideCategoryId ?? txn.category;
+
     final updated = txn.copyWith(
       isVerified: true,
-      transactionType: overrideType ?? txn.transactionType,
+      transactionType: finalType,
+      amount: finalAmount,
+      merchantName: finalMerchant,
+      category: finalCategory,
       confidence: 1.0,
     );
 
-    await _repository.updateVerified(id, true);
-    if (overrideType != null) {
-      await _repository.updateTransactionType(id, overrideType);
+    await _repository.updateDetails(
+      id,
+      amount: overrideAmount,
+      merchantName: overrideMerchant,
+      category: overrideCategoryId,
+      transactionType: overrideType,
+    );
+
+    // Promote observation to canonical core ledger
+    try {
+      await FinancialIngestionService().confirmObservation(
+        observationId: id,
+        overrideAmount: overrideAmount,
+        overrideMerchant: overrideMerchant,
+        overrideCategoryId: overrideCategoryId,
+        overrideType: finalType == 'credit'
+            ? TransactionType.income
+            : (finalType == 'debit' ? TransactionType.expense : null),
+      );
+    } catch (e) {
+      AppLogger.debug('[PET-SMS] Error promoting confirmed observation to ledger: $e');
     }
 
     // Record feedback for future learning
     final feedback = UserFeedbackStore.recordFeedback(
       smsBody: txn.rawSmsBody,
       smsTimestamp: txn.timestamp,
-      action: overrideType == 'credit'
+      action: finalType == 'credit'
           ? UserFeedbackAction.markCredit
           : UserFeedbackAction.markDebit,
-      confirmedAmount: txn.amount,
+      confirmedAmount: finalAmount,
     );
     await _repository.saveFeedback(feedback.toMap());
 
@@ -358,6 +395,15 @@ class SmsTransactionProvider extends ChangeNotifier {
       status: 'ignored',
       reason: 'pending_review_rejected',
     );
+
+    // Record tombstone in FinancialIngestionService
+    try {
+      await FinancialIngestionService().rejectObservation(
+        observationId: id,
+        reason: 'pending_review_rejected',
+      );
+    } catch (_) {}
+
     _uncertainTransactions = _uncertainTransactions.where((t) => t.id != id).toList();
     notifyListeners();
   }

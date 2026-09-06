@@ -579,13 +579,22 @@ class NegativeFilter {
     caseSensitive: false,
   );
 
+  /// Bill statement and credit card statement notices that should be processed by the bill pipeline.
+  static final RegExp _billStatementSignal = RegExp(
+    r'(?:statement\s+(?:generated|for)|total\s*(?:amt|amount)?\s*due|bill\s*(?:generated|due)|credit\s*card\s*statement)',
+    caseSensitive: false,
+  );
+
   static String? _checkPaymentReminder(
     String body, {
     bool hasCompletedTransaction = false,
   }) {
     // CRITICAL: Reminder detection MUST ONLY execute if the SMS has NOT
-    // already been classified as a completed financial transaction.
-    if (hasCompletedTransaction || _completedTxnSignal.hasMatch(body)) {
+    // already been classified as a completed financial transaction, and is
+    // not a bill statement notice intended for the bill pipeline (P7.1).
+    if (hasCompletedTransaction ||
+        _completedTxnSignal.hasMatch(body) ||
+        _billStatementSignal.hasMatch(body)) {
       return null;
     }
 

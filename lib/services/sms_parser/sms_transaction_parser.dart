@@ -122,7 +122,70 @@ class SmsTransactionParser {
     if (!intent.hasIntent) {
       if (intent.isPendingCollect) {
         allReasons.add('Pending collect request — not a completed transaction');
+        return TransactionParseResult.rejected(reasons: allReasons);
       }
+
+      // Check if this is a bill statement / credit card statement
+      final billMatch = RegExp(
+        r'(?:statement\s+(?:generated|for)|total\s*(?:amt|amount)?\s*due|bill\s*(?:generated|due)|credit\s*card\s*statement)',
+        caseSensitive: false,
+      ).hasMatch(normalizedBody);
+
+      if (billMatch) {
+        allReasons.add('Detected bill / statement generation notice');
+        final amtMatch = RegExp(
+          r'(?:total\s*(?:amt|amount)?\s*due|bill\s*amount|statement\s*amount|due\s*amount)[\s\S]{0,100}?(?:Rs\.?\s*|INR\.?\s*|₹\s?)([0-9]+(?:,[0-9]{2,3})*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ).firstMatch(normalizedBody);
+        final billAmt = amtMatch != null
+            ? double.tryParse(amtMatch.group(1)!.replaceAll(',', ''))
+            : AmountExtractor.extract(normalizedBody).amount;
+
+        final entities = EntityExtractor.extractAll(
+          normalizedBody,
+          sender,
+          'bill',
+          smsTimestamp: timestamp,
+        );
+
+        return TransactionParseResult(
+          isTransaction: false,
+          isUncertain: false,
+          isBill: true,
+          billAmountDue: billAmt,
+          billDueDate: entities.date,
+          merchant: entities.merchantName,
+          bank: entities.bankName,
+          accountTail: entities.accountTail,
+          date: entities.date ?? timestamp,
+          confidence: 85,
+          reasons: allReasons,
+        );
+      }
+
+      // Check if this is a balance-only informational message
+      final balResult = AmountExtractor.extract(normalizedBody);
+      if (balResult.balanceAfter != null) {
+        allReasons.add('Balance-only observation detected (₹${balResult.balanceAfter})');
+        final entities = EntityExtractor.extractAll(
+          normalizedBody,
+          sender,
+          'balance',
+          smsTimestamp: timestamp,
+        );
+        return TransactionParseResult(
+          isTransaction: false,
+          isUncertain: false,
+          balanceAfter: balResult.balanceAfter,
+          merchant: entities.merchantName,
+          bank: entities.bankName,
+          accountTail: entities.accountTail,
+          date: entities.date ?? timestamp,
+          confidence: 80,
+          reasons: allReasons,
+        );
+      }
+
       return TransactionParseResult.rejected(reasons: allReasons);
     }
 
@@ -133,6 +196,26 @@ class SmsTransactionParser {
     allReasons.addAll(amountResult.reasons);
 
     if (amountResult.amount == null) {
+      if (amountResult.balanceAfter != null) {
+        allReasons.add('Balance-only observation detected despite intent (₹${amountResult.balanceAfter})');
+        final entities = EntityExtractor.extractAll(
+          normalizedBody,
+          sender,
+          'balance',
+          smsTimestamp: timestamp,
+        );
+        return TransactionParseResult(
+          isTransaction: false,
+          isUncertain: false,
+          balanceAfter: amountResult.balanceAfter,
+          merchant: entities.merchantName,
+          bank: entities.bankName,
+          accountTail: entities.accountTail,
+          date: entities.date ?? timestamp,
+          confidence: 80,
+          reasons: allReasons,
+        );
+      }
       allReasons.add('REJECTED: No valid amount found despite intent');
       return TransactionParseResult.rejected(reasons: allReasons);
     }
@@ -239,6 +322,7 @@ class SmsTransactionParser {
             : null,
         channel: intent.channel,
         subType: intent.subType,
+        balanceAfter: amountResult.balanceAfter,
         confidence: scoreBreakdown.totalScore,
         reasons: allReasons,
       );
@@ -263,6 +347,7 @@ class SmsTransactionParser {
             : null,
         channel: intent.channel,
         subType: intent.subType,
+        balanceAfter: amountResult.balanceAfter,
         confidence: scoreBreakdown.totalScore,
         reasons: allReasons,
       );

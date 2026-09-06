@@ -12,6 +12,8 @@ import 'package:sqflite_sqlcipher/sqflite.dart' hide databaseFactory;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactory, databaseFactoryFfi, sqfliteFfiInit;
 import 'package:pet/core/constants/categories.dart';
 import 'package:pet/data/models/enums.dart';
+import 'package:pet/services/canonical_identity_resolver.dart';
+import 'package:pet/services/category_mapper.dart';
 import 'package:pet/services/recurrence_calculator.dart';
 import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
@@ -128,7 +130,7 @@ class DatabaseHelper {
       final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
       return await openDatabase(
         path,
-        version: 17,
+        version: 18,
         password: password,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -141,7 +143,7 @@ class DatabaseHelper {
       AppLogger.warn('SQLCipher is not supported on this platform. Opening in plaintext.', label: 'DB');
       return await openDatabase(
         path,
-        version: 17,
+        version: 18,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
         onOpen: (db) async {
@@ -204,13 +206,20 @@ class DatabaseHelper {
         accountId TEXT,
         updatedAt TEXT,
         recurringRuleId TEXT,
-        occurrenceDate TEXT
+        occurrenceDate TEXT,
+        sourceObservationId TEXT,
+        sourceFingerprint TEXT
       )
     ''');
 
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_txn_recurring
       ON transactions (recurringRuleId)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_txn_source_fingerprint
+      ON transactions (sourceFingerprint)
     ''');
 
     // Create categories table
@@ -243,6 +252,12 @@ class DatabaseHelper {
 
     // Create sms_processing_state table
     await _createSmsProcessingStateTable(db);
+
+    // Create financial_observations table
+    await _createFinancialObservationsTable(db);
+
+    // Create merchant learned rules table
+    await _createMerchantLearnedRulesTable(db);
 
     // Create classification system tables
     await _createClassificationTables(db);
@@ -387,6 +402,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 17) {
       await _migrateToV17(db);
+    }
+    if (oldVersion < 18) {
+      await _migrateToV18(db);
     }
   }
 
@@ -707,6 +725,250 @@ class DatabaseHelper {
     }
   }
 
+  /// Create financial_observations table for canonical observation tracking and provenance.
+  Future<void> _createFinancialObservationsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS financial_observations (
+        observationId TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        sourceIdentifier TEXT,
+        sender TEXT,
+        packageName TEXT,
+        title TEXT,
+        body TEXT NOT NULL,
+        normalizedText TEXT NOT NULL,
+        receivedAt TEXT NOT NULL,
+        sourceTimestamp TEXT NOT NULL,
+        accountHint TEXT,
+        schemaVersion INTEGER DEFAULT 1,
+        observationHash TEXT NOT NULL UNIQUE,
+        sourceFingerprint TEXT,
+        state TEXT NOT NULL,
+        stateReason TEXT,
+        confidence REAL NOT NULL,
+        canonicalTransactionId TEXT,
+        relatedBillId TEXT,
+        observedBalance REAL,
+        accountTail TEXT,
+        rawPayload TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_obs_hash ON financial_observations (observationHash)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_obs_fingerprint ON financial_observations (sourceFingerprint)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_obs_state ON financial_observations (state)
+    ''');
+  }
+
+  /// Create merchant_learned_rules table for persistent user corrections.
+  Future<void> _createMerchantLearnedRulesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS merchant_learned_rules (
+        id TEXT PRIMARY KEY,
+        identifier TEXT UNIQUE NOT NULL,
+        learnedMerchantName TEXT NOT NULL,
+        learnedCategoryId TEXT,
+        learnedPaymentType TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_merchant_learned_identifier
+      ON merchant_learned_rules (identifier)
+    ''');
+  }
+
+  /// Migrate to v18: Unified Financial Ingestion Pipeline & Canonical Observation Ledger.
+  Future<void> _migrateToV18(Database db) async {
+    try {
+      // 1. Add sourceObservationId and sourceFingerprint to transactions table
+      final txnTableCheck = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'",
+      );
+      if (txnTableCheck.isNotEmpty) {
+        final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
+        final txnColNames = txnCols.map((c) => c['name'] as String).toSet();
+
+        if (!txnColNames.contains('sourceObservationId')) {
+          await db.execute('ALTER TABLE transactions ADD COLUMN sourceObservationId TEXT');
+        }
+        if (!txnColNames.contains('sourceFingerprint')) {
+          await db.execute('ALTER TABLE transactions ADD COLUMN sourceFingerprint TEXT');
+        }
+        await db.execute('''
+          CREATE INDEX IF NOT EXISTS idx_txn_source_fingerprint 
+          ON transactions (sourceFingerprint)
+        ''');
+      }
+
+      // 2. Create financial_observations table and merchant_learned_rules table
+      await _createFinancialObservationsTable(db);
+      await _createMerchantLearnedRulesTable(db);
+
+      // 3. Add accountTail, lastObservedBalance, lastObservedAt, bankName to linked_accounts
+      try {
+        final acctTableCheck = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='linked_accounts'",
+        );
+        if (acctTableCheck.isNotEmpty) {
+          final acctCols = await db.rawQuery('PRAGMA table_info(linked_accounts)');
+          final acctColNames = acctCols.map((c) => c['name'] as String).toSet();
+
+          if (!acctColNames.contains('accountTail')) {
+            await db.execute('ALTER TABLE linked_accounts ADD COLUMN accountTail TEXT');
+          }
+          if (!acctColNames.contains('lastObservedBalance')) {
+            await db.execute('ALTER TABLE linked_accounts ADD COLUMN lastObservedBalance REAL');
+          }
+          if (!acctColNames.contains('lastObservedAt')) {
+            await db.execute('ALTER TABLE linked_accounts ADD COLUMN lastObservedAt TEXT');
+          }
+          if (!acctColNames.contains('bankName')) {
+            await db.execute('ALTER TABLE linked_accounts ADD COLUMN bankName TEXT');
+          }
+        }
+      } catch (e) {
+        AppLogger.warn('linked_accounts table migration check: $e', label: 'DB');
+      }
+
+      // 4. Safe, idempotent backfill of existing confirmed/high-confidence SMS transactions
+      try {
+        final tables = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='sms_transactions'",
+        );
+        if (tables.isNotEmpty) {
+          final eligibleRows = await db.query(
+            'sms_transactions',
+            where: 'isVerified = 1 OR confidence >= 0.80',
+          );
+
+          for (final row in eligibleRows) {
+            final smsId = row['id'] as String;
+            final smsHash = row['smsHash'] as String? ?? '';
+            final rawBody = row['rawSmsBody'] as String? ?? '';
+            final sender = row['smsSender'] as String? ?? '';
+            final amount = (row['amount'] as num).toDouble();
+            final merchant = row['merchantName'] as String? ?? 'Unknown';
+            final bank = row['bankName'] as String? ?? '';
+            final txnTypeStr = row['transactionType'] as String? ?? 'debit';
+            final timestampStr = row['timestamp'] as String;
+            final timestamp = DateTime.tryParse(timestampStr) ?? DateTime.now();
+            final rawCat = row['category'] as String? ?? 'Uncategorized';
+            final refId = row['referenceId'] as String?;
+            final conf = (row['confidence'] as num?)?.toDouble() ?? 0.8;
+
+            // Check if user rejected or deleted this SMS
+            final stateRows = await db.query(
+              'sms_processing_state',
+              where: 'smsHash = ?',
+              whereArgs: [smsHash],
+              limit: 1,
+            );
+            if (stateRows.isNotEmpty) {
+              final status = stateRows.first['status'] as String?;
+              if (status == 'rejected' || status == 'deleted' || status == 'ignored') {
+                continue; // Do not resurrect
+              }
+            }
+
+            final isIncome = txnTypeStr == 'credit';
+            final mappedCategoryId = CategoryMapper.mapToCategoryId(
+              parserCategory: rawCat,
+              merchantName: merchant,
+              isIncome: isIncome,
+            );
+
+            final fingerprint = CanonicalIdentityResolver.generateFingerprint(
+              referenceId: refId,
+              merchantName: merchant,
+              amount: amount,
+              timestamp: timestamp,
+            );
+
+            // Check if already backfilled or exists in transactions
+            final existingTxn = await db.query(
+              'transactions',
+              where: 'sourceObservationId = ? OR sourceFingerprint = ?',
+              whereArgs: [smsId, fingerprint],
+              limit: 1,
+            );
+
+            if (existingTxn.isEmpty) {
+              final txnId = 'txn_backfill_$smsId';
+              final nowIso = DateTime.now().toIso8601String();
+
+              await db.insert(
+                'transactions',
+                {
+                  'id': txnId,
+                  'amount': amount,
+                  'type': isIncome ? 'income' : 'expense',
+                  'categoryId': mappedCategoryId,
+                  'date': timestamp.toIso8601String(),
+                  'note': 'Imported from SMS ($bank)',
+                  'paymentMethod': 'UPI',
+                  'isRecurring': 0,
+                  'recurringFrequency': null,
+                  'merchantName': merchant,
+                  'taxCategory': null,
+                  'source': 'sms',
+                  'accountId': null,
+                  'updatedAt': nowIso,
+                  'recurringRuleId': null,
+                  'occurrenceDate': null,
+                  'sourceObservationId': smsId,
+                  'sourceFingerprint': fingerprint,
+                },
+                conflictAlgorithm: ConflictAlgorithm.ignore,
+              );
+
+              await db.insert(
+                'financial_observations',
+                {
+                  'observationId': smsId,
+                  'source': 'sms',
+                  'sourceIdentifier': sender,
+                  'sender': sender,
+                  'packageName': null,
+                  'title': null,
+                  'body': rawBody,
+                  'normalizedText': rawBody,
+                  'receivedAt': timestamp.toIso8601String(),
+                  'sourceTimestamp': timestamp.toIso8601String(),
+                  'accountHint': bank,
+                  'schemaVersion': 1,
+                  'observationHash': smsHash.isNotEmpty ? smsHash : smsId,
+                  'sourceFingerprint': fingerprint,
+                  'state': 'promoted',
+                  'stateReason': 'backfilled_from_sms_transactions',
+                  'confidence': conf,
+                  'canonicalTransactionId': txnId,
+                  'relatedBillId': null,
+                  'observedBalance': null,
+                  'accountTail': null,
+                  'rawPayload': null,
+                },
+                conflictAlgorithm: ConflictAlgorithm.ignore,
+              );
+            }
+          }
+        }
+      } catch (e) {
+        AppLogger.warn('Backfill of sms_transactions failed or skipped: $e', label: 'DB');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to run v18 database migration', error: e, label: 'DB');
+    }
+  }
+
   Future<void> _createPremiumTables(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS recurring_payments (
@@ -816,7 +1078,11 @@ class DatabaseHelper {
         accountName TEXT NOT NULL,
         accountType TEXT NOT NULL,
         lastSyncedAt TEXT,
-        status TEXT DEFAULT 'active'
+        status TEXT DEFAULT 'active',
+        accountTail TEXT,
+        lastObservedBalance REAL,
+        lastObservedAt TEXT,
+        bankName TEXT
       )
     ''');
 

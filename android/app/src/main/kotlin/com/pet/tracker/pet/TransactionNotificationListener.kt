@@ -118,6 +118,14 @@ class TransactionNotificationListener : NotificationListenerService() {
             "com.slice",                                  // Slice
             "com.jupiter.money",                          // Jupiter
             "com.epifi.paisa",                           // Fi Money
+            "com.dreamplug.androidapp",                   // CRED
+            "com.naviapp",                                // Navi
+            "com.hdfcbank.payzapp",                       // PayZapp
+            "money.super.payments",                       // Super.money
+            "com.tatadigital.tcp",                        // Tata Neu
+            "com.freecharge.android",                     // Freecharge
+            "com.myairtelapp",                            // Airtel Thanks
+            "com.mobikwik_new",                           // MobiKwik
         )
 
         /**
@@ -206,26 +214,52 @@ class TransactionNotificationListener : NotificationListenerService() {
         // Use bigText if available (contains full transaction details)
         val body = bigText ?: text
 
-        if (body.isBlank()) return
+        if (body.isBlank() && title.isBlank()) return
 
-        // Tighter financial check:
-        // Require BOTH a currency/amount indicator AND a transaction verb.
-        val hasCurrencyOrAmount = body.contains("Rs", ignoreCase = true) ||
-                body.contains("INR", ignoreCase = true) ||
-                body.contains("₹")
+        // Combined inspection across both title and body
+        val combinedText = "$title $body"
 
-        val hasTransactionVerb = body.contains("paid", ignoreCase = true) ||
-                body.contains("received", ignoreCase = true) ||
-                body.contains("debited", ignoreCase = true) ||
-                body.contains("credited", ignoreCase = true) ||
-                body.contains("sent", ignoreCase = true) ||
-                body.contains("transferred", ignoreCase = true)
+        // Require currency or amount indicator
+        val hasCurrencyOrAmount = combinedText.contains("Rs", ignoreCase = true) ||
+                combinedText.contains("INR", ignoreCase = true) ||
+                combinedText.contains("₹")
+
+        // Comprehensive financial verbs to avoid false negatives
+        val hasTransactionVerb = combinedText.contains("paid", ignoreCase = true) ||
+                combinedText.contains("received", ignoreCase = true) ||
+                combinedText.contains("debited", ignoreCase = true) ||
+                combinedText.contains("credited", ignoreCase = true) ||
+                combinedText.contains("sent", ignoreCase = true) ||
+                combinedText.contains("transferred", ignoreCase = true) ||
+                combinedText.contains("spent", ignoreCase = true) ||
+                combinedText.contains("deducted", ignoreCase = true) ||
+                combinedText.contains("successful", ignoreCase = true) ||
+                combinedText.contains("payment", ignoreCase = true) ||
+                combinedText.contains("withdrawn", ignoreCase = true) ||
+                combinedText.contains("charged", ignoreCase = true) ||
+                combinedText.contains("purchase", ignoreCase = true) ||
+                combinedText.contains("refund", ignoreCase = true) ||
+                combinedText.contains("reversed", ignoreCase = true) ||
+                combinedText.contains("completed", ignoreCase = true) ||
+                combinedText.contains("cashback", ignoreCase = true) ||
+                combinedText.contains("added", ignoreCase = true)
 
         if (!hasCurrencyOrAmount || !hasTransactionVerb) return
+
+        // Conservative native filter against obvious non-transaction noise
+        val isNegativePromoOrOtp = combinedText.contains("OTP", ignoreCase = true) ||
+                combinedText.contains("one time password", ignoreCase = true) ||
+                combinedText.contains("use coupon", ignoreCase = true) ||
+                combinedText.contains("get flat", ignoreCase = true) ||
+                combinedText.contains("claim cashback offer", ignoreCase = true) ||
+                combinedText.contains("apply for loan", ignoreCase = true)
+
+        if (isNegativePromoOrOtp) return
 
         SafeLog.d(TAG, "Financial notification captured from $packageName")
 
         val data = mapOf(
+            "schemaVersion" to 1,
             "source" to "notification",
             "package" to packageName,
             "title" to title,

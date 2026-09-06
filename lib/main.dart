@@ -38,6 +38,7 @@ import 'package:pet/services/haptic_service.dart';
 import 'package:pet/services/biometric_service.dart';
 import 'package:pet/screens/biometric/biometric_lock_screen.dart';
 import 'package:pet/screens/budget/budget_screen.dart';
+import 'package:pet/screens/sms_transactions/pending_review_screen.dart';
 import 'package:pet/premium/screens/alerts_screen.dart';
 import 'package:pet/premium/screens/recurring_bills_screen.dart';
 import 'package:pet/premium/screens/goals_screen.dart';
@@ -145,6 +146,29 @@ class PETApp extends StatefulWidget {
 
   const PETApp({super.key, required this.themeMode});
 
+  /// Maps a notification payload string (e.g. `obs:observationId`) to the destination Widget.
+  static Widget screenForPayload(String payload) {
+    final parts = payload.split(':');
+    final type = parts.first;
+    final observationId = parts.length > 1 ? parts.sublist(1).join(':') : null;
+
+    switch (type) {
+      case 'obs':
+        return PendingReviewScreen(initialObservationId: observationId);
+      case 'bill':
+        return const RecurringBillsScreen();
+      case 'budget':
+        return const BudgetScreen();
+      case 'goal':
+        return const GoalsScreen();
+      case 'cashflow':
+        return const CashflowScreen();
+      case 'anomaly':
+      default:
+        return const AlertsScreen();
+    }
+  }
+
   @override
   State<PETApp> createState() => _PETAppState();
 }
@@ -220,28 +244,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
     }
 
     AppLogger.debug('[MAIN] Deep linking to notification payload: $payload');
-    final parts = payload.split(':');
-    final type = parts.first;
-
-    Widget targetScreen;
-    switch (type) {
-      case 'bill':
-        targetScreen = const RecurringBillsScreen();
-        break;
-      case 'budget':
-        targetScreen = const BudgetScreen();
-        break;
-      case 'goal':
-        targetScreen = const GoalsScreen();
-        break;
-      case 'cashflow':
-        targetScreen = const CashflowScreen();
-        break;
-      case 'anomaly':
-      default:
-        targetScreen = const AlertsScreen();
-        break;
-    }
+    final targetScreen = PETApp.screenForPayload(payload);
 
     nav.push(
       MaterialPageRoute(builder: (_) => targetScreen),

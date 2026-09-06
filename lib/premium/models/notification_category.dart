@@ -34,6 +34,11 @@ enum NotificationCategory {
     'cashflow',
     'Cash Flow Alerts',
     'Alerts on low cash flow or balance drops',
+  ),
+  transactionDetected(
+    'transactionDetected',
+    'Transaction Alerts',
+    'Notifications for automatically detected bank transactions',
   );
 
   final String key;

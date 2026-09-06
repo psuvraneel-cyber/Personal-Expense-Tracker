@@ -24,13 +24,21 @@ class AmountResult {
   /// Extracted amount in INR, or null if no valid amount found.
   final double? amount;
 
+  /// Available balance after transaction, or null if not present in SMS.
+  final double? balanceAfter;
+
   /// Position in the body where the amount was found (for diagnostics).
   final int? position;
 
   /// Reasons explaining extraction decisions.
   final List<String> reasons;
 
-  const AmountResult({this.amount, this.position, required this.reasons});
+  const AmountResult({
+    this.amount,
+    this.balanceAfter,
+    this.position,
+    required this.reasons,
+  });
 }
 
 /// Extracts monetary amounts from Indian bank SMS messages.
@@ -81,8 +89,9 @@ class AmountExtractor {
   /// Matches: "Avl Bal Rs 15,000", "Balance: ₹10,000",
   ///          "Remaining balance Rs 3,500"
   static final RegExp _balanceAmountPattern = RegExp(
-    r'(?:avl\.?|available|remaining|current|closing|total)\s*'
-    r'(?:bal(?:ance)?|bal\.?)\s*(?:(?:is|:)\s*)?(?:Rs\.?\s*|INR\.?\s*|₹\s?)',
+    r'(?:avl\.?|available|remaining|current|closing|total|clear|account|a/c)?\s*'
+    r'(?:bal(?:ance)?|bal\.?)\s*(?:(?:in|for|of)?\s*(?:your\s*)?(?:a/c|account|card)?\s*(?:[xX*]*\d+)?\s*(?:is|:)?\s*)'
+    r'(?:Rs\.?\s*|INR\.?\s*|₹\s?)',
     caseSensitive: false,
   );
 
@@ -123,6 +132,8 @@ class AmountExtractor {
     final allMatches = _amountPattern.allMatches(cleanedBody).toList();
     reasons.add('Found ${allMatches.length} amount pattern(s) in body');
 
+    double? balanceAfter;
+
     for (final match in allMatches) {
       // Check if this amount is a balance amount
       final isBalance = balancePositions.any(
@@ -130,9 +141,14 @@ class AmountExtractor {
       );
 
       if (isBalance) {
-        reasons.add(
-          'Skipping balance amount at position ${match.start}: "${match.group(0)}"',
-        );
+        final rawBal = match.group(1)!.replaceAll(',', '');
+        final parsedBal = double.tryParse(rawBal);
+        if (parsedBal != null) {
+          balanceAfter ??= parsedBal;
+          reasons.add(
+            'Extracted balance-after at position ${match.start}: ₹$parsedBal',
+          );
+        }
         continue;
       }
 
@@ -160,6 +176,7 @@ class AmountExtractor {
       reasons.add('Extracted amount: ₹$amount at position ${match.start}');
       return AmountResult(
         amount: amount,
+        balanceAfter: balanceAfter,
         position: match.start,
         reasons: reasons,
       );
@@ -174,6 +191,7 @@ class AmountExtractor {
         reasons.add('Extracted amount via "amount of" pattern: ₹$amount');
         return AmountResult(
           amount: amount,
+          balanceAfter: balanceAfter,
           position: altMatch.start,
           reasons: reasons,
         );
@@ -181,6 +199,6 @@ class AmountExtractor {
     }
 
     reasons.add('No valid transaction amount found');
-    return AmountResult(reasons: reasons);
+    return AmountResult(balanceAfter: balanceAfter, reasons: reasons);
   }
 }

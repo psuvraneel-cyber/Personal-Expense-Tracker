@@ -106,6 +106,18 @@ class TransactionParseResult {
   /// Transaction sub-type (payment, refund, cashback, etc.).
   final TransactionSubType subType;
 
+  /// Available balance observed after the transaction, or null.
+  final double? balanceAfter;
+
+  /// Whether this observation describes a bill or statement (not an immediate expense).
+  final bool isBill;
+
+  /// Amount due for the bill / statement, or null.
+  final double? billAmountDue;
+
+  /// Due date for the bill / statement, or null.
+  final DateTime? billDueDate;
+
   /// Confidence score 0–100. Higher = more certain.
   ///
   /// Recommended thresholds (configurable):
@@ -134,6 +146,10 @@ class TransactionParseResult {
     this.time,
     this.channel = TransactionChannel.unknown,
     this.subType = TransactionSubType.unknown,
+    this.balanceAfter,
+    this.isBill = false,
+    this.billAmountDue,
+    this.billDueDate,
     required this.confidence,
     required this.reasons,
   });
@@ -154,7 +170,11 @@ class TransactionParseResult {
        date = null,
        time = null,
        channel = TransactionChannel.unknown,
-       subType = TransactionSubType.unknown;
+       subType = TransactionSubType.unknown,
+       balanceAfter = null,
+       isBill = false,
+       billAmountDue = null,
+       billDueDate = null;
 
   /// Quick constructor for an uncertain message (needs user verification).
   const TransactionParseResult.uncertain({
@@ -171,6 +191,10 @@ class TransactionParseResult {
     this.time,
     this.channel = TransactionChannel.unknown,
     this.subType = TransactionSubType.unknown,
+    this.balanceAfter,
+    this.isBill = false,
+    this.billAmountDue,
+    this.billDueDate,
   }) : isTransaction = false,
        isUncertain = true;
 
@@ -188,6 +212,10 @@ class TransactionParseResult {
     ({int hour, int minute, int? second})? time,
     TransactionChannel? channel,
     TransactionSubType? subType,
+    double? balanceAfter,
+    bool? isBill,
+    double? billAmountDue,
+    DateTime? billDueDate,
     int? confidence,
     List<String>? reasons,
   }) {
@@ -205,6 +233,10 @@ class TransactionParseResult {
       time: time ?? this.time,
       channel: channel ?? this.channel,
       subType: subType ?? this.subType,
+      balanceAfter: balanceAfter ?? this.balanceAfter,
+      isBill: isBill ?? this.isBill,
+      billAmountDue: billAmountDue ?? this.billAmountDue,
+      billDueDate: billDueDate ?? this.billDueDate,
       confidence: confidence ?? this.confidence,
       reasons: reasons ?? this.reasons,
     );

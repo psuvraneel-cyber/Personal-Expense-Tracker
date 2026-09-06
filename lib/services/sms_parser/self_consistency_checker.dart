@@ -157,6 +157,17 @@ class SelfConsistencyChecker {
       '${legacyParsed != null ? " (confidence=${(legacyParsed.confidence * 100).round()})" : ""}',
     );
 
+    // ── Check if modular detected a bill or balance-only observation ───────────
+    if (modularResult.isBill || (modularResult.balanceAfter != null && !modularResult.isTransaction)) {
+      reasons.add('Modular pipeline detected non-expense event (bill/balance)');
+      return ConsistencyResult(
+        result: modularResult,
+        source: ConsistencySource.modularPreferred,
+        agreement: AgreementLevel.single,
+        consistencyReasons: reasons,
+      );
+    }
+
     // ── Case 1: Neither detected ─────────────────────────────────
     if (!modularIsTransaction && !legacyIsTransaction) {
       reasons.add('CONSENSUS: Neither parser detected a transaction');
@@ -170,12 +181,9 @@ class SelfConsistencyChecker {
 
     // ── Case 2: Only modular detected ────────────────────────────
     if (modularIsTransaction && !legacyIsTransaction) {
-      reasons.add(
-        'SINGLE: Only modular pipeline detected (−$_singleParserPenalty)',
-      );
-      final adjusted = _adjustConfidence(modularResult, -_singleParserPenalty);
+      reasons.add('Modular pipeline detected transaction (authoritative)');
       return ConsistencyResult(
-        result: adjusted,
+        result: modularResult,
         source: ConsistencySource.modularOnly,
         agreement: AgreementLevel.single,
         consistencyReasons: reasons,

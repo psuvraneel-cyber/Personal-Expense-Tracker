@@ -282,6 +282,25 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                     result.success(emptyList<Map<String, Any?>>())
                 }
             }
+            "peekPendingNotifications" -> {
+                val ctx = applicationContext
+                if (ctx != null) {
+                    val list = EncryptedNotificationCache.peekPendingNotifications(ctx)
+                    result.success(list)
+                } else {
+                    result.success(emptyList<Map<String, Any?>>())
+                }
+            }
+            "acknowledgeNotifications" -> {
+                val ctx = applicationContext
+                val count = call.argument<Number>("count")?.toInt() ?: 0
+                if (ctx != null) {
+                    val success = EncryptedNotificationCache.acknowledgeNotifications(ctx, count)
+                    result.success(success)
+                } else {
+                    result.success(false)
+                }
+            }
             else -> result.notImplemented()
         }
     }

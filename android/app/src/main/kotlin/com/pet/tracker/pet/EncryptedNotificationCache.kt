@@ -276,12 +276,11 @@ object EncryptedNotificationCache {
     }
 
     /**
-     * Retrieve and clear all pending cached notifications.
-     *
+     * Non-destructive read of all pending cached notifications without clearing them.
      * Preserves strict FIFO insertion order across in-memory queue and encrypted storage.
      */
     @Synchronized
-    fun popPendingNotifications(context: Context): List<Map<String, Any?>> {
+    fun peekPendingNotifications(context: Context): List<Map<String, Any?>> {
         val results = mutableListOf<Map<String, Any?>>()
         try {
             val prefs = getPrefs(context)
@@ -290,37 +289,75 @@ object EncryptedNotificationCache {
                 val cachedString = prefs.getString(KEY_PENDING, "[]") ?: "[]"
                 val jsonArray = JSONArray(cachedString)
 
-                if (jsonArray.length() > 0) {
-                    SafeLog.d(TAG, "Processing ${jsonArray.length()} cached notifications from encrypted store")
-                    for (i in 0 until jsonArray.length()) {
-                        val jsonObject = jsonArray.getJSONObject(i)
-                        val data = mutableMapOf<String, Any?>()
-                        val keys = jsonObject.keys()
-                        while (keys.hasNext()) {
-                            val key = keys.next()
-                            data[key] = jsonObject.get(key)
-                        }
-                        results.add(data)
+                for (i in 0 until jsonArray.length()) {
+                    val jsonObject = jsonArray.getJSONObject(i)
+                    val data = mutableMapOf<String, Any?>()
+                    val keys = jsonObject.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        data[key] = jsonObject.get(key)
                     }
-                    // Clear the encrypted cache after popping
-                    prefs.edit().putString(KEY_PENDING, "[]").commit()
+                    results.add(data)
                 }
             } else {
-                // Encrypted storage unavailable: drain and return in-memory queue
-                if (inMemoryQueue.isNotEmpty()) {
-                    SafeLog.d(TAG, "Processing ${inMemoryQueue.size} in-memory buffered notifications (encrypted store unavailable)")
-                    while (true) {
-                        val item = inMemoryQueue.poll() ?: break
-                        results.add(item)
-                    }
+                // Encrypted storage unavailable: read in-memory queue without polling
+                for (item in inMemoryQueue) {
+                    results.add(item)
                 }
             }
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error popping notifications: ${e.message}")
-            while (true) {
-                val item = inMemoryQueue.poll() ?: break
-                results.add(item)
+            SafeLog.e(TAG, "Error peeking notifications: ${e.message}")
+        }
+        return results
+    }
+
+    /**
+     * Acknowledge and remove the first [count] processed notifications from the cache.
+     * Guaranteed durability: Items are only removed after successful downstream processing and commit.
+     */
+    @Synchronized
+    fun acknowledgeNotifications(context: Context, count: Int): Boolean {
+        if (count <= 0) return true
+        try {
+            val prefs = getPrefs(context)
+            if (prefs != null) {
+                val cachedString = prefs.getString(KEY_PENDING, "[]") ?: "[]"
+                val jsonArray = JSONArray(cachedString)
+                val newArray = JSONArray()
+
+                // Keep only remaining elements starting after acknowledged count
+                for (i in count until jsonArray.length()) {
+                    newArray.put(jsonArray.get(i))
+                }
+
+                val success = prefs.edit().putString(KEY_PENDING, newArray.toString()).commit()
+                if (success) {
+                    SafeLog.d(TAG, "Acknowledged $count notifications. Remaining: ${newArray.length()}")
+                }
+                return success
+            } else {
+                for (i in 0 until count) {
+                    inMemoryQueue.poll() ?: break
+                }
+                return true
             }
+        } catch (e: Exception) {
+            SafeLog.e(TAG, "Error acknowledging notifications: ${e.message}")
+            return false
+        }
+    }
+
+    /**
+     * Retrieve and clear all pending cached notifications.
+     *
+     * Preserves strict FIFO insertion order across in-memory queue and encrypted storage.
+     * Maintained for backward compatibility. Delegates to peek + acknowledge.
+     */
+    @Synchronized
+    fun popPendingNotifications(context: Context): List<Map<String, Any?>> {
+        val results = peekPendingNotifications(context)
+        if (results.isNotEmpty()) {
+            acknowledgeNotifications(context, results.size)
         }
         return results
     }

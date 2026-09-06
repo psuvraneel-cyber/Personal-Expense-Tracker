@@ -18,6 +18,8 @@ class TransactionRecord {
   final DateTime? updatedAt;
   final String? recurringRuleId;
   final DateTime? occurrenceDate;
+  final String? sourceObservationId;
+  final String? sourceFingerprint;
 
   TransactionRecord({
     required this.id,
@@ -36,6 +38,8 @@ class TransactionRecord {
     this.updatedAt,
     this.recurringRuleId,
     this.occurrenceDate,
+    this.sourceObservationId,
+    this.sourceFingerprint,
   });
 
   /// Serialize to SQLite row — enums are stored as their string representation
@@ -58,6 +62,8 @@ class TransactionRecord {
       'updatedAt': updatedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
       'recurringRuleId': recurringRuleId,
       'occurrenceDate': occurrenceDate?.toIso8601String(),
+      'sourceObservationId': sourceObservationId,
+      'sourceFingerprint': sourceFingerprint,
     };
   }
 
@@ -85,6 +91,8 @@ class TransactionRecord {
       occurrenceDate: map['occurrenceDate'] != null
           ? DateTime.parse(map['occurrenceDate'] as String)
           : null,
+      sourceObservationId: map['sourceObservationId'] as String?,
+      sourceFingerprint: map['sourceFingerprint'] as String?,
     );
   }
 
@@ -105,6 +113,8 @@ class TransactionRecord {
     DateTime? updatedAt,
     String? recurringRuleId,
     DateTime? occurrenceDate,
+    String? sourceObservationId,
+    String? sourceFingerprint,
   }) {
     return TransactionRecord(
       id: id ?? this.id,
@@ -123,6 +133,8 @@ class TransactionRecord {
       updatedAt: updatedAt ?? this.updatedAt,
       recurringRuleId: recurringRuleId ?? this.recurringRuleId,
       occurrenceDate: occurrenceDate ?? this.occurrenceDate,
+      sourceObservationId: sourceObservationId ?? this.sourceObservationId,
+      sourceFingerprint: sourceFingerprint ?? this.sourceFingerprint,
     );
   }
 
@@ -146,6 +158,8 @@ class TransactionRecord {
       'occurrenceDate': occurrenceDate != null
           ? Timestamp.fromDate(occurrenceDate!)
           : null,
+      'sourceObservationId': sourceObservationId,
+      'sourceFingerprint': sourceFingerprint,
     };
   }
 
@@ -173,6 +187,8 @@ class TransactionRecord {
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
       recurringRuleId: data['recurringRuleId'] as String?,
       occurrenceDate: (data['occurrenceDate'] as Timestamp?)?.toDate(),
+      sourceObservationId: data['sourceObservationId'] as String?,
+      sourceFingerprint: data['sourceFingerprint'] as String?,
     );
   }
 }

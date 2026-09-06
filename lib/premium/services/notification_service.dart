@@ -70,6 +70,9 @@ class NotificationService {
   static final ValueNotifier<String?> selectNotificationNotifier =
       ValueNotifier<String?>(null);
 
+  /// Callback for background/foreground interactive action buttons.
+  static Future<void> Function(String actionId, String payload)? onActionReceived;
+
   static String? _initialPayload;
   static String? get initialPayload => _initialPayload;
   static void clearInitialPayload() => _initialPayload = null;
@@ -113,6 +116,7 @@ class NotificationService {
       NotificationCategory.weeklyReport => 'pet_weekly_insights',
       NotificationCategory.goalProgress => 'pet_goal_progress',
       NotificationCategory.cashflow => 'pet_cashflow_insights',
+      NotificationCategory.transactionDetected => 'pet_transactions',
     };
   }
 
@@ -174,6 +178,14 @@ class NotificationService {
         importance: Importance.defaultImportance,
         playSound: true,
         enableVibration: false,
+      ),
+      NotificationCategory.transactionDetected => const AndroidNotificationChannel(
+        'pet_transactions',
+        'Transactions Detected',
+        description: 'Alerts when a bank transaction is parsed and imported',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
       ),
     };
   }
@@ -265,8 +277,15 @@ class NotificationService {
     try {
       await _plugin.initialize(
         initSettings,
-        onDidReceiveNotificationResponse: (NotificationResponse response) {
+        onDidReceiveNotificationResponse: (NotificationResponse response) async {
           final payload = response.payload;
+          final actionId = response.actionId;
+          if (actionId != null && actionId.isNotEmpty && payload != null) {
+            if (onActionReceived != null) {
+              await onActionReceived!(actionId, payload);
+              return;
+            }
+          }
           if (payload != null && payload.isNotEmpty) {
             handleNotificationTap(payload);
           }
@@ -484,6 +503,92 @@ class NotificationService {
   }) async {
     if (alerts.isEmpty) return;
     await _postGroupSummaryNotification(alerts: alerts);
+  }
+
+  /// Displays an interactive notification for a detected financial transaction.
+  /// Includes Confirm, Edit, and Ignore action buttons that are idempotent and crash-safe.
+  static Future<void> showTransactionDetectedNotification({
+    required String observationId,
+    required String merchant,
+    required double amount,
+    required String bankOrChannel,
+    required bool isUncertain,
+    String? categoryName,
+  }) async {
+    final enabled = await NotificationPreferencesService.isCategoryEnabled(
+      NotificationCategory.transactionDetected,
+    );
+    if (!enabled) {
+      AppLogger.debug(
+        '[NotificationService] Transaction detected notification dropped (category disabled)',
+      );
+      return;
+    }
+
+    final id = collisionSafeId('obs_$observationId');
+    final formattedAmount =
+        '₹${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)}';
+    final title = isUncertain
+        ? 'Possible Transaction: $formattedAmount at $merchant'
+        : 'Detected: $formattedAmount at $merchant';
+    final body = '$bankOrChannel • ${categoryName ?? (isUncertain ? "Review required" : "Auto-imported")}';
+
+    final androidDetails = AndroidNotificationDetails(
+      channelFor(NotificationCategory.transactionDetected).id,
+      channelFor(NotificationCategory.transactionDetected).name,
+      channelDescription:
+          channelFor(NotificationCategory.transactionDetected).description,
+      importance: Importance.high,
+      priority: Priority.high,
+      visibility: NotificationVisibility.private,
+      actions: <AndroidNotificationAction>[
+        if (isUncertain)
+          const AndroidNotificationAction(
+            'confirm',
+            'Confirm',
+            showsUserInterface: false,
+            cancelNotification: true,
+          ),
+        const AndroidNotificationAction(
+          'edit',
+          'Edit',
+          showsUserInterface: true,
+        ),
+        const AndroidNotificationAction(
+          'ignore',
+          'Ignore',
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+      ],
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+      macOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+
+    try {
+      await _plugin.show(
+        id,
+        title,
+        body,
+        details,
+        payload: 'obs:$observationId',
+      );
+    } catch (e, st) {
+      AppLogger.debug('[NotificationService] show transaction notification failed: $e');
+      _recordCrashlyticsError(e, st, reason: 'show_transaction_notification_failed');
+    }
   }
 
   // ── Private ────────────────────────────────────────────────────────────────

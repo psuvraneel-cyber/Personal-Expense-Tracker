@@ -20,6 +20,9 @@ const String kSmsInboxScanTask = 'com.pet.tracker.smsInboxScan';
 /// Background task name for periodic reconciliation sweep.
 const String kReconciliationSweepTask = 'com.pet.tracker.reconciliationSweep';
 
+/// Background task name for processing cached incoming notifications.
+const String kProcessNotificationsTask = 'com.pet.tracker.processNotifications';
+
 /// Background task name for periodic budget, anomaly, and bill alert evaluation.
 const String kAlertEvaluationTask = 'com.pet.tracker.alertEvaluation';
 
@@ -60,6 +63,54 @@ void smsCallbackDispatcher() {
         );
       } catch (e) {
         AppLogger.debug('[PET-BG] Background reconciliation error: $e');
+      }
+    } else if (taskName == kProcessNotificationsTask) {
+      try {
+        final smsService = SmsService();
+        final processed = await smsService.processPendingNotifications();
+        AppLogger.debug(
+          '[PET-BG] Background notification processing completed: ${processed.length} transactions',
+        );
+
+        if (processed.isNotEmpty) {
+          try {
+            await NotificationService.initialize();
+            final now = DateTime.now();
+            final budgetRepo = BudgetRepository();
+            final txnRepo = TransactionRepository();
+            final budgetsList = await budgetRepo.getBudgetsByMonth(
+              now.month,
+              now.year,
+            );
+            final budgetsMap = <String, double>{};
+            final spentMap = <String, double>{};
+
+            for (final budget in budgetsList) {
+              budgetsMap[budget.categoryId] = budget.amount;
+              spentMap[budget.categoryId] = await txnRepo.getSpentInCategory(
+                budget.categoryId,
+                now.month,
+                now.year,
+              );
+            }
+
+            final transactions = await txnRepo.getAllTransactions();
+            await AlertEvaluationCoordinator().onTransactionsChanged(
+              transactions,
+              budgets: budgetsMap,
+              spent: spentMap,
+              now: now,
+            );
+          } catch (e) {
+            AppLogger.debug(
+              '[PET-BG] Post-notification alert evaluation error: $e',
+            );
+          }
+        }
+      } catch (e) {
+        AppLogger.debug(
+          '[PET-BG] Background notification processing error: $e',
+        );
       }
     } else if (taskName == kAlertEvaluationTask) {
       try {

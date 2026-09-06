@@ -5,10 +5,54 @@ import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 
+import 'package:pet/providers/category_provider.dart';
+
 /// Screen showing uncertain/low-confidence transactions for user review.
-/// Users can accept (as debit or credit) or reject each transaction.
-class PendingReviewScreen extends StatelessWidget {
-  const PendingReviewScreen({super.key});
+/// Users can accept (as debit or credit), edit, or reject each transaction.
+class PendingReviewScreen extends StatefulWidget {
+  final String? initialObservationId;
+
+  const PendingReviewScreen({super.key, this.initialObservationId});
+
+  @override
+  State<PendingReviewScreen> createState() => _PendingReviewScreenState();
+}
+
+class _PendingReviewScreenState extends State<PendingReviewScreen> {
+  bool _checkedInitial = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkInitialObservation();
+    });
+  }
+
+  void _checkInitialObservation() {
+    if (_checkedInitial || widget.initialObservationId == null || !mounted) return;
+    final provider = context.read<SmsTransactionProvider>();
+    if (provider.isLoading) return;
+
+    _checkedInitial = true;
+    final target = provider.uncertainTransactions.cast<SmsTransaction?>().firstWhere(
+      (t) => t?.id == widget.initialObservationId,
+      orElse: () => null,
+    );
+
+    if (target != null) {
+      _showEditDialog(context, target, provider);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Observation ${widget.initialObservationId} is already reviewed, confirmed, or dismissed.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +76,10 @@ class PendingReviewScreen extends StatelessWidget {
       ),
       body: Consumer<SmsTransactionProvider>(
         builder: (context, provider, _) {
+          if (!provider.isLoading && !_checkedInitial && widget.initialObservationId != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _checkInitialObservation());
+          }
+
           final uncertain = provider.uncertainTransactions;
 
           if (uncertain.isEmpty) {
@@ -101,7 +149,7 @@ class PendingReviewScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${uncertain.length} possible transaction${uncertain.length > 1 ? 's' : ''} '
-                        'need your review. Swipe right to accept, left to reject.',
+                        'need your review. Swipe right to accept, left to reject, or tap Edit.',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark
@@ -126,6 +174,7 @@ class PendingReviewScreen extends StatelessWidget {
                       txn: txn,
                       isDark: isDark,
                       currencyFormat: currencyFormat,
+                      onEdit: () => _showEditDialog(context, txn, provider),
                     );
                   },
                 ),
@@ -138,15 +187,149 @@ class PendingReviewScreen extends StatelessWidget {
   }
 }
 
+Future<void> _showEditDialog(
+  BuildContext context,
+  SmsTransaction txn,
+  SmsTransactionProvider provider,
+) async {
+  final amountController = TextEditingController(
+    text: txn.amount > 0 ? txn.amount.toStringAsFixed(2) : '',
+  );
+  final merchantController = TextEditingController(text: txn.merchantName);
+  String selectedType = txn.transactionType == 'credit' ? 'credit' : 'debit';
+  String selectedCategory = txn.category;
+
+  final categories = context.read<CategoryProvider>().categories;
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) {
+      return StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Edit Transaction Details'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: merchantController,
+                    decoration: const InputDecoration(
+                      labelText: 'Merchant / Description',
+                      prefixIcon: Icon(Icons.store_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Amount (₹)',
+                      prefixIcon: Icon(Icons.currency_rupee_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Transaction Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Debit'),
+                        selected: selectedType == 'debit',
+                        selectedColor: AppTheme.expenseRed.withAlpha(50),
+                        onSelected: (val) {
+                          if (val) setDialogState(() => selectedType = 'debit');
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('Credit'),
+                        selected: selectedType == 'credit',
+                        selectedColor: AppTheme.incomeGreen.withAlpha(50),
+                        onSelected: (val) {
+                          if (val) setDialogState(() => selectedType = 'credit');
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (categories.isNotEmpty) ...[
+                    const Text('Category', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      initialValue: categories.any((c) => c.name == selectedCategory)
+                          ? selectedCategory
+                          : (categories.isNotEmpty ? categories.first.name : null),
+                      items: categories.map((c) {
+                        return DropdownMenuItem(
+                          value: c.name,
+                          child: Text(c.name),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => selectedCategory = val);
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogCtx, true),
+                child: const Text('Confirm & Save'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  if (confirmed == true) {
+    final double? parsedAmount = double.tryParse(amountController.text.trim());
+    final String merchant = merchantController.text.trim().isNotEmpty
+        ? merchantController.text.trim()
+        : txn.merchantName;
+
+    await provider.acceptUncertainTransaction(
+      txn.id,
+      overrideType: selectedType,
+      overrideAmount: parsedAmount,
+      overrideMerchant: merchant,
+      overrideCategoryId: selectedCategory,
+    );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Saved and accepted as $selectedType'),
+          backgroundColor: AppTheme.incomeGreen,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+}
+
 class _UncertainTransactionCard extends StatelessWidget {
   final SmsTransaction txn;
   final bool isDark;
   final NumberFormat currencyFormat;
+  final VoidCallback onEdit;
 
   const _UncertainTransactionCard({
     required this.txn,
     required this.isDark,
     required this.currencyFormat,
+    required this.onEdit,
   });
 
   @override
@@ -345,7 +528,7 @@ class _UncertainTransactionCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: _ActionButton(
-                    label: 'Accept as Debit',
+                    label: 'Debit',
                     icon: Icons.arrow_upward_rounded,
                     color: AppTheme.expenseRed,
                     isDark: isDark,
@@ -360,10 +543,10 @@ class _UncertainTransactionCard extends StatelessWidget {
                     },
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: _ActionButton(
-                    label: 'Accept as Credit',
+                    label: 'Credit',
                     icon: Icons.arrow_downward_rounded,
                     color: AppTheme.incomeGreen,
                     isDark: isDark,
@@ -378,9 +561,19 @@ class _UncertainTransactionCard extends StatelessWidget {
                     },
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _ActionButton(
+                    label: 'Edit',
+                    icon: Icons.edit_rounded,
+                    color: Colors.amber,
+                    isDark: isDark,
+                    onTap: onEdit,
+                  ),
+                ),
+                const SizedBox(width: 4),
                 _ActionButton(
-                  label: 'Not a txn',
+                  label: 'Reject',
                   icon: Icons.close_rounded,
                   color: AppTheme.textTertiary,
                   isDark: isDark,

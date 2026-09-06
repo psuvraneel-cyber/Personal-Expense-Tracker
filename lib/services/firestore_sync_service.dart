@@ -4,7 +4,6 @@ import 'dart:ui' show Color;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pet/core/utils/app_logger.dart';
-import 'package:flutter/widgets.dart' show IconData;
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/data/models/category.dart' as cat_model;
 import 'package:pet/data/models/budget.dart';
@@ -235,9 +234,8 @@ class FirestoreSyncService {
                   return cat_model.Category(
                     id: data['id'] as String,
                     name: data['name'] as String,
-                    icon: IconData(
-                      data['iconCodePoint'] as int,
-                      fontFamily: data['iconFontFamily'] as String?,
+                    icon: cat_model.CategoryIconHelper.fromCodePoint(
+                      data['iconCodePoint'] as int?,
                     ),
                     color: Color(data['colorValue'] as int),
                     isCustom: data['isCustom'] as bool? ?? true,
