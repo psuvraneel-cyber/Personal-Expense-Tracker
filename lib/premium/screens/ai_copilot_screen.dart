@@ -13,14 +13,18 @@ import 'package:pet/premium/services/ai_copilot_service.dart';
 import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/budget_provider.dart';
+import 'package:pet/premium/models/cashflow_forecast.dart';
+import 'package:pet/premium/services/cashflow_forecast_service.dart';
+import 'package:pet/premium/providers/recurring_provider.dart';
 import 'package:pet/services/sms_service.dart';
 
 const _suggestions = [
+  'Can I afford a ₹25,000 purchase next week?',
+  'What is my biggest cashflow risk this month?',
   'Where am I overspending this month?',
   'How long until I hit my savings goal?',
-  'What\'s my biggest expense category?',
+  'When is my lowest projected balance?',
   'Am I on track with my budget?',
-  'How much did I spend on food this week?',
 ];
 
 class AiCopilotScreen extends StatefulWidget {
@@ -97,6 +101,27 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       return '$date: $sign₹${t.amount.toStringAsFixed(0)}$merchant — $catName via ${t.paymentMethod.displayName}$note';
     }).toList();
 
+    // Canonical cashflow forecast (CF-20)
+    CashflowForecast? forecast;
+    double upcoming14DaysTotal = 0;
+    try {
+      final recurringProv = context.read<RecurringProvider>();
+      final confirmed = recurringProv.confirmedBills;
+      forecast = CashflowForecastService.forecast(
+        txnProv.allTransactions,
+        confirmedBills: confirmed,
+        days: 30,
+      );
+
+      final limitDate = now.add(const Duration(days: 14));
+      for (final bill in confirmed) {
+        if (bill.nextDueAt.isAfter(now.subtract(const Duration(days: 1))) &&
+            bill.nextDueAt.isBefore(limitDate)) {
+          upcoming14DaysTotal += bill.amount;
+        }
+      }
+    } catch (_) {}
+
     return FinancialContext(
       monthLabel: monthLabel,
       totalIncome: txnProv.totalIncome,
@@ -105,6 +130,16 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       categorySpending: catSpending,
       budgets: budgets,
       recentTransactions: recent,
+      projectedEndingBalance: forecast?.projectedEndingBalance,
+      safeToSpend: forecast?.safeToSpend,
+      cashflowRunwayDays: forecast?.runwayDays,
+      isCashflowPositive: forecast?.isCashflowPositive,
+      monthlyNetCashflow: forecast?.monthlyNetCashflow,
+      upcomingBillsNext14Days: upcoming14DaysTotal > 0 ? upcoming14DaysTotal : null,
+      lowestProjectedBalance: forecast?.lowestProjectedBalance,
+      lowestProjectedDate: forecast?.lowestProjectedDate,
+      cashflowRiskLevel: forecast?.riskLevel.displayName,
+      forecastConfidence: forecast?.confidence.displayName,
     );
   }
 

@@ -86,7 +86,7 @@ void main() {
       final txns = [
         TransactionRecord(
           id: 't_income',
-          amount: 5000,
+          amount: 10000,
           date: DateTime(2026, 7, 1),
           categoryId: 'cat_salary',
           type: TransactionType.income,

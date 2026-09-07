@@ -3,12 +3,16 @@ import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/data/repositories/budget_repository.dart';
+import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/premium/models/app_alert.dart';
 import 'package:pet/premium/models/notification_category.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
 import 'package:pet/premium/models/saving_goal.dart';
 import 'package:pet/premium/providers/alert_provider.dart';
 import 'package:pet/premium/repositories/alert_repository.dart';
+import 'package:pet/premium/repositories/recurring_payment_repository.dart';
+import 'package:pet/premium/models/cashflow_forecast.dart';
+import 'package:pet/premium/services/cashflow_forecast_service.dart';
 import 'package:pet/premium/services/alert_evaluator.dart';
 import 'package:pet/premium/services/notification_service.dart';
 
@@ -24,11 +28,18 @@ class AlertEvaluationCoordinator {
   factory AlertEvaluationCoordinator({
     AlertRepository? repository,
     BudgetRepository? budgetRepository,
+    RecurringPaymentRepository? recurringRepository,
+    TransactionRepository? transactionRepository,
   }) {
-    if (repository != null || budgetRepository != null) {
+    if (repository != null ||
+        budgetRepository != null ||
+        recurringRepository != null ||
+        transactionRepository != null) {
       _instance = AlertEvaluationCoordinator._internal(
         repository: repository,
         budgetRepository: budgetRepository,
+        recurringRepository: recurringRepository,
+        transactionRepository: transactionRepository,
       );
     }
     return _instance;
@@ -36,17 +47,27 @@ class AlertEvaluationCoordinator {
 
   final AlertRepository _repository;
   final BudgetRepository _budgetRepository;
+  final RecurringPaymentRepository _recurringRepository;
+  final TransactionRepository _transactionRepository;
   AlertProvider? _alertProvider;
   Future<void> _dispatchQueue = Future.value();
 
   AlertEvaluationCoordinator._internal({
     AlertRepository? repository,
     BudgetRepository? budgetRepository,
+    RecurringPaymentRepository? recurringRepository,
+    TransactionRepository? transactionRepository,
   })  : _repository = repository ?? AlertRepository(),
         _budgetRepository = budgetRepository ??
             (repository?.database != null
                 ? BudgetRepository(database: repository!.database)
-                : BudgetRepository());
+                : BudgetRepository()),
+        _recurringRepository = recurringRepository ??
+            (repository?.database != null
+                ? RecurringPaymentRepository() // db helper shares database
+                : RecurringPaymentRepository()),
+        _transactionRepository =
+            transactionRepository ?? TransactionRepository();
 
   /// Attach the UI AlertProvider so live in-memory state is updated after evaluation.
   void attachProvider(AlertProvider provider) {
@@ -125,10 +146,16 @@ class AlertEvaluationCoordinator {
             error: e, stack: st, label: 'AlertCoordinator');
       }
 
+      List<RecurringPayment>? confirmedBills;
+      try {
+        confirmedBills = await _recurringRepository.getConfirmed();
+      } catch (_) {}
+
       AppAlert? cashflowAlert;
       try {
         cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
           transactions: transactions,
+          confirmedBills: confirmedBills,
           now: referenceTime,
         );
       } catch (e, st) {
@@ -178,6 +205,13 @@ class AlertEvaluationCoordinator {
           period: period,
         );
       }
+
+      // Reconcile cashflow alerts (CF-10)
+      await _reconcileCashflowAlerts(
+        transactions: transactions,
+        confirmedBills: confirmedBills,
+        now: referenceTime,
+      );
 
       // If transactions were deleted, resolve alerts tied to deleted transactions
       final activeTxnIds = transactions.map((t) => t.id).toSet();
@@ -340,7 +374,7 @@ class AlertEvaluationCoordinator {
     }
   }
 
-  /// Evaluates upcoming recurring bills.
+  /// Evaluates upcoming recurring bills and re-evaluates cashflow risk (CF-08).
   Future<void> onRecurringChanged(
     List<RecurringPayment> recurring, {
     DateTime? now,
@@ -354,12 +388,130 @@ class AlertEvaluationCoordinator {
         now: referenceTime,
       );
 
-      await processAndDispatch(billAlerts);
+      // Re-evaluate cashflow risk when recurring commitments change (CF-08)
+      AppAlert? cashflowAlert;
+      List<TransactionRecord> transactions = [];
+      try {
+        transactions = await _transactionRepository.getAllTransactions();
+      } catch (_) {}
+
+      final confirmed = recurring
+          .where((r) => r.status == RecurringStatus.confirmed)
+          .toList();
+
+      if (transactions.isNotEmpty) {
+        try {
+          cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
+            transactions: transactions,
+            confirmedBills: confirmed,
+            now: referenceTime,
+          );
+        } catch (e, st) {
+          AppLogger.error(
+            'Cashflow evaluation error in onRecurringChanged',
+            error: e,
+            stack: st,
+            label: 'AlertCoordinator',
+          );
+        }
+
+        // Reconcile cashflow alerts (CF-10)
+        await _reconcileCashflowAlerts(
+          transactions: transactions,
+          confirmedBills: confirmed,
+          now: referenceTime,
+        );
+      }
+
+      await processAndDispatch([
+        ...billAlerts,
+        ?cashflowAlert,
+      ]);
     } catch (e, stack) {
       AppLogger.error(
         'Failed to evaluate recurring bills in AlertCoordinator',
         error: e,
         stack: stack,
+        label: 'AlertCoordinator',
+      );
+    }
+  }
+
+  /// Reconciles active cashflow alerts against current forecast (CF-10).
+  /// Dismisses cashflow deficit/warning alerts when the cashflow condition has resolved,
+  /// or cleans up lower stages when risk escalates.
+  Future<void> _reconcileCashflowAlerts({
+    required List<TransactionRecord> transactions,
+    List<RecurringPayment>? confirmedBills,
+    required DateTime now,
+  }) async {
+    try {
+      final period = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+      final forecast = CashflowForecastService.forecast(
+        transactions,
+        confirmedBills: confirmedBills,
+        days: 30,
+        referenceDate: now,
+      );
+
+      final alertWindowPoints = forecast.dailyPoints.take(14).toList();
+      final lowestPoint = alertWindowPoints.fold<CashflowPoint?>(
+        null,
+        (min, pt) => (min == null || pt.balance < min.balance) ? pt : min,
+      );
+
+      final lowestBal = lowestPoint?.balance ?? 0.0;
+      final hasImminentDeficit = lowestBal < 0;
+      final hasEndingDeficit = forecast.projectedEndingBalance <= 0;
+      final hasBufferBreach =
+          lowestBal < CashflowForecastService.defaultSafetyBuffer;
+
+      if (!hasImminentDeficit && !hasEndingDeficit && !hasBufferBreach) {
+        // Cashflow is completely healthy - auto-resolve/dismiss active cashflow alerts for this period
+        await _repository.dismissWhere(
+          'alertKey LIKE ?',
+          ['cashflow:$period%'],
+        );
+        _alertProvider?.removeAlertsWhere(
+          (a) => a.type == AppAlertType.cashflow && a.period == period,
+        );
+      } else if (hasImminentDeficit || hasEndingDeficit) {
+        // Critical deficit: dismiss lower-severity buffer warning if present
+        await _repository.dismissWhere(
+          'alertKey = ?',
+          ['cashflow:$period:warning'],
+        );
+        _alertProvider?.removeAlertsWhere(
+          (a) =>
+              a.type == AppAlertType.cashflow &&
+              a.period == period &&
+              a.stage == AppAlertStage.warning,
+        );
+
+        // If an existing critical alert has materially worsened (deficit deepened by >= ₹2,000),
+        // dismiss the older critical alert so the escalated alert can be inserted (Defect 2 Fix)
+        try {
+          final existing = await _repository.getPage(
+            period: period,
+            type: AppAlertType.cashflow,
+          );
+          final currentDeficit = hasImminentDeficit ? lowestBal : forecast.projectedEndingBalance;
+          for (final a in existing) {
+            if (a.stage == AppAlertStage.critical && a.amount != null) {
+              final oldBal = a.amount!;
+              if (currentDeficit < oldBal - 2000) {
+                await _repository.dismissWhere('id = ?', [a.id]);
+                _alertProvider?.removeAlertsWhere((al) => al.id == a.id);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (e, st) {
+      AppLogger.error(
+        'Failed to reconcile cashflow alerts in AlertCoordinator',
+        error: e,
+        stack: st,
         label: 'AlertCoordinator',
       );
     }

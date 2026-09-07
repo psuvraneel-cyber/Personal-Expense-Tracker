@@ -29,6 +29,18 @@ class FinancialContext {
   /// (Capped at 10 to reduce token usage — was 30 before.)
   final List<String> recentTransactions;
 
+  // --- Canonical Cashflow Forecast Metrics (CF-20) ---
+  final double? projectedEndingBalance;
+  final double? safeToSpend;
+  final int? cashflowRunwayDays;
+  final bool? isCashflowPositive;
+  final double? monthlyNetCashflow;
+  final double? upcomingBillsNext14Days;
+  final double? lowestProjectedBalance;
+  final DateTime? lowestProjectedDate;
+  final String? cashflowRiskLevel;
+  final String? forecastConfidence;
+
   const FinancialContext({
     required this.monthLabel,
     required this.totalIncome,
@@ -37,6 +49,16 @@ class FinancialContext {
     required this.categorySpending,
     required this.budgets,
     required this.recentTransactions,
+    this.projectedEndingBalance,
+    this.safeToSpend,
+    this.cashflowRunwayDays,
+    this.isCashflowPositive,
+    this.monthlyNetCashflow,
+    this.upcomingBillsNext14Days,
+    this.lowestProjectedBalance,
+    this.lowestProjectedDate,
+    this.cashflowRiskLevel,
+    this.forecastConfidence,
   });
 }
 
@@ -293,6 +315,40 @@ class AiCopilotService {
       for (final t in ctx.recentTransactions.take(10)) {
         buf.writeln('  • $t');
       }
+    }
+
+    // --- Canonical Cashflow Forecast Section (CF-20) ---
+    if (ctx.projectedEndingBalance != null || ctx.safeToSpend != null) {
+      buf.writeln('\n--- 30-DAY CASHFLOW FORECAST (ESTIMATED) ---');
+      if (ctx.safeToSpend != null) {
+        buf.writeln('Safe-to-spend allowance: ₹${_fmt(ctx.safeToSpend!)}/day');
+      }
+      if (ctx.projectedEndingBalance != null) {
+        buf.writeln('Projected 30-day ending balance: ₹${_fmt(ctx.projectedEndingBalance!)}');
+      }
+      if (ctx.cashflowRunwayDays != null) {
+        if (ctx.isCashflowPositive == true) {
+          buf.writeln('Runway: Cashflow positive (+₹${_fmt(ctx.monthlyNetCashflow ?? 0)}/mo surplus)');
+        } else {
+          buf.writeln('Runway: ~${ctx.cashflowRunwayDays} days of liquidity');
+        }
+      }
+      if (ctx.lowestProjectedBalance != null) {
+        final dateStr = ctx.lowestProjectedDate != null
+            ? ' on ${ctx.lowestProjectedDate!.day}/${ctx.lowestProjectedDate!.month}'
+            : '';
+        buf.writeln('Lowest projected trough: ₹${_fmt(ctx.lowestProjectedBalance!)}$dateStr');
+      }
+      if (ctx.upcomingBillsNext14Days != null && ctx.upcomingBillsNext14Days! > 0) {
+        buf.writeln('Upcoming confirmed bills (next 14 days): ₹${_fmt(ctx.upcomingBillsNext14Days!)}');
+      }
+      if (ctx.cashflowRiskLevel != null) {
+        buf.writeln('Forecast risk status: ${ctx.cashflowRiskLevel}');
+      }
+      if (ctx.forecastConfidence != null) {
+        buf.writeln('Forecast confidence: ${ctx.forecastConfidence}');
+      }
+      buf.writeln('Note: Forecasts are estimates based on recent activity, not guarantees or formal financial advice.');
     }
 
     buf.writeln('--- END OF SNAPSHOT ---');

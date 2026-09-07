@@ -403,12 +403,13 @@ class AlertEvaluator {
     return alerts;
   }
 
-  /// Evaluates 30-day cashflow forecast risk (checking 14-day imminent deficit and 30-day ending deficit).
+  /// Evaluates 30-day cashflow forecast risk (checking 14-day imminent deficit, 30-day ending deficit, and safety buffer).
   static AppAlert? evaluateCashflowRisk({
     required List<TransactionRecord> transactions,
     List<RecurringPayment>? confirmedBills,
     DateTime? now,
     Uuid? uuid,
+    double safetyBuffer = CashflowForecastService.defaultSafetyBuffer,
   }) {
     final referenceTime = now ?? DateTime.now();
     final idGenerator = uuid ?? _uuid;
@@ -417,6 +418,8 @@ class AlertEvaluator {
       transactions,
       confirmedBills: confirmedBills,
       days: 30,
+      referenceDate: referenceTime,
+      safetyBuffer: safetyBuffer,
     );
 
     // Evaluate across the 14-day imminent horizon as well as the 30-day projection
@@ -426,28 +429,57 @@ class AlertEvaluator {
       (min, pt) => (min == null || pt.balance < min.balance) ? pt : min,
     );
 
+    final lowestBal = lowestPoint?.balance ?? 0.0;
     final hasImminentDeficit = lowestPoint != null && lowestPoint.balance < 0;
     final hasEndingDeficit = forecast.projectedEndingBalance <= 0;
+    final hasBufferBreach = lowestBal < safetyBuffer;
 
-    if ((hasImminentDeficit || hasEndingDeficit) && !forecast.hasInsufficientData) {
+    if (!forecast.hasInsufficientData &&
+        (hasImminentDeficit || hasEndingDeficit || hasBufferBreach)) {
       final period =
           '${referenceTime.year}-${referenceTime.month.toString().padLeft(2, '0')}';
-      final alertKey = 'cashflow:$period';
-      final deficitAmount = hasImminentDeficit
-          ? -lowestPoint.balance
-          : -forecast.projectedEndingBalance;
+
+      final AppAlertStage stage;
+      final AlertSeverity severity;
+      final String title;
+      final String message;
+
+      if (hasImminentDeficit) {
+        stage = AppAlertStage.critical;
+        severity = AlertSeverity.critical;
+        title = '⚠️ Cashflow Risk Warning';
+        final amountStr = (-lowestBal).toStringAsFixed(0);
+        message =
+            'Your projected cashflow has a deficit (-₹$amountStr) in the next 14 days. Review upcoming bills and expenses.';
+      } else if (hasEndingDeficit) {
+        stage = AppAlertStage.critical;
+        severity = AlertSeverity.critical;
+        title = '⚠️ Cashflow Risk Warning';
+        final deficitAmount = -forecast.projectedEndingBalance;
+        message = deficitAmount > 0
+            ? 'Your projected cashflow has a deficit (-₹${deficitAmount.toStringAsFixed(0)}) in the next 30 days. Review upcoming bills and expenses.'
+            : 'Your projected 30-day balance reaches zero. Review upcoming bills and expenses.';
+      } else {
+        // Safety buffer breach while balance remains non-negative (Defect 3 Fix)
+        stage = AppAlertStage.warning;
+        severity = AlertSeverity.warning;
+        title = '📉 Safety Buffer Warning';
+        message =
+            'Your projected cashflow dips to ₹${lowestBal.toStringAsFixed(0)}, breaching your ₹${safetyBuffer.toStringAsFixed(0)} safety buffer.';
+      }
+
+      // Risk-aware deduplication key enabling stage escalation within the same month (Defect 2 Fix)
+      final alertKey = 'cashflow:$period:${stage.name}';
 
       return AppAlert(
         id: idGenerator.v4(),
         type: AppAlertType.cashflow,
-        stage: AppAlertStage.critical,
-        severity: AlertSeverity.critical,
-        title: '⚠️ Cashflow Risk Warning',
-        message: deficitAmount > 0
-            ? 'Your projected cashflow has a deficit (-₹${deficitAmount.toStringAsFixed(0)}) in the next ${hasImminentDeficit ? '14' : '30'} days. Review upcoming bills and expenses.'
-            : 'Your projected 30-day balance reaches zero. Review upcoming bills and expenses.',
-        amount: hasImminentDeficit
-            ? lowestPoint.balance
+        stage: stage,
+        severity: severity,
+        title: title,
+        message: message,
+        amount: hasImminentDeficit || hasBufferBreach
+            ? lowestPoint?.balance
             : forecast.projectedEndingBalance,
         period: period,
         createdAt: referenceTime,
