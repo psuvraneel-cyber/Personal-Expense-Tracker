@@ -18,7 +18,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'dart:ui' show PlatformDispatcher;
 import 'package:pet/data/database/database_helper.dart';
-import 'package:pet/firebase_options.dart';
+import 'package:pet/firebase_options.example.dart';
 import 'package:pet/screens/splash/splash_screen.dart';
 import 'package:pet/premium/providers/premium_provider.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';
@@ -254,7 +254,9 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
   Future<void> _onAuthStateChanged(User? user) async {
     if (AccountDeletionService.isDeletionInProgress) {
-      AppLogger.debug('[MAIN] Account deletion in progress — ignoring auth change');
+      AppLogger.debug(
+        '[MAIN] Account deletion in progress — ignoring auth change',
+      );
       return;
     }
     final currentUserId = FirebaseAuthService().currentUserId;
@@ -348,26 +350,26 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (AccountDeletionService.isDeletionInProgress) {
-      AppLogger.debug('[MAIN] Account deletion in progress — ignoring lifecycle resume');
+      AppLogger.debug(
+        '[MAIN] Account deletion in progress — ignoring lifecycle resume',
+      );
       return;
     }
     if (state == AppLifecycleState.resumed) {
       NotificationService.permissionStatus();
       try {
-        _navigatorKey.currentContext?.read<TransactionProvider>().triggerSyncQueue();
+        _navigatorKey.currentContext
+            ?.read<TransactionProvider>()
+            .triggerSyncQueue();
       } catch (e) {
         AppLogger.debug('[MAIN] Failed to trigger sync queue on resume: $e');
       }
       try {
-        _navigatorKey.currentContext?.read<TransactionProvider>().checkRecurringOccurrences();
-        _navigatorKey.currentContext?.read<RecurringTransactionProvider>().checkAndGenerateDue();
+
       } catch (e) {
-        AppLogger.debug('[MAIN] Failed to trigger recurring check on resume: $e');
-      }
-      try {
-        _navigatorKey.currentContext?.read<SmsTransactionProvider>().runReconciliation();
-      } catch (e) {
-        AppLogger.debug('[MAIN] Failed to trigger SMS reconciliation on resume: $e');
+        AppLogger.debug(
+          '[MAIN] Failed to trigger SMS reconciliation on resume: $e',
+        );
       }
     }
 

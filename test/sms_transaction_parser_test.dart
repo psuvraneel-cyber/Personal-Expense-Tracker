@@ -820,7 +820,11 @@ void main() {
   group('Entity Extraction — Date', () {
     test('dd-mm-yy format', () {
       final reasons = <String>[];
-      final dt = EntityExtractor.extractDate('on 13-02-26', reasons, smsTimestamp: DateTime(2026, 2, 13, 14, 30));
+      final dt = EntityExtractor.extractDate(
+        'on 13-02-26',
+        reasons,
+        smsTimestamp: DateTime(2026, 2, 13, 14, 30),
+      );
       expect(dt?.day, 13);
       expect(dt?.month, 2);
       expect(dt?.year, 2026);
@@ -828,7 +832,11 @@ void main() {
 
     test('dd/mm/yyyy format', () {
       final reasons = <String>[];
-      final dt = EntityExtractor.extractDate('on 14/02/2026', reasons, smsTimestamp: DateTime(2026, 2, 14, 10, 0));
+      final dt = EntityExtractor.extractDate(
+        'on 14/02/2026',
+        reasons,
+        smsTimestamp: DateTime(2026, 2, 14, 10, 0),
+      );
       expect(dt?.day, 14);
       expect(dt?.month, 2);
       expect(dt?.year, 2026);
@@ -836,7 +844,11 @@ void main() {
 
     test('ddMonyy format (13Feb26)', () {
       final reasons = <String>[];
-      final dt = EntityExtractor.extractDate('on 13Feb26 by transfer', reasons, smsTimestamp: DateTime(2026, 2, 13, 9, 15));
+      final dt = EntityExtractor.extractDate(
+        'on 13Feb26 by transfer',
+        reasons,
+        smsTimestamp: DateTime(2026, 2, 13, 9, 15),
+      );
       expect(dt?.day, 13);
       expect(dt?.month, 2);
       expect(dt?.year, 2026);
@@ -844,7 +856,11 @@ void main() {
 
     test('dd-Mon-yyyy format', () {
       final reasons = <String>[];
-      final dt = EntityExtractor.extractDate('on 13-Feb-2026 for UPI', reasons, smsTimestamp: DateTime(2026, 2, 13, 21, 45));
+      final dt = EntityExtractor.extractDate(
+        'on 13-Feb-2026 for UPI',
+        reasons,
+        smsTimestamp: DateTime(2026, 2, 13, 21, 45),
+      );
       expect(dt?.day, 13);
       expect(dt?.month, 2);
       expect(dt?.year, 2026);
@@ -1042,27 +1058,30 @@ void main() {
       expect(consensus.result.direction, TransactionDirection.credit);
     });
 
-    test('Pipeline applies recorded user feedback (notTransaction override)', () {
-      final date = DateTime(2026, 7, 20, 16, 0);
-      const body = 'Rs 500 debited from A/c XX1234 on 20-Jul-26 for Swiggy';
+    test(
+      'Pipeline applies recorded user feedback (notTransaction override)',
+      () {
+        final date = DateTime(2026, 7, 20, 16, 0);
+        const body = 'Rs 500 debited from A/c XX1234 on 20-Jul-26 for Swiggy';
 
-      // 1. Record user feedback as not a transaction
-      UserFeedbackStore.recordFeedback(
-        smsBody: body,
-        smsTimestamp: date,
-        action: UserFeedbackAction.notTransaction,
-      );
+        // 1. Record user feedback as not a transaction
+        UserFeedbackStore.recordFeedback(
+          smsBody: body,
+          smsTimestamp: date,
+          action: UserFeedbackAction.notTransaction,
+        );
 
-      // 2. Parse through SmsTransactionParser
-      final parsed = SmsTransactionParser.parse(
-        body: body,
-        sender: 'AD-HDFCBK',
-        timestamp: date,
-      );
+        // 2. Parse through SmsTransactionParser
+        final parsed = SmsTransactionParser.parse(
+          body: body,
+          sender: 'AD-HDFCBK',
+          timestamp: date,
+        );
 
-      expect(parsed.isTransaction, isFalse);
-      expect(parsed.reasons.any((r) => r.contains('USER OVERRIDE')), isTrue);
-    });
+        expect(parsed.isTransaction, isFalse);
+        expect(parsed.reasons.any((r) => r.contains('USER OVERRIDE')), isTrue);
+      },
+    );
   });
 
   // ═════════════════════════════════════════════════════════════════

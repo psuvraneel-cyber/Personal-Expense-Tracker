@@ -9,7 +9,8 @@ import 'package:pet/services/platform_stub.dart'
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart' hide databaseFactory;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactory, databaseFactoryFfi, sqfliteFfiInit;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart'
+    show databaseFactory, databaseFactoryFfi, sqfliteFfiInit;
 import 'package:pet/core/constants/categories.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/services/canonical_identity_resolver.dart';
@@ -39,20 +40,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    
-    if (_dbCompleter != null) {
-      return _dbCompleter!.future;
-    }
 
-    final completer = Completer<Database>();
-    _dbCompleter = completer;
-    try {
-      _database = await _initDatabase();
-      completer.complete(_database);
-      return _database!;
-    } catch (e) {
-      _dbCompleter = null;
-      rethrow;
     }
   }
 
@@ -87,12 +75,14 @@ class DatabaseHelper {
     // deliberate, correct mitigation to safely construct this ATTACH command.
     final escapedTempPath = tempPath.replaceAll("'", "''");
     final escapedPassword = password.replaceAll("'", "''");
-    
-    await db.execute("ATTACH DATABASE '$escapedTempPath' AS encrypted KEY '$escapedPassword'");
+
+    await db.execute(
+      "ATTACH DATABASE '$escapedTempPath' AS encrypted KEY '$escapedPassword'",
+    );
     await db.execute("SELECT sqlcipher_export('encrypted')");
     await db.execute("DETACH DATABASE encrypted");
     await db.close();
-    
+
     final file = File(path);
     final tempFile = File(tempPath);
     if (await file.exists()) {
@@ -117,9 +107,10 @@ class DatabaseHelper {
     if (cipherSupported) {
       final File dbFile = File(path);
       if (await dbFile.exists() && await _isDatabasePlaintext(path)) {
-        AppLogger.warn('Plaintext database detected. Migrating to encrypted database...', label: 'DB');
+
         try {
-          final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
+          final password = await SecureStorageService.instance
+              .getDatabaseEncryptionKey();
           await _encryptDatabaseInPlace(path, password);
           AppLogger.info('Migration to encrypted database complete.', label: 'DB');
         } catch (e) {
@@ -127,7 +118,8 @@ class DatabaseHelper {
         }
       }
 
-      final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
+      final password = await SecureStorageService.instance
+          .getDatabaseEncryptionKey();
       return await openDatabase(
         path,
         version: 20,
@@ -140,7 +132,7 @@ class DatabaseHelper {
         },
       );
     } else {
-      AppLogger.warn('SQLCipher is not supported on this platform. Opening in plaintext.', label: 'DB');
+
       return await openDatabase(
         path,
         version: 20,
@@ -335,7 +327,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 8) {
       final smsCols = await db.rawQuery('PRAGMA table_info(sms_transactions)');
-      final hasApprox = smsCols.any((c) => c['name'] == 'timestamp_is_approximate');
+      final hasApprox = smsCols.any(
+        (c) => c['name'] == 'timestamp_is_approximate',
+      );
       if (!hasApprox) {
         await db.execute(
           'ALTER TABLE sms_transactions ADD COLUMN timestamp_is_approximate INTEGER DEFAULT 0',
@@ -352,9 +346,7 @@ class DatabaseHelper {
       final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
       final hasUpdatedAt = txnCols.any((c) => c['name'] == 'updatedAt');
       if (!hasUpdatedAt) {
-        await db.execute(
-          'ALTER TABLE transactions ADD COLUMN updatedAt TEXT',
-        );
+        await db.execute('ALTER TABLE transactions ADD COLUMN updatedAt TEXT');
       }
     }
     if (oldVersion < 10) {
@@ -1451,18 +1443,16 @@ class DatabaseHelper {
 
       await db.update(
         'unknown_format_logs',
-        {
-          'smsBody': redactedBody,
-          'created_at': createdAtMillis,
-        },
+        {'smsBody': redactedBody, 'created_at': createdAtMillis},
         where: 'id = ?',
         whereArgs: [id],
       );
     }
 
     // 3. Enforce 30-day TTL cleanup
-    final cutoffMillis =
-        DateTime.now().subtract(const Duration(days: 30)).millisecondsSinceEpoch;
+    final cutoffMillis = DateTime.now()
+        .subtract(const Duration(days: 30))
+        .millisecondsSinceEpoch;
     await db.delete(
       'unknown_format_logs',
       where: 'created_at < ?',

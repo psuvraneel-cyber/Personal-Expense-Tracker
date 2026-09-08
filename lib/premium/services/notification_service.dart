@@ -452,6 +452,40 @@ class NotificationService {
   /// Cancels a specific pending or active notification by [id].
   static Future<void> cancelNotification(int id) async {
     try {
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          channelDescription: _channelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+        macOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      );
+
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tz.TZDateTime.from(scheduledDate, tz.local),
+        details,
+        androidScheduleMode: await _resolveScheduleMode(),
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      AppLogger.debug('[NotificationService] schedule failed (id=$id): $e');
       _pending.removeWhere((item) => item.id == id);
       _pendingScheduled.removeWhere((item) => item.id == id);
       if (!_isInitialized) return;
@@ -496,6 +530,30 @@ class NotificationService {
         category == NotificationCategory.bill;
   }
 
+  /// Returns the strongest scheduling mode the device currently allows.
+  ///
+  /// On Android 12+ (API 31+), `SCHEDULE_EXACT_ALARM` is a revocable
+  /// special-access permission. If the user or OEM revokes it,
+  /// `AndroidScheduleMode.exactAllowWhileIdle` throws an exception.
+  ///
+  /// This method checks at runtime:
+  /// - If the plugin confirms exact alarms are permitted → exact scheduling.
+  /// - Otherwise → inexact scheduling; the OS may delay the notification by
+  ///   a few minutes but will never crash or silently drop it.
+  static Future<AndroidScheduleMode> _resolveScheduleMode() async {
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (androidPlugin != null) {
+      final canSchedule = await androidPlugin.canScheduleExactNotifications();
+      if (canSchedule == false) {
+        AppLogger.debug(
+          '[NotificationService] Exact alarm permission not '
+          'granted — falling back to inexact scheduling.',
+        );
+        return AndroidScheduleMode.inexact;
+      }
   /// Posts or updates the Android group summary notification for a batch of alerts.
   static Future<void> postAlertsSummary({
     required List<({String title, String body, NotificationCategory category})>

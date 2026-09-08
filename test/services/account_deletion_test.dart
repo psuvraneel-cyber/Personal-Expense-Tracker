@@ -56,7 +56,8 @@ class FakeQuerySnapshot implements QuerySnapshot<Map<String, dynamic>> {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class FakeQueryDocumentSnapshot implements QueryDocumentSnapshot<Map<String, dynamic>> {
+class FakeQueryDocumentSnapshot
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {
   final DocumentReference<Map<String, dynamic>> _ref;
 
   FakeQueryDocumentSnapshot(this._ref);
@@ -110,7 +111,8 @@ class FakeQuery implements Query<Map<String, dynamic>> {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class FakeCollectionReference implements CollectionReference<Map<String, dynamic>> {
+class FakeCollectionReference
+    implements CollectionReference<Map<String, dynamic>> {
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
   bool shouldFail = false;
 
@@ -164,7 +166,10 @@ class FakeFirebaseFirestore implements FirebaseFirestore {
   DocumentReference<Map<String, dynamic>> doc(String path) {
     final parts = path.split('/');
     if (parts.length == 2 && parts[0] == 'users') {
-      return userDocs.putIfAbsent(parts[1], () => FakeUserDocumentReference(this, parts[1]));
+      return userDocs.putIfAbsent(
+        parts[1],
+        () => FakeUserDocumentReference(this, parts[1]),
+      );
     }
     return FakeDocumentReference();
   }
@@ -186,7 +191,8 @@ class FakeFirebaseFirestore implements FirebaseFirestore {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class FakeUsersCollectionReference implements CollectionReference<Map<String, dynamic>> {
+class FakeUsersCollectionReference
+    implements CollectionReference<Map<String, dynamic>> {
   final FakeFirebaseFirestore firestore;
 
   FakeUsersCollectionReference(this.firestore);
@@ -194,7 +200,10 @@ class FakeUsersCollectionReference implements CollectionReference<Map<String, dy
   @override
   DocumentReference<Map<String, dynamic>> doc([String? path]) {
     if (path != null) {
-      return firestore.userDocs.putIfAbsent(path, () => FakeUserDocumentReference(firestore, path));
+      return firestore.userDocs.putIfAbsent(
+        path,
+        () => FakeUserDocumentReference(firestore, path),
+      );
     }
     return FakeDocumentReference();
   }
@@ -203,7 +212,8 @@ class FakeUsersCollectionReference implements CollectionReference<Map<String, dy
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class FakeUserDocumentReference implements DocumentReference<Map<String, dynamic>> {
+class FakeUserDocumentReference
+    implements DocumentReference<Map<String, dynamic>> {
   final FakeFirebaseFirestore firestore;
   final String uid;
   bool deleted = false;
@@ -218,7 +228,10 @@ class FakeUserDocumentReference implements DocumentReference<Map<String, dynamic
   @override
   CollectionReference<Map<String, dynamic>> collection(String path) {
     final key = '$uid/$path';
-    return firestore.subcollections.putIfAbsent(key, () => FakeCollectionReference());
+    return firestore.subcollections.putIfAbsent(
+      key,
+      () => FakeCollectionReference(),
+    );
   }
 
   @override
@@ -251,18 +264,20 @@ void main() {
   late AccountDeletionService service;
 
   setUp(() async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-      const MethodChannel('purchases_flutter'),
-      (methodCall) async {
-        return <dynamic, dynamic>{};
-      },
-    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('purchases_flutter'), (
+          methodCall,
+        ) async {
+          return <dynamic, dynamic>{};
+        });
     SharedPreferences.setMockInitialValues({});
     db = await openDatabase(
       inMemoryDatabasePath,
       version: 1,
       onCreate: (db, version) async {
-        await db.execute('CREATE TABLE transactions (id TEXT PRIMARY KEY, amount REAL)');
+        await db.execute(
+          'CREATE TABLE transactions (id TEXT PRIMARY KEY, amount REAL)',
+        );
         await db.execute('''
           CREATE TABLE transaction_sync_queue (
             id TEXT PRIMARY KEY,
@@ -304,12 +319,16 @@ void main() {
 
     test('Full safe deletion progress order verification', () async {
       // 1. Populate Firestore document collections
-      final userDoc = firestore.collection('users').doc('test_uid_123') as FakeUserDocumentReference;
-      final txnsCol = userDoc.collection('transactions') as FakeCollectionReference;
+      final userDoc =
+          firestore.collection('users').doc('test_uid_123')
+              as FakeUserDocumentReference;
+      final txnsCol =
+          userDoc.collection('transactions') as FakeCollectionReference;
       final t1 = FakeDocumentReference();
       txnsCol.docs.add(FakeQueryDocumentSnapshot(t1));
 
-      final tombstonesCol = userDoc.collection('tombstones') as FakeCollectionReference;
+      final tombstonesCol =
+          userDoc.collection('tombstones') as FakeCollectionReference;
       final tom1 = FakeDocumentReference();
       tombstonesCol.docs.add(FakeQueryDocumentSnapshot(tom1));
 
@@ -320,14 +339,14 @@ void main() {
         'transactionId': 'local_txn_1',
         'action': 'create',
         'payload': '{}',
-        'userId': 'test_uid_123'
+        'userId': 'test_uid_123',
       });
       await db.insert('transaction_sync_queue', {
         'id': 'action_guest',
         'transactionId': 'local_txn_guest',
         'action': 'create',
         'payload': '{}',
-        'userId': 'guest_user'
+        'userId': 'guest_user',
       });
 
       final steps = <DeletionStep>[];
@@ -368,52 +387,59 @@ void main() {
       await subscription.cancel();
     });
 
-    test('Resumable local cleanup when user is already deleted from Auth', () async {
-      // Simulate that Auth user is null, but isDeletionInProgress is set
-      AccountDeletionService.isDeletionInProgress = true;
-      auth.setCurrentUser(null);
+    test(
+      'Resumable local cleanup when user is already deleted from Auth',
+      () async {
+        // Simulate that Auth user is null, but isDeletionInProgress is set
+        AccountDeletionService.isDeletionInProgress = true;
+        auth.setCurrentUser(null);
 
-      // Populate local sqlite
-      await db.insert('transactions', {'id': 'local_txn_1', 'amount': 45.5});
-      await db.insert('transaction_sync_queue', {
-        'id': 'action_1',
-        'transactionId': 'local_txn_1',
-        'action': 'create',
-        'payload': '{}',
-        'userId': 'test_uid_123'
-      });
+        // Populate local sqlite
+        await db.insert('transactions', {'id': 'local_txn_1', 'amount': 45.5});
+        await db.insert('transaction_sync_queue', {
+          'id': 'action_1',
+          'transactionId': 'local_txn_1',
+          'action': 'create',
+          'payload': '{}',
+          'userId': 'test_uid_123',
+        });
 
-      final steps = <DeletionStep>[];
-      final subscription = service.progress.listen(steps.add);
+        final steps = <DeletionStep>[];
+        final subscription = service.progress.listen(steps.add);
 
-      await service.deleteAccount(targetUid: 'test_uid_123');
-      await Future.delayed(Duration.zero);
+        await service.deleteAccount(targetUid: 'test_uid_123');
+        await Future.delayed(Duration.zero);
 
-      // It should execute local cleanup steps and complete
-      expect(steps, contains(DeletionStep.clearingLocalData));
-      expect(steps, contains(DeletionStep.complete));
+        // It should execute local cleanup steps and complete
+        expect(steps, contains(DeletionStep.clearingLocalData));
+        expect(steps, contains(DeletionStep.complete));
 
-      // Verify local data is cleaned up
-      final transactions = await db.query('transactions');
-      expect(transactions, isEmpty);
+        // Verify local data is cleaned up
+        final transactions = await db.query('transactions');
+        expect(transactions, isEmpty);
 
-      final queue = await db.query('transaction_sync_queue');
-      expect(queue, isEmpty);
+        final queue = await db.query('transaction_sync_queue');
+        expect(queue, isEmpty);
 
-      expect(AccountDeletionService.isDeletionInProgress, isFalse);
+        expect(AccountDeletionService.isDeletionInProgress, isFalse);
 
-      await subscription.cancel();
-    });
+        await subscription.cancel();
+      },
+    );
 
     test('Idempotent partial cloud failure retry test', () async {
       // 1. Populate Firestore document collections
-      final userDoc = firestore.collection('users').doc('test_uid_123') as FakeUserDocumentReference;
-      final txnsCol = userDoc.collection('transactions') as FakeCollectionReference;
+      final userDoc =
+          firestore.collection('users').doc('test_uid_123')
+              as FakeUserDocumentReference;
+      final txnsCol =
+          userDoc.collection('transactions') as FakeCollectionReference;
       final t1 = FakeDocumentReference();
       txnsCol.docs.add(FakeQueryDocumentSnapshot(t1));
 
       // Make tombstones collection fail
-      final tombstonesCol = userDoc.collection('tombstones') as FakeCollectionReference;
+      final tombstonesCol =
+          userDoc.collection('tombstones') as FakeCollectionReference;
       final tom1 = FakeDocumentReference();
       tombstonesCol.docs.add(FakeQueryDocumentSnapshot(tom1));
       tombstonesCol.shouldFail = true;
@@ -425,7 +451,7 @@ void main() {
         'transactionId': 'local_txn_1',
         'action': 'create',
         'payload': '{}',
-        'userId': 'test_uid_123'
+        'userId': 'test_uid_123',
       });
 
       // 3. Trigger account deletion — should fail on tombstones

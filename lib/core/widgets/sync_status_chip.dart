@@ -53,11 +53,7 @@ class SyncStatusChip extends StatelessWidget {
     if (status == SyncStatus.error) {
       return _Chip(
         key: const ValueKey('error'),
-        icon: const Icon(
-          Icons.cloud_off,
-          size: 10,
-          color: AppTheme.expenseRed,
-        ),
+        icon: const Icon(Icons.cloud_off, size: 10, color: AppTheme.expenseRed),
         label: 'Sync unavailable',
         color: AppTheme.expenseRed,
         isDark: isDark,

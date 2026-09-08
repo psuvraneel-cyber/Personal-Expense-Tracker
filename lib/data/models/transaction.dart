@@ -59,11 +59,7 @@ class TransactionRecord {
       'taxCategory': taxCategory,
       'source': source.toJson(),
       'accountId': accountId,
-      'updatedAt': updatedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
-      'recurringRuleId': recurringRuleId,
-      'occurrenceDate': occurrenceDate?.toIso8601String(),
-      'sourceObservationId': sourceObservationId,
-      'sourceFingerprint': sourceFingerprint,
+
     };
   }
 
@@ -86,13 +82,7 @@ class TransactionRecord {
       taxCategory: map['taxCategory'] as String?,
       source: TransactionSource.fromJson(map['source'] as String?),
       accountId: map['accountId'] as String?,
-      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt'] as String) : null,
-      recurringRuleId: map['recurringRuleId'] as String?,
-      occurrenceDate: map['occurrenceDate'] != null
-          ? DateTime.parse(map['occurrenceDate'] as String)
-          : null,
-      sourceObservationId: map['sourceObservationId'] as String?,
-      sourceFingerprint: map['sourceFingerprint'] as String?,
+
     );
   }
 
