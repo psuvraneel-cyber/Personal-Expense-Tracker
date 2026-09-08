@@ -13,6 +13,7 @@ import 'package:pet/premium/models/app_alert.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
 import 'package:pet/premium/models/recurring_payment_history.dart';
 import 'package:pet/premium/models/saving_goal.dart';
+import 'package:pet/premium/models/weekly_limit.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 
 /// Firestore sync service for transactions, categories, and budgets.
@@ -53,7 +54,34 @@ class FirestoreSyncService {
     }
   }
 
-  // ── Auth Check ──────────────────────────────────────────────────────
+  // ── Auth Check & Session Isolation ──────────────────────────────────
+
+  int _sessionGeneration = 0;
+  String? _activeSessionUid;
+
+  /// Current authentication session generation counter.
+  /// Increments on logout or user switch to invalidate in-flight async sync callbacks.
+  int get sessionGeneration => _sessionGeneration;
+
+  /// Active session UID currently tracked by this sync service.
+  String? get activeSessionUid {
+    if (_activeSessionUid != null) return _activeSessionUid;
+    try {
+      return _auth.currentUserId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Invalidate all ongoing listeners and asynchronous operations from a prior user session.
+  void onSessionChanged(String? newUid) {
+    _sessionGeneration++;
+    _activeSessionUid = newUid;
+    AppLogger.info(
+      'FirestoreSync session generation bumped to $_sessionGeneration for uid: $newUid',
+      label: 'FirestoreSync',
+    );
+  }
 
   /// Whether the current user is authenticated.
   /// Callers should check this before attempting Firestore operations.
@@ -105,6 +133,9 @@ class FirestoreSyncService {
 
   CollectionReference<Map<String, dynamic>> get _alertsCollection =>
       _db.collection('users').doc(_uid).collection('alerts');
+
+  CollectionReference<Map<String, dynamic>> get _weeklyLimitsCollection =>
+      _db.collection('users').doc(_uid).collection('weekly_limits');
 
   // ── Transaction Write Operations ─────────────────────────────────────
 
@@ -782,6 +813,91 @@ class FirestoreSyncService {
           .toList();
     } catch (e) {
       AppLogger.debug('[Firestore] fetchAllAlerts error: $e');
+      return [];
+    }
+  }
+
+  // ── Weekly Limits Write & Read Operations ────────────────────────────
+
+  Future<void> upsertWeeklyLimit(WeeklyLimit limit) async {
+    if (!isAuthenticated) return;
+    try {
+      await _weeklyLimitsCollection.doc(limit.id).set(
+        limit.toMap(),
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      AppLogger.warn(
+        'Failed to sync weekly limit ${limit.id}: $e',
+        label: 'FirestoreSync',
+      );
+    }
+  }
+
+  Future<void> deleteWeeklyLimit(String id) async {
+    if (!isAuthenticated) return;
+    try {
+      await _weeklyLimitsCollection.doc(id).delete();
+    } catch (e) {
+      AppLogger.warn(
+        'Failed to delete weekly limit $id: $e',
+        label: 'FirestoreSync',
+      );
+    }
+  }
+
+  Stream<List<WeeklyLimit>> weeklyLimitsStream() {
+    if (!isAuthenticated) return const Stream.empty();
+    return _weeklyLimitsCollection
+        .snapshots()
+        .map((snap) {
+          return snap.docs
+              .map((doc) {
+                try {
+                  return WeeklyLimit.fromMap(doc.data());
+                } catch (e) {
+                  AppLogger.warn(
+                    'Failed to parse weekly limit ${doc.id}: $e',
+                    label: 'FirestoreSync',
+                  );
+                  return null;
+                }
+              })
+              .whereType<WeeklyLimit>()
+              .toList();
+        })
+        .handleError((Object e) {
+          AppLogger.warn(
+            'weeklyLimitsStream error: $e',
+            label: 'FirestoreSync',
+          );
+          return <WeeklyLimit>[];
+        });
+  }
+
+  Future<List<WeeklyLimit>> fetchAllWeeklyLimits() async {
+    if (!isAuthenticated) return [];
+    try {
+      final snap = await _weeklyLimitsCollection.get();
+      return snap.docs
+          .map((doc) {
+            try {
+              return WeeklyLimit.fromMap(doc.data());
+            } catch (e) {
+              AppLogger.warn(
+                'Failed to parse weekly limit ${doc.id}: $e',
+                label: 'FirestoreSync',
+              );
+              return null;
+            }
+          })
+          .whereType<WeeklyLimit>()
+          .toList();
+    } catch (e) {
+      AppLogger.warn(
+        'fetchAllWeeklyLimits error: $e',
+        label: 'FirestoreSync',
+      );
       return [];
     }
   }

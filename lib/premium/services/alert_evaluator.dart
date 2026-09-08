@@ -1,10 +1,12 @@
 import 'dart:math';
+import 'package:pet/core/utils/calendar_utils.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/premium/models/app_alert.dart';
 import 'package:pet/premium/models/cashflow_forecast.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
 import 'package:pet/premium/models/saving_goal.dart';
+import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/premium/services/anomaly_detection_service.dart';
 import 'package:pet/premium/services/cashflow_forecast_service.dart';
 import 'package:uuid/uuid.dart';
@@ -537,7 +539,7 @@ class AlertEvaluator {
     return alerts;
   }
 
-  /// Evaluates savings goal milestones (e.g. goal achieved).
+  /// Evaluates savings goal milestones (25%, 50%, 75%, 100%).
   static List<AppAlert> evaluateGoals({
     required List<SavingGoal> goals,
     DateTime? now,
@@ -570,14 +572,14 @@ class AlertEvaluator {
           actionPayload: goal.id,
         );
         alerts.add(alert);
-      } else if (progress >= 0.80) {
-        final alertKey = 'goal_milestone:${goal.id}:80';
+      } else if (progress >= 0.75) {
+        final alertKey = 'goal_milestone:${goal.id}:75';
         final alert = AppAlert(
           id: idGenerator.v4(),
           type: AppAlertType.goal,
           stage: AppAlertStage.milestone,
           severity: AlertSeverity.info,
-          title: 'Goal milestone reached',
+          title: 'Goal milestone reached (75%)',
           message:
               'You are at ${(progress * 100).toStringAsFixed(0)}% for ${goal.name} (₹${goal.currentAmount.toStringAsFixed(0)} / ₹${goal.targetAmount.toStringAsFixed(0)}).',
           goalId: goal.id,
@@ -590,7 +592,126 @@ class AlertEvaluator {
           actionPayload: goal.id,
         );
         alerts.add(alert);
+      } else if (progress >= 0.50) {
+        final alertKey = 'goal_milestone:${goal.id}:50';
+        final alert = AppAlert(
+          id: idGenerator.v4(),
+          type: AppAlertType.goal,
+          stage: AppAlertStage.milestone,
+          severity: AlertSeverity.info,
+          title: 'Goal halfway mark reached (50%)',
+          message:
+              'Halfway there! 50% reached for ${goal.name} (₹${goal.currentAmount.toStringAsFixed(0)} / ₹${goal.targetAmount.toStringAsFixed(0)}).',
+          goalId: goal.id,
+          amount: goal.currentAmount,
+          targetAmount: goal.targetAmount,
+          ratio: progress,
+          createdAt: referenceTime,
+          alertKey: alertKey,
+          actionType: AlertActionType.viewGoal,
+          actionPayload: goal.id,
+        );
+        alerts.add(alert);
+      } else if (progress >= 0.25) {
+        final alertKey = 'goal_milestone:${goal.id}:25';
+        final alert = AppAlert(
+          id: idGenerator.v4(),
+          type: AppAlertType.goal,
+          stage: AppAlertStage.milestone,
+          severity: AlertSeverity.info,
+          title: 'Goal off to a great start (25%)',
+          message:
+              'Quarter mark reached for ${goal.name} (₹${goal.currentAmount.toStringAsFixed(0)} / ₹${goal.targetAmount.toStringAsFixed(0)}).',
+          goalId: goal.id,
+          amount: goal.currentAmount,
+          targetAmount: goal.targetAmount,
+          ratio: progress,
+          createdAt: referenceTime,
+          alertKey: alertKey,
+          actionType: AlertActionType.viewGoal,
+          actionPayload: goal.id,
+        );
+        alerts.add(alert);
       }
+    }
+
+    return alerts;
+  }
+
+  /// Evaluates weekly planner limits against actual weekly spending.
+  ///
+  /// Stages:
+  /// - progress >= 1.0 -> exceeded (critical: 100%)
+  /// - 0.90 <= progress < 1.0 -> critical warning (90%)
+  /// - 0.80 <= progress < 0.90 -> warning (80%)
+  /// - progress < 0.80 -> no alert
+  static List<AppAlert> evaluateWeeklyLimits({
+    required List<WeeklyPlannerEntry> entries,
+    DateTime? now,
+    Uuid? uuid,
+  }) {
+    final referenceTime = now ?? DateTime.now();
+    final idGenerator = uuid ?? _uuid;
+    final weekKey = CalendarUtils.weekPeriodKey(referenceTime);
+    final alerts = <AppAlert>[];
+
+    for (final entry in entries) {
+      if (entry.weeklyLimit <= 0) continue;
+      final progress = entry.weeklySpent / entry.weeklyLimit;
+      if (progress < 0.80) continue;
+
+      final AppAlertStage stage;
+      final AlertSeverity severity;
+      final String title;
+      final String message;
+      final String stageKey;
+
+      if (progress >= 1.0) {
+        stage = AppAlertStage.exceeded;
+        severity = AlertSeverity.critical;
+        title = 'Weekly limit exceeded';
+        final over = (entry.weeklySpent - entry.weeklyLimit).toStringAsFixed(0);
+        message = over == '0'
+            ? 'You have reached 100% of your weekly limit for ${entry.categoryName}.'
+            : 'You have exceeded your weekly limit for ${entry.categoryName} by ₹$over.';
+        stageKey = '100';
+      } else if (progress >= 0.90) {
+        stage = AppAlertStage.critical;
+        severity = AlertSeverity.warning;
+        title = 'Weekly limit almost reached';
+        final percentUsed = (progress * 100).toStringAsFixed(0);
+        message =
+            'You have used $percentUsed% of your weekly limit for ${entry.categoryName}.';
+        stageKey = '90';
+      } else {
+        stage = AppAlertStage.warning;
+        severity = AlertSeverity.warning;
+        title = 'Weekly limit warning';
+        final percentUsed = (progress * 100).toStringAsFixed(0);
+        message =
+            'You have reached $percentUsed% of your weekly limit for ${entry.categoryName}.';
+        stageKey = '80';
+      }
+
+      final alertKey = 'weekly_limit:${entry.categoryId}:$weekKey:$stageKey';
+
+      alerts.add(AppAlert(
+        id: idGenerator.v4(),
+        type: AppAlertType.budget,
+        stage: stage,
+        severity: severity,
+        title: title,
+        message: message,
+        categoryId: entry.categoryId,
+        amount: entry.weeklySpent,
+        targetAmount: entry.weeklyLimit,
+        ratio: progress,
+        period: weekKey,
+        createdAt: referenceTime,
+        alertKey: alertKey,
+        actionType: AlertActionType.adjustBudget,
+        actionPayload: entry.categoryId,
+      ));
     }
 
     return alerts;

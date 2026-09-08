@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/transaction_provider.dart';
+import 'package:pet/core/utils/calendar_utils.dart';
+import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/premium/widgets/premium_gate.dart';
 
@@ -113,8 +115,8 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
     bool isDark,
   ) {
     final now = DateTime.now();
-    final monday = now.subtract(Duration(days: now.weekday - 1));
-    final sunday = monday.add(const Duration(days: 6));
+    final monday = CalendarUtils.startOfWeek(now);
+    final sunday = CalendarUtils.endOfWeek(now);
     final dateFmt = DateFormat('dd MMM');
 
     return Container(
@@ -223,7 +225,6 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
     bool isDark,
   ) {
     final now = DateTime.now();
-    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final maxSpend = planner.weekDays.isEmpty
         ? 1.0
         : planner.weekDays.fold<double>(
@@ -282,7 +283,7 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      dayLabels[day.date.weekday - 1],
+                      day.shortLabel,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
@@ -308,6 +309,7 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
     bool isDark,
   ) {
     final isOver = entry.isOverBudget;
+    final isBlocked = context.watch<SpendPauseProvider>().isCategoryBlocked(entry.categoryId);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -372,6 +374,36 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
               ),
             ],
           ),
+          if (isBlocked) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppTheme.accentPurple.withAlpha(25),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppTheme.accentPurple.withAlpha(50)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.pause_circle_filled_rounded,
+                    size: 12,
+                    color: AppTheme.accentPurple,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    'Focus Mode Active • Protecting Budget',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.accentPurple,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
@@ -470,6 +502,7 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
     }
     String? selectedCategoryId = categories.first.id;
     final limitCtrl = TextEditingController();
+    String? limitError;
 
     await showModalBottomSheet(
       context: context,
@@ -495,6 +528,7 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
+                key: ValueKey('category_dropdown_$selectedCategoryId'),
                 initialValue: selectedCategoryId,
                 decoration: const InputDecoration(labelText: 'Category'),
                 items: categories
@@ -511,10 +545,14 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
               TextField(
                 controller: limitCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Weekly limit (₹)',
-                  prefixIcon: Icon(Icons.currency_rupee),
+                  prefixIcon: const Icon(Icons.currency_rupee),
+                  errorText: limitError,
                 ),
+                onChanged: (_) {
+                  if (limitError != null) setS(() => limitError = null);
+                },
               ),
               const SizedBox(height: 20),
               SizedBox(
@@ -522,8 +560,15 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     final id = selectedCategoryId;
-                    final limit = double.tryParse(limitCtrl.text.trim()) ?? 0;
-                    if (id == null || limit <= 0) return;
+                    final limit = double.tryParse(limitCtrl.text.trim());
+                    if (id == null) {
+                      setS(() => limitError = 'Please select a category');
+                      return;
+                    }
+                    if (limit == null || limit <= 0) {
+                      setS(() => limitError = 'Please enter a limit greater than ₹0');
+                      return;
+                    }
                     final catName = categories
                         .firstWhere((c) => c.id == id)
                         .name;
@@ -538,12 +583,16 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.accentTeal,
+                    foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: const Text('Save Limit'),
+                  child: const Text(
+                    'Save Limit',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],

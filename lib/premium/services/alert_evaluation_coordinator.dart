@@ -13,6 +13,8 @@ import 'package:pet/premium/repositories/alert_repository.dart';
 import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/models/cashflow_forecast.dart';
 import 'package:pet/premium/services/cashflow_forecast_service.dart';
+import 'package:pet/core/utils/calendar_utils.dart';
+import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/premium/services/alert_evaluator.dart';
 import 'package:pet/premium/services/notification_service.dart';
 
@@ -542,6 +544,156 @@ class AlertEvaluationCoordinator {
     }
   }
 
+  /// Evaluates weekly planner limits and reconciles obsolete/expired alerts.
+  Future<void> onWeeklyPlannerChanged(
+    List<WeeklyPlannerEntry> entries, {
+    DateTime? now,
+  }) async {
+    try {
+      if (entries.isEmpty) return;
+      final referenceTime = now ?? DateTime.now();
+
+      final weeklyAlerts = AlertEvaluator.evaluateWeeklyLimits(
+        entries: entries,
+        now: referenceTime,
+      );
+
+      final weekKey = CalendarUtils.weekPeriodKey(referenceTime);
+      await _reconcileWeeklyPlannerAlerts(
+        entries: entries,
+        weekKey: weekKey,
+      );
+
+      await processAndDispatch(weeklyAlerts);
+    } catch (e, stack) {
+      AppLogger.error(
+        'Failed to evaluate weekly limits in AlertCoordinator',
+        error: e,
+        stack: stack,
+        label: 'AlertCoordinator',
+      );
+    }
+  }
+
+  /// Reconciles active weekly planner alerts against current spending ratios.
+  Future<void> _reconcileWeeklyPlannerAlerts({
+    required List<WeeklyPlannerEntry> entries,
+    required String weekKey,
+  }) async {
+    try {
+      // 1. Dismiss alerts for past weeks (lifecycle ended)
+      await _repository.dismissWhere(
+        'alertKey LIKE ? AND period != ?',
+        ['weekly_limit:%', weekKey],
+      );
+      _alertProvider?.removeAlertsWhere(
+        (a) =>
+            a.alertKey != null &&
+            a.alertKey!.startsWith('weekly_limit:') &&
+            a.period != weekKey,
+      );
+
+      // 2. Reconcile current week per category
+      for (final entry in entries) {
+        final categoryId = entry.categoryId;
+        final limit = entry.weeklyLimit;
+        final spent = entry.weeklySpent;
+
+        if (limit <= 0 || (spent / limit) < 0.80) {
+          // Below 80% or zero limit: auto-resolve all active weekly alerts for this category
+          await _repository.dismissWhere(
+            'alertKey LIKE ?',
+            ['weekly_limit:$categoryId:$weekKey:%'],
+          );
+          _alertProvider?.removeAlertsWhere(
+            (a) =>
+                a.alertKey != null &&
+                a.alertKey!.startsWith('weekly_limit:$categoryId:$weekKey:'),
+          );
+        } else {
+          final progress = spent / limit;
+          if (progress >= 1.0) {
+            // 100% exceeded: dismiss 80% and 90% warnings
+            await _repository.dismissWhere(
+              'alertKey IN (?, ?)',
+              [
+                'weekly_limit:$categoryId:$weekKey:80',
+                'weekly_limit:$categoryId:$weekKey:90',
+              ],
+            );
+            _alertProvider?.removeAlertsWhere(
+              (a) =>
+                  a.alertKey == 'weekly_limit:$categoryId:$weekKey:80' ||
+                  a.alertKey == 'weekly_limit:$categoryId:$weekKey:90',
+            );
+          } else if (progress >= 0.90) {
+            // 90%: dismiss 80% and 100%
+            await _repository.dismissWhere(
+              'alertKey IN (?, ?)',
+              [
+                'weekly_limit:$categoryId:$weekKey:80',
+                'weekly_limit:$categoryId:$weekKey:100',
+              ],
+            );
+            _alertProvider?.removeAlertsWhere(
+              (a) =>
+                  a.alertKey == 'weekly_limit:$categoryId:$weekKey:80' ||
+                  a.alertKey == 'weekly_limit:$categoryId:$weekKey:100',
+            );
+          } else {
+            // 80%: dismiss 90% and 100%
+            await _repository.dismissWhere(
+              'alertKey IN (?, ?)',
+              [
+                'weekly_limit:$categoryId:$weekKey:90',
+                'weekly_limit:$categoryId:$weekKey:100',
+              ],
+            );
+            _alertProvider?.removeAlertsWhere(
+              (a) =>
+                  a.alertKey == 'weekly_limit:$categoryId:$weekKey:90' ||
+                  a.alertKey == 'weekly_limit:$categoryId:$weekKey:100',
+            );
+          }
+        }
+      }
+    } catch (e, st) {
+      AppLogger.error(
+        'Failed to reconcile weekly planner alerts in AlertCoordinator',
+        error: e,
+        stack: st,
+        label: 'AlertCoordinator',
+      );
+    }
+  }
+
+  /// Resolves alerts for a deleted weekly limit.
+  Future<void> onWeeklyLimitDeleted(String categoryId, {String? weekKey}) async {
+    try {
+      if (weekKey != null) {
+        await _repository.dismissWhere(
+          'alertKey LIKE ?',
+          ['weekly_limit:$categoryId:$weekKey:%'],
+        );
+        _alertProvider?.removeAlertsWhere(
+          (a) =>
+              a.alertKey != null &&
+              a.alertKey!.startsWith('weekly_limit:$categoryId:$weekKey:'),
+        );
+      } else {
+        await _repository.dismissWhere(
+          'alertKey LIKE ?',
+          ['weekly_limit:$categoryId:%'],
+        );
+        _alertProvider?.removeAlertsWhere(
+          (a) =>
+              a.alertKey != null &&
+              a.alertKey!.startsWith('weekly_limit:$categoryId:'),
+        );
+      }
+    } catch (_) {}
+  }
+
   /// Resolves alerts for a paid or deleted recurring bill.
   Future<void> onBillResolved(String recurringPaymentId) async {
     try {
@@ -565,6 +717,47 @@ class AlertEvaluationCoordinator {
       _alertProvider?.removeAlertsWhere(
           (a) => a.goalId == goalId || (a.alertKey?.contains(goalId) ?? false));
     } catch (_) {}
+  }
+
+  /// Evaluates aggregate Focus Mode override events (e.g., >= 3 overrides).
+  /// Prevents alert spam on individual "Spend Anyway" overrides while surfacing
+  /// actionable aggregate behavioral insights without notification fatigue.
+  Future<void> onFocusModeRepeatedOverrides({
+    required int overrideCount,
+    required String categoryId,
+    String? categoryName,
+    DateTime? now,
+  }) async {
+    try {
+      if (overrideCount < 3) return;
+      final referenceTime = now ?? DateTime.now();
+      final weekKey = CalendarUtils.weekPeriodKey(referenceTime);
+      final alertKey = 'focus_override:$categoryId:$weekKey';
+
+      final displayName = categoryName ?? 'Protected Category';
+      final alert = AppAlert(
+        id: 'focus_override_${categoryId}_$weekKey',
+        title: 'Frequent Spend Overrides',
+        message:
+            'You have overridden Focus Mode $overrideCount times this week for $displayName. Consider reviewing this spending impulse or adjusting your limits.',
+        type: AppAlertType.system,
+        severity: AlertSeverity.warning,
+        stage: AppAlertStage.warning,
+        categoryId: categoryId,
+        period: weekKey,
+        alertKey: alertKey,
+        createdAt: referenceTime,
+      );
+
+      await processAndDispatch([alert]);
+    } catch (e, stack) {
+      AppLogger.error(
+        'Failed to evaluate focus mode repeated overrides in AlertCoordinator',
+        error: e,
+        stack: stack,
+        label: 'AlertCoordinator',
+      );
+    }
   }
 
   /// Core deduplication, persistence, notification dispatch, and state propagation pipeline.

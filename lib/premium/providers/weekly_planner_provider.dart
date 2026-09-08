@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:uuid/uuid.dart';
+import 'package:pet/core/utils/calendar_utils.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
+import 'package:pet/premium/models/weekly_limit.dart';
+import 'package:pet/premium/repositories/weekly_planner_repository.dart';
+import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 
 /// A single day's aggregated spend for the weekly planner strip.
 class DaySpend {
@@ -11,10 +15,7 @@ class DaySpend {
 
   const DaySpend({required this.date, required this.spent});
 
-  String get shortLabel {
-    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return labels[date.weekday - 1];
-  }
+  String get shortLabel => CalendarUtils.formatWeekday(date);
 }
 
 /// Weekly planner entry for one category.
@@ -23,41 +24,53 @@ class WeeklyPlannerEntry {
   final String categoryName;
   final double weeklyLimit;
   double weeklySpent;
+  final WeeklyRecurrencePolicy recurrencePolicy;
+  final DateTime? periodStart;
 
   WeeklyPlannerEntry({
     required this.categoryId,
     required this.categoryName,
     required this.weeklyLimit,
     this.weeklySpent = 0,
+    this.recurrencePolicy = WeeklyRecurrencePolicy.recurring,
+    this.periodStart,
   });
 
   double get progress =>
       weeklyLimit > 0 ? (weeklySpent / weeklyLimit).clamp(0.0, 1.0) : 0.0;
   bool get isOverBudget => weeklySpent > weeklyLimit;
   double get remaining => (weeklyLimit - weeklySpent).clamp(0, double.infinity);
+  double get surplus => (weeklyLimit - weeklySpent).clamp(0, double.infinity);
+  double get overage => isOverBudget ? (weeklySpent - weeklyLimit) : 0.0;
 
-  Map<String, dynamic> toJson() => {
-    'categoryId': categoryId,
-    'categoryName': categoryName,
-    'weeklyLimit': weeklyLimit,
-  };
-
-  factory WeeklyPlannerEntry.fromJson(Map<String, dynamic> j) =>
-      WeeklyPlannerEntry(
-        categoryId: j['categoryId'] as String,
-        categoryName: j['categoryName'] as String,
-        weeklyLimit: (j['weeklyLimit'] as num).toDouble(),
-      );
+  WeeklyLimit toLimit({required DateTime now}) {
+    return WeeklyLimit(
+      id: categoryId,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      weeklyLimit: weeklyLimit,
+      createdAt: now,
+      updatedAt: now,
+      recurrencePolicy: recurrencePolicy,
+      periodStart: periodStart,
+    );
+  }
 }
 
 class WeeklyPlannerProvider extends ChangeNotifier {
-  static const _prefsKey = 'weekly_planner_entries';
+  final WeeklyPlannerRepository _repository;
+  static const Uuid _uuid = Uuid();
+
+  WeeklyPlannerProvider({WeeklyPlannerRepository? repository})
+      : _repository = repository ?? WeeklyPlannerRepository();
 
   List<WeeklyPlannerEntry> _entries = [];
   List<DaySpend> _weekDays = [];
   double _totalWeekSpent = 0;
   double _totalWeekLimit = 0;
-  List<TransactionRecord>? _lastTransactionsForPlanner;
+  int? _lastFingerprint;
+  String? _lastWeekKey;
+  List<TransactionRecord>? _cachedTransactions;
 
   List<WeeklyPlannerEntry> get entries => _entries;
   List<DaySpend> get weekDays => _weekDays;
@@ -65,14 +78,50 @@ class WeeklyPlannerProvider extends ChangeNotifier {
   double get totalWeekLimit => _totalWeekLimit;
   bool get hasLimits => _entries.isNotEmpty;
 
+  /// Budget surplus: amount unspent under the configured weekly limit.
+  double get weeklyBudgetSurplus =>
+      (_totalWeekLimit - _totalWeekSpent).clamp(0.0, double.infinity);
+
   Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_prefsKey);
-    if (raw != null) {
-      final list = jsonDecode(raw) as List<dynamic>;
-      _entries = list
-          .map((e) => WeeklyPlannerEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
+    await _repository.migrateFromSharedPreferencesIfNeeded();
+    final limits = await _repository.getAll();
+    final now = DateTime.now();
+    final currentWeekStart = CalendarUtils.getWeekStart(now);
+
+    // Group and resolve effective limit per category for current week.
+    // One-off limit designated specifically for current week overrides recurring baseline.
+    final effectiveLimitsByCategory = <String, WeeklyLimit>{};
+    for (final l in limits) {
+      if (!l.isActive) continue;
+      if (l.recurrencePolicy == WeeklyRecurrencePolicy.oneOff) {
+        if (l.periodStart != null) {
+          final limitWeekStart = CalendarUtils.getWeekStart(l.periodStart!);
+          if (CalendarUtils.isSameWeek(limitWeekStart, currentWeekStart)) {
+            effectiveLimitsByCategory[l.categoryId] = l;
+          }
+        }
+      } else {
+        if (!effectiveLimitsByCategory.containsKey(l.categoryId) ||
+            effectiveLimitsByCategory[l.categoryId]!.recurrencePolicy != WeeklyRecurrencePolicy.oneOff) {
+          effectiveLimitsByCategory[l.categoryId] = l;
+        }
+      }
+    }
+
+    _entries = effectiveLimitsByCategory.values.map((l) {
+      return WeeklyPlannerEntry(
+        categoryId: l.categoryId,
+        categoryName: l.categoryName,
+        weeklyLimit: l.weeklyLimit,
+        recurrencePolicy: l.recurrencePolicy,
+        periodStart: l.periodStart,
+      );
+    }).toList();
+
+    _totalWeekLimit = _entries.fold(0.0, (s, e) => s + e.weeklyLimit);
+
+    if (_cachedTransactions != null) {
+      _computeSpending(_cachedTransactions!, force: true);
     }
     notifyListeners();
   }
@@ -81,70 +130,93 @@ class WeeklyPlannerProvider extends ChangeNotifier {
     required String categoryId,
     required String categoryName,
     required double weeklyLimit,
+    WeeklyRecurrencePolicy recurrencePolicy = WeeklyRecurrencePolicy.recurring,
+    DateTime? periodStart,
   }) async {
-    final idx = _entries.indexWhere((e) => e.categoryId == categoryId);
-    if (idx >= 0) {
-      _entries = List<WeeklyPlannerEntry>.from(_entries)
-        ..[idx] = WeeklyPlannerEntry(
-          categoryId: categoryId,
-          categoryName: categoryName,
-          weeklyLimit: weeklyLimit,
-          weeklySpent: _entries[idx].weeklySpent,
-        );
-    } else {
-      _entries = [
-        ..._entries,
-        WeeklyPlannerEntry(
-          categoryId: categoryId,
-          categoryName: categoryName,
-          weeklyLimit: weeklyLimit,
-        ),
-      ];
+    if (weeklyLimit <= 0) {
+      throw ArgumentError('Weekly limit must be greater than zero');
     }
-    await _persist();
-    notifyListeners();
-  }
 
-  Future<void> removeLimit(String categoryId) async {
-    _entries = _entries.where((e) => e.categoryId != categoryId).toList();
-    await _persist();
-    notifyListeners();
-  }
-
-  void refreshFromTransactions(List<TransactionRecord> transactions) {
-    if (identical(_lastTransactionsForPlanner, transactions)) return;
-    _lastTransactionsForPlanner = transactions;
     final now = DateTime.now();
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
-    final mondayMidnight = DateTime(
-      weekStart.year,
-      weekStart.month,
-      weekStart.day,
+    final effectivePeriodStart = recurrencePolicy == WeeklyRecurrencePolicy.oneOff
+        ? (periodStart != null ? CalendarUtils.getWeekStart(periodStart) : CalendarUtils.getWeekStart(now))
+        : null;
+
+    final limit = WeeklyLimit(
+      id: _uuid.v4(),
+      categoryId: categoryId,
+      categoryName: categoryName,
+      weeklyLimit: weeklyLimit,
+      createdAt: now,
+      updatedAt: now,
+      recurrencePolicy: recurrencePolicy,
+      periodStart: effectivePeriodStart,
     );
 
-    _weekDays = List.generate(7, (i) {
-      final day = mondayMidnight.add(Duration(days: i));
-      final daySpent = transactions
-          .where((t) {
-            if (t.type != TransactionType.expense) return false;
-            return t.date.year == day.year &&
-                t.date.month == day.month &&
-                t.date.day == day.day;
-          })
-          .fold(0.0, (s, t) => s + t.amount);
+    await _repository.upsert(limit);
+
+    await load();
+
+    unawaited(
+      AlertEvaluationCoordinator().onWeeklyPlannerChanged(_entries),
+    );
+  }
+
+  Future<void> removeLimit(String categoryId, {String? ruleId}) async {
+    await _repository.delete(categoryId, ruleId: ruleId);
+    await load();
+
+    unawaited(
+      AlertEvaluationCoordinator().onWeeklyPlannerChanged(_entries),
+    );
+  }
+
+  /// Refreshes weekly spent calculations from ledger transactions.
+  /// Uses deterministic content fingerprinting instead of fragile instance identity.
+  void refreshFromTransactions(List<TransactionRecord> transactions) {
+    _computeSpending(transactions, force: false);
+  }
+
+  void _computeSpending(
+    List<TransactionRecord> transactions, {
+    required bool force,
+  }) {
+    _cachedTransactions = transactions;
+    final now = DateTime.now();
+    final currentWeekKey = CalendarUtils.weekKey(now);
+    final fingerprint = _computeTransactionFingerprint(transactions);
+
+    if (!force &&
+        _lastFingerprint == fingerprint &&
+        _lastWeekKey == currentWeekKey) {
+      return; // Content and week are identical; skip re-computation safely
+    }
+
+    _lastFingerprint = fingerprint;
+    _lastWeekKey = currentWeekKey;
+
+    final weekStart = CalendarUtils.getWeekStart(now);
+    final weekEnd = CalendarUtils.getWeekEnd(now);
+
+    // 1. Compute 7-day daily breakdown for current week
+    final weekDays = CalendarUtils.getWeekDays(now);
+    _weekDays = weekDays.map((day) {
+      final daySpent = transactions.where((t) {
+        if (t.type != TransactionType.expense) return false;
+        return t.date.year == day.year &&
+            t.date.month == day.month &&
+            t.date.day == day.day;
+      }).fold(0.0, (s, t) => s + t.amount);
       return DaySpend(date: day, spent: daySpent);
-    });
+    }).toList();
 
-    final weekTxns = transactions
-        .where(
-          (t) =>
-              t.type == TransactionType.expense &&
-              t.date.isAfter(
-                mondayMidnight.subtract(const Duration(seconds: 1)),
-              ),
-        )
-        .toList();
+    // 2. Filter transactions in current week window [Monday 00:00:00, Sunday 23:59:59]
+    final weekTxns = transactions.where((t) {
+      if (t.type != TransactionType.expense) return false;
+      return !t.date.isBefore(weekStart) && !t.date.isAfter(weekEnd);
+    }).toList();
 
+    // 3. Aggregate spend per planned category
     for (final entry in _entries) {
       entry.weeklySpent = weekTxns
           .where(
@@ -154,25 +226,44 @@ class WeeklyPlannerProvider extends ChangeNotifier {
     }
 
     _totalWeekSpent = _weekDays.fold(0.0, (s, d) => s + d.spent);
-    _totalWeekLimit = _entries.fold(0.0, (s, e) => s + e.weeklyLimit);
+
+    unawaited(
+      AlertEvaluationCoordinator().onWeeklyPlannerChanged(_entries),
+    );
 
     notifyListeners();
   }
 
-  Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _prefsKey,
-      jsonEncode(_entries.map((e) => e.toJson()).toList()),
-    );
+  /// Computes a deterministic content fingerprint of transactions.
+  /// Includes every property affecting planner aggregation: id, amount, categoryId,
+  /// date, type, and source. Uses commutative addition so list permutations
+  /// preserve the cache while any mutation invalidates it.
+  int _computeTransactionFingerprint(List<TransactionRecord> txns) {
+    int hash = txns.length.hashCode;
+    for (int i = 0; i < txns.length; i++) {
+      final t = txns[i];
+      final itemHash = Object.hash(
+        t.id,
+        (t.amount * 100).round(),
+        t.categoryId,
+        t.date.millisecondsSinceEpoch,
+        t.type.index,
+        t.source,
+      );
+      hash = (hash + itemHash) & 0x7FFFFFFF;
+    }
+    return hash;
   }
 
-  void clearData() {
+  Future<void> clearData() async {
     _entries = [];
     _weekDays = [];
     _totalWeekSpent = 0;
     _totalWeekLimit = 0;
-    _lastTransactionsForPlanner = null;
+    _lastFingerprint = null;
+    _lastWeekKey = null;
+    _cachedTransactions = null;
     notifyListeners();
+    await _repository.deleteAll();
   }
 }

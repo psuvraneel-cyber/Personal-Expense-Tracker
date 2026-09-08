@@ -35,6 +35,8 @@ import 'package:pet/providers/dashboard_config_provider.dart';
 import 'package:pet/providers/recurring_transaction_provider.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/premium/services/notification_service.dart';
+import 'package:pet/premium/providers/spend_pause_provider.dart';
+import 'package:pet/services/firestore_sync_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -1227,6 +1229,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!context.mounted) return;
 
     try {
+      // Invalidate active Firestore sync session immediately to reject any in-flight callbacks
+      FirestoreSyncService().onSessionChanged(null);
+
       // Cache providers before making async calls.
       final transactionProvider = context.read<TransactionProvider>();
       final categoryProvider = context.read<CategoryProvider>();
@@ -1242,6 +1247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final recurringTxnProvider = context.read<RecurringTransactionProvider>();
       final smsProvider = context.read<SmsTransactionProvider>();
       final dashboardConfigProvider = context.read<DashboardConfigProvider>();
+      final spendPauseProvider = context.read<SpendPauseProvider>();
 
       // Clear all provider state BEFORE signing out so no stale data
       // remains in memory or SQLite when a different account signs in.
@@ -1254,6 +1260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         goalProvider.clearData(),
         alertProvider.clearData(),
         recurringTxnProvider.clearData(),
+        spendPauseProvider.clearData(),
       ]);
       familyProvider.clearData();
       taxProvider.clearData();

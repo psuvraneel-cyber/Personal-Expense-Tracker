@@ -16,6 +16,9 @@ import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/premium/models/cashflow_forecast.dart';
 import 'package:pet/premium/services/cashflow_forecast_service.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';
+import 'package:pet/premium/providers/goal_provider.dart';
+import 'package:pet/premium/providers/weekly_planner_provider.dart';
+import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/services/sms_service.dart';
 
 const _suggestions = [
@@ -101,7 +104,21 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       return '$date: $sign₹${t.amount.toStringAsFixed(0)}$merchant — $catName via ${t.paymentMethod.displayName}$note';
     }).toList();
 
-    // Canonical cashflow forecast (CF-20)
+    // Read premium providers for complete financial ecosystem context
+    GoalProvider? goalProv;
+    WeeklyPlannerProvider? plannerProv;
+    SpendPauseProvider? spendPauseProv;
+    try {
+      goalProv = context.read<GoalProvider>();
+    } catch (_) {}
+    try {
+      plannerProv = context.read<WeeklyPlannerProvider>();
+    } catch (_) {}
+    try {
+      spendPauseProv = context.read<SpendPauseProvider>();
+    } catch (_) {}
+
+    // Canonical cashflow forecast with active goal reserves (CF-20)
     CashflowForecast? forecast;
     double upcoming14DaysTotal = 0;
     try {
@@ -111,6 +128,7 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
         txnProv.allTransactions,
         confirmedBills: confirmed,
         days: 30,
+        goalReserves: goalProv?.totalActiveGoalReserves ?? 0.0,
       );
 
       final limitDate = now.add(const Duration(days: 14));
@@ -121,6 +139,32 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
         }
       }
     } catch (_) {}
+
+    // Active savings goals
+    final activeGoals = goalProv?.goals.map((g) => {
+      'name': g.name,
+      'current': g.currentAmount,
+      'target': g.targetAmount,
+      'isPaused': g.isPaused,
+    }).toList();
+
+    // Weekly limits
+    final weeklyLimits = plannerProv?.entries.map((e) {
+      final catName = catById(e.categoryId)?.name ?? e.categoryId;
+      return {
+        'category': catName,
+        'limit': e.weeklyLimit,
+        'spent': e.weeklySpent,
+        'isOver': e.isOverBudget,
+      };
+    }).toList();
+
+    // Focus Mode state
+    final isFocusModeActive = spendPauseProv?.isActive ?? false;
+    final focusModeBlockedCount = spendPauseProv?.blockedCategoryIds.length ?? 0;
+    final focusModeBlockedCategories = spendPauseProv?.blockedCategoryIds
+        .map((id) => catById(id)?.name ?? id)
+        .toList();
 
     return FinancialContext(
       monthLabel: monthLabel,
@@ -140,6 +184,11 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       lowestProjectedDate: forecast?.lowestProjectedDate,
       cashflowRiskLevel: forecast?.riskLevel.displayName,
       forecastConfidence: forecast?.confidence.displayName,
+      isFocusModeActive: isFocusModeActive,
+      focusModeBlockedCount: focusModeBlockedCount,
+      focusModeBlockedCategories: focusModeBlockedCategories,
+      weeklyLimits: weeklyLimits,
+      activeGoals: activeGoals,
     );
   }
 

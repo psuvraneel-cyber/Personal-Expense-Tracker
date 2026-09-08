@@ -12,7 +12,7 @@ import 'package:pet/core/widgets/gradient_background.dart';
 import 'package:pet/core/widgets/category_chip.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/premium/services/tax_category_service.dart';
-import 'package:pet/premium/services/spend_pause_service.dart';
+import 'package:pet/premium/providers/spend_pause_provider.dart';
 
 class AddEditTransactionScreen extends StatefulWidget {
   final TransactionRecord? transaction;
@@ -604,26 +604,25 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final catProvider = context.read<CategoryProvider>();
     final recurringProvider = context.read<RecurringTransactionProvider>();
+    final spendPauseProvider = context.read<SpendPauseProvider>();
 
     // Only check on new expense transactions, not edits (editing implies intent).
     if (!_isEditing && _type == TransactionType.expense) {
-      final pause = await SpendPauseService.getState();
-      if (pause.isActive && pause.blockedCategories.isNotEmpty) {
-        final catName =
-            catProvider.categories
-                .where((c) => c.id == _selectedCategoryId)
-                .map((c) => c.name)
-                .firstOrNull ??
-            '';
-        // Case-insensitive partial match: blocked list entry inside category name, or vice-versa.
-        final isBlocked = pause.blockedCategories.any(
-          (blocked) =>
-              catName.toLowerCase().contains(blocked.toLowerCase()) ||
-              blocked.toLowerCase().contains(catName.toLowerCase()),
-        );
-        if (isBlocked && mounted) {
+      if (spendPauseProvider.isActive &&
+          _selectedCategoryId != null &&
+          spendPauseProvider.isCategoryBlocked(_selectedCategoryId!)) {
+        final catName = catProvider.categories
+            .where((c) => c.id == _selectedCategoryId)
+            .map((c) => c.name)
+            .firstOrNull ?? '';
+        if (mounted) {
           final proceed = await _showFocusModeWarning(catName);
           if (!proceed) return; // user chose to stay in focus mode
+          await spendPauseProvider.recordOverride(
+            categoryId: _selectedCategoryId!,
+            amount: double.tryParse(_amountController.text) ?? 0.0,
+            categoryName: catName,
+          );
         }
       }
     }

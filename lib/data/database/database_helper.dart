@@ -130,7 +130,7 @@ class DatabaseHelper {
       final password = await SecureStorageService.instance.getDatabaseEncryptionKey();
       return await openDatabase(
         path,
-        version: 18,
+        version: 20,
         password: password,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -143,7 +143,7 @@ class DatabaseHelper {
       AppLogger.warn('SQLCipher is not supported on this platform. Opening in plaintext.', label: 'DB');
       return await openDatabase(
         path,
-        version: 18,
+        version: 20,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
         onOpen: (db) async {
@@ -405,6 +405,12 @@ class DatabaseHelper {
     }
     if (oldVersion < 18) {
       await _migrateToV18(db);
+    }
+    if (oldVersion < 19) {
+      await _migrateToV19(db);
+    }
+    if (oldVersion < 20) {
+      await _migrateToV20(db);
     }
   }
 
@@ -969,6 +975,128 @@ class DatabaseHelper {
     }
   }
 
+  /// Migrate to v19: Durable Weekly Planner persistence, Goal History audit log, and Goal updatedAt parity.
+  Future<void> _migrateToV19(Database db) async {
+    try {
+      // 1. Create weekly_limits table
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS weekly_limits (
+          id TEXT PRIMARY KEY,
+          categoryId TEXT UNIQUE NOT NULL,
+          categoryName TEXT NOT NULL,
+          weeklyLimit REAL NOT NULL,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL,
+          isActive INTEGER DEFAULT 1,
+          periodStart TEXT,
+          recurrencePolicy TEXT DEFAULT 'recurring'
+        )
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_weekly_limits_category
+        ON weekly_limits (categoryId)
+      ''');
+
+      // 2. Create goal_history table
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS goal_history (
+          id TEXT PRIMARY KEY,
+          goalId TEXT NOT NULL,
+          amount REAL NOT NULL,
+          actionType TEXT NOT NULL,
+          createdAt TEXT NOT NULL,
+          note TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_goal_history_goal
+        ON goal_history (goalId)
+      ''');
+
+      // 3. Add updatedAt column to saving_goals if not present
+      final goalCols = await db.rawQuery('PRAGMA table_info(saving_goals)');
+      final hasUpdatedAt = goalCols.any((c) => c['name'] == 'updatedAt');
+      if (!hasUpdatedAt) {
+        await db.execute('ALTER TABLE saving_goals ADD COLUMN updatedAt TEXT');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to run v19 database migration', error: e, label: 'DB');
+    }
+  }
+
+  /// Migrate to v20: Weekly Planner composite uniqueness (recurring + one-off per category)
+  /// and rich Goal History audit trail (previousAmount, resultingAmount, source, transactionId).
+  Future<void> _migrateToV20(Database db) async {
+    try {
+      // 1. Upgrade weekly_limits schema to allow composite recurrence rules without categoryId UNIQUE constraint
+      final tableInfo = await db.rawQuery(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='weekly_limits'",
+      );
+      if (tableInfo.isNotEmpty) {
+        final createSql = tableInfo.first['sql'] as String? ?? '';
+        if (createSql.contains('categoryId TEXT UNIQUE')) {
+          await db.transaction((txn) async {
+            await txn.execute('''
+              CREATE TABLE weekly_limits_v20 (
+                id TEXT PRIMARY KEY,
+                categoryId TEXT NOT NULL,
+                categoryName TEXT NOT NULL,
+                weeklyLimit REAL NOT NULL,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                isActive INTEGER DEFAULT 1,
+                periodStart TEXT,
+                recurrencePolicy TEXT DEFAULT 'recurring'
+              )
+            ''');
+            await txn.execute('''
+              INSERT INTO weekly_limits_v20 (
+                id, categoryId, categoryName, weeklyLimit, createdAt, updatedAt, isActive, periodStart, recurrencePolicy
+              )
+              SELECT id, categoryId, categoryName, weeklyLimit, createdAt, updatedAt, isActive, periodStart, recurrencePolicy
+              FROM weekly_limits
+            ''');
+            await txn.execute('DROP TABLE weekly_limits');
+            await txn.execute('ALTER TABLE weekly_limits_v20 RENAME TO weekly_limits');
+            await txn.execute('''
+              CREATE INDEX IF NOT EXISTS idx_weekly_limits_category
+              ON weekly_limits (categoryId)
+            ''');
+            await txn.execute('''
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_limits_recurring
+              ON weekly_limits (categoryId)
+              WHERE recurrencePolicy = 'recurring'
+            ''');
+            await txn.execute('''
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_limits_one_off
+              ON weekly_limits (categoryId, periodStart)
+              WHERE recurrencePolicy = 'oneOff'
+            ''');
+          });
+        }
+      }
+
+      // 2. Add rich audit columns to goal_history if not present
+      final goalHistCols = await db.rawQuery('PRAGMA table_info(goal_history)');
+      final goalHistColNames = goalHistCols.map((c) => c['name'] as String).toSet();
+
+      if (!goalHistColNames.contains('previousAmount')) {
+        await db.execute('ALTER TABLE goal_history ADD COLUMN previousAmount REAL');
+      }
+      if (!goalHistColNames.contains('resultingAmount')) {
+        await db.execute('ALTER TABLE goal_history ADD COLUMN resultingAmount REAL');
+      }
+      if (!goalHistColNames.contains('source')) {
+        await db.execute("ALTER TABLE goal_history ADD COLUMN source TEXT DEFAULT 'manual'");
+      }
+      if (!goalHistColNames.contains('transactionId')) {
+        await db.execute('ALTER TABLE goal_history ADD COLUMN transactionId TEXT');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to run v20 database migration', error: e, label: 'DB');
+    }
+  }
+
   Future<void> _createPremiumTables(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS recurring_payments (
@@ -1019,8 +1147,60 @@ class DatabaseHelper {
         targetDate TEXT,
         createdAt TEXT NOT NULL,
         isPaused INTEGER DEFAULT 0,
-        emoji TEXT
+        emoji TEXT,
+        updatedAt TEXT
       )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS goal_history (
+        id TEXT PRIMARY KEY,
+        goalId TEXT NOT NULL,
+        amount REAL NOT NULL,
+        actionType TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        note TEXT,
+        previousAmount REAL,
+        resultingAmount REAL,
+        source TEXT DEFAULT 'manual',
+        transactionId TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_goal_history_goal
+      ON goal_history (goalId)
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS weekly_limits (
+        id TEXT PRIMARY KEY,
+        categoryId TEXT NOT NULL,
+        categoryName TEXT NOT NULL,
+        weeklyLimit REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        isActive INTEGER DEFAULT 1,
+        periodStart TEXT,
+        recurrencePolicy TEXT DEFAULT 'recurring'
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_weekly_limits_category
+      ON weekly_limits (categoryId)
+    ''');
+
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_limits_recurring
+      ON weekly_limits (categoryId)
+      WHERE recurrencePolicy = 'recurring'
+    ''');
+
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_limits_one_off
+      ON weekly_limits (categoryId, periodStart)
+      WHERE recurrencePolicy = 'oneOff'
     ''');
 
     await db.execute('''
@@ -1302,9 +1482,9 @@ class DatabaseHelper {
 
   /// Atomically wipe all user financial data across all tables during sign-out or account deletion.
   /// Preserves system/metadata seed definitions like default categories and seed rules.
-  Future<void> wipeAllUserData() async {
-    final db = await database;
-    await db.transaction((txn) async {
+  Future<void> wipeAllUserData({Database? db}) async {
+    final targetDb = db ?? await database;
+    await targetDb.transaction((txn) async {
       const tablesToClear = [
         'user_feedback',
         'unknown_format_logs',
@@ -1319,6 +1499,8 @@ class DatabaseHelper {
         'recurring_occurrences',
         'recurring_rules',
         'saving_goals',
+        'goal_history',
+        'weekly_limits',
         'transactions',
         'budgets',
         'transaction_sync_queue',

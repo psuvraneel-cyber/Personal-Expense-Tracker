@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
-import 'package:pet/premium/models/spend_pause.dart';
-import 'package:pet/premium/services/spend_pause_service.dart';
+import 'package:pet/providers/category_provider.dart';
+import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/premium/widgets/premium_gate.dart';
 
 class SpendPauseScreen extends StatefulWidget {
@@ -14,23 +14,13 @@ class SpendPauseScreen extends StatefulWidget {
 
 class _SpendPauseScreenState extends State<SpendPauseScreen>
     with SingleTickerProviderStateMixin {
-  SpendPause _pause = SpendPause(enabled: false);
   late final AnimationController _breathCtrl;
   late final Animation<double> _breathAnim;
   String _selectedDuration = 'Until midnight';
   DateTime? _customUntil;
-  Timer? _countdownTimer;
+  final Set<String> _selectedCategoryIds = {};
 
   static const _durations = ['1 hour', 'Until midnight', '3 days', 'Custom'];
-
-  static const _blockedIcons = {
-    'Food & Dining': Icons.restaurant_rounded,
-    'Entertainment': Icons.movie_rounded,
-    'Shopping': Icons.shopping_bag_rounded,
-    'Travel': Icons.flight_rounded,
-  };
-
-  final Set<String> _blockedCategories = {};
 
   @override
   void initState() {
@@ -43,48 +33,28 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
       begin: 0.9,
       end: 1.1,
     ).animate(CurvedAnimation(parent: _breathCtrl, curve: Curves.easeInOut));
-    _load();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_pause.enabled && _pause.until != null && mounted) {
-        setState(() {}); // Trigger rebuild to update countdown text
-      }
-    });
   }
 
   @override
   void dispose() {
-    _countdownTimer?.cancel();
     _breathCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _load() async {
-    final state = await SpendPauseService.getState();
-    setState(() {
-      _pause = state;
-      // Restore UI state from persisted pause so active-info is always correct.
-      if (state.isActive) {
-        _blockedCategories
-          ..clear()
-          ..addAll(state.blockedCategories);
-        // Restore duration label from the stored until time
-        if (state.until != null) {
-          final remaining = state.until!.difference(DateTime.now());
-          if (remaining.inDays >= 3) {
-            _selectedDuration = '3 days';
-          } else if (remaining.inHours >= 1 && remaining.inDays < 1) {
-            _selectedDuration = '1 hour';
-          } else {
-            _selectedDuration = 'Until midnight';
-          }
-        }
-      }
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pauseProvider = context.watch<SpendPauseProvider>();
+    final catProvider = context.watch<CategoryProvider>();
+    final expenseCategories = catProvider.categories
+        .where((c) => c.type == 'expense')
+        .toList();
+
+    // Sync selected category IDs from provider if active
+    if (pauseProvider.isActive && _selectedCategoryIds.isEmpty) {
+      _selectedCategoryIds.addAll(pauseProvider.blockedCategoryIds);
+    }
+
     return Scaffold(
       backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
       appBar: AppBar(
@@ -98,14 +68,14 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 60),
           children: [
             const SizedBox(height: 16),
-            _buildToggleHero(isDark),
+            _buildToggleHero(pauseProvider, isDark),
             const SizedBox(height: 24),
-            if (!_pause.isActive) ...[
+            if (!pauseProvider.isActive) ...[
               _buildDurationSection(isDark),
               const SizedBox(height: 20),
-              _buildCategoryBlock(isDark),
+              _buildCategoryBlock(expenseCategories, isDark),
             ] else ...[
-              _buildActiveInfo(isDark),
+              _buildActiveInfo(pauseProvider, catProvider, isDark),
             ],
           ],
         ),
@@ -113,19 +83,17 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
     );
   }
 
-  Widget _buildToggleHero(bool isDark) {
+  Widget _buildToggleHero(SpendPauseProvider pauseProvider, bool isDark) {
+    final canToggle = pauseProvider.isActive || _selectedCategoryIds.isNotEmpty;
     return Center(
       child: Column(
         children: [
           GestureDetector(
-            // Hero button activates only if categories are selected (or deactivates)
-            onTap: (_pause.isActive || _blockedCategories.isNotEmpty)
-                ? _togglePause
-                : null,
+            onTap: canToggle ? () => _handleToggle(pauseProvider) : null,
             child: AnimatedBuilder(
               animation: _breathAnim,
               builder: (_, child) {
-                final scale = _pause.enabled ? _breathAnim.value : 1.0;
+                final scale = pauseProvider.isActive ? _breathAnim.value : 1.0;
                 return Transform.scale(scale: scale, child: child);
               },
               child: Container(
@@ -133,7 +101,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
                 height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: _pause.enabled
+                  gradient: pauseProvider.isActive
                       ? LinearGradient(
                           colors: [
                             AppTheme.accentPurple.withAlpha(220),
@@ -148,82 +116,77 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
                               isDark ? 20 : 12,
                             ),
                             (isDark ? Colors.white : Colors.black).withAlpha(
-                              isDark ? 10 : 6,
+                              isDark ? 10 : 5,
                             ),
                           ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                  boxShadow: _pause.enabled
+                  boxShadow: pauseProvider.isActive
                       ? [
                           BoxShadow(
-                            color: AppTheme.accentPurple.withAlpha(80),
+                            color: AppTheme.accentPurple.withAlpha(100),
                             blurRadius: 30,
-                            spreadRadius: 6,
+                            spreadRadius: 4,
                           ),
                         ]
-                      : [],
+                      : null,
+                  border: Border.all(
+                    color: pauseProvider.isActive
+                        ? Colors.white.withAlpha(80)
+                        : (isDark
+                            ? Colors.white.withAlpha(20)
+                            : Colors.black.withAlpha(12)),
+                    width: 2,
+                  ),
                 ),
-                child: Icon(
-                  _pause.enabled
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
-                  size: 60,
-                  color: _pause.enabled ? Colors.white : AppTheme.textTertiary,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      pauseProvider.isActive
+                          ? Icons.shield_rounded
+                          : Icons.shield_outlined,
+                      size: 44,
+                      color: pauseProvider.isActive
+                          ? Colors.white
+                          : AppTheme.textTertiary,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      pauseProvider.isActive ? 'ACTIVE' : 'OFF',
+                      style: TextStyle(
+                        color: pauseProvider.isActive
+                            ? Colors.white
+                            : AppTheme.textTertiary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
-            _pause.isActive
-                ? 'Focus Mode Active'
-                : _blockedCategories.isEmpty
-                ? 'Select categories below'
-                : 'Tap to Enable',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: _pause.isActive
-                  ? AppTheme.accentPurple
-                  : _blockedCategories.isEmpty
-                  ? AppTheme.textTertiary
-                  : AppTheme.accentTeal,
+            pauseProvider.isActive
+                ? (pauseProvider.until != null
+                    ? _formatUntil(pauseProvider.until!)
+                    : 'Active Indefinitely')
+                : 'Tap to Activate Focus Mode',
+            style: TextStyle(
+              color: pauseProvider.isActive
+                  ? AppTheme.accentTeal
+                  : AppTheme.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _pause.isActive
-                ? (_pause.until != null
-                      ? _formatUntil(_pause.until!)
-                      : 'Active indefinitely')
-                : 'Set a duration below and activate',
-            style: Theme.of(context).textTheme.bodySmall,
-            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _pickCustomDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: now.add(const Duration(days: 1)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _customUntil = DateTime(
-          picked.year,
-          picked.month,
-          picked.day,
-          23,
-          59,
-          59,
-        );
-        _selectedDuration = 'Custom';
-      });
-    }
   }
 
   Widget _buildDurationSection(bool isDark) {
@@ -231,7 +194,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Duration',
+          'Pause Duration',
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -241,20 +204,15 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
           spacing: 8,
           runSpacing: 8,
           children: _durations.map((d) {
-            final selected = d == _selectedDuration;
-            final labelText = (d == 'Custom' && _customUntil != null)
-                ? 'Custom (${_customUntil!.day}/${_customUntil!.month})'
-                : d;
+            final selected = _selectedDuration == d;
             return ChoiceChip(
-              label: Text(labelText),
+              label: Text(d),
               selected: selected,
               onSelected: (_) {
                 if (d == 'Custom') {
                   _pickCustomDate();
                 } else {
-                  setState(() {
-                    _selectedDuration = d;
-                  });
+                  setState(() => _selectedDuration = d);
                 }
               },
               selectedColor: AppTheme.accentPurple.withAlpha(40),
@@ -271,8 +229,8 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
                 color: selected
                     ? AppTheme.accentPurple
                     : (isDark
-                          ? Colors.white.withAlpha(15)
-                          : Colors.black.withAlpha(10)),
+                        ? Colors.white.withAlpha(15)
+                        : Colors.black.withAlpha(10)),
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -284,7 +242,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
     );
   }
 
-  Widget _buildCategoryBlock(bool isDark) {
+  Widget _buildCategoryBlock(List<dynamic> categories, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -300,8 +258,8 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 10),
-        ..._blockedIcons.entries.map((e) {
-          final isSelected = _blockedCategories.contains(e.key);
+        ...categories.map((c) {
+          final isSelected = _selectedCategoryIds.contains(c.id);
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
@@ -313,8 +271,8 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
                 color: isSelected
                     ? AppTheme.accentPurple
                     : (isDark
-                          ? Colors.white.withAlpha(10)
-                          : Colors.black.withAlpha(7)),
+                        ? Colors.white.withAlpha(10)
+                        : Colors.black.withAlpha(7)),
               ),
             ),
             child: ListTile(
@@ -326,10 +284,14 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
                   color: AppTheme.accentPurple.withAlpha(isDark ? 30 : 20),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(e.value, color: AppTheme.accentPurple, size: 20),
+                child: Icon(
+                  IconData(c.iconCodePoint, fontFamily: c.iconFontFamily ?? 'MaterialIcons'),
+                  color: AppTheme.accentPurple,
+                  size: 20,
+                ),
               ),
               title: Text(
-                e.key,
+                c.name,
                 style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               trailing: Icon(
@@ -341,9 +303,9 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
               onTap: () {
                 setState(() {
                   if (isSelected) {
-                    _blockedCategories.remove(e.key);
+                    _selectedCategoryIds.remove(c.id);
                   } else {
-                    _blockedCategories.add(e.key);
+                    _selectedCategoryIds.add(c.id);
                   }
                 });
               },
@@ -354,7 +316,9 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _blockedCategories.isEmpty ? null : _togglePause,
+            onPressed: _selectedCategoryIds.isEmpty
+                ? null
+                : () => _handleToggle(context.read<SpendPauseProvider>()),
             style: ElevatedButton.styleFrom(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -368,7 +332,19 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
     );
   }
 
-  Widget _buildActiveInfo(bool isDark) {
+  Widget _buildActiveInfo(
+    SpendPauseProvider pauseProvider,
+    CategoryProvider catProvider,
+    bool isDark,
+  ) {
+    final blockedNames = pauseProvider.blockedCategoryIds
+        .map((id) => catProvider.categories.firstWhere(
+              (c) => c.id == id,
+              orElse: () => catProvider.categories.first,
+            ).name)
+        .toSet()
+        .join(', ');
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -396,13 +372,18 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'Duration: $_selectedDuration',
-            style: Theme.of(context).textTheme.bodyMedium,
+            pauseProvider.until != null
+                ? _formatUntil(pauseProvider.until!)
+                : 'Duration: Indefinite',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.accentTeal,
+                ),
           ),
-          if (_pause.blockedCategories.isNotEmpty) ...[
+          if (blockedNames.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              'Paused: ${_pause.blockedCategories.join(', ')}',
+              'Paused: $blockedNames',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -410,7 +391,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: _togglePause,
+              onPressed: () => pauseProvider.deactivate(),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.expenseRed,
                 side: const BorderSide(color: AppTheme.expenseRed),
@@ -441,37 +422,19 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
       if (h > 0) return 'Ends in $h:$m:$s';
       return 'Ends in $m:$s';
     } else {
-      // Multi-day — show date
       const months = [
-        '',
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
+        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
       ];
       return 'Active until ${until.day} ${months[until.month]}';
     }
   }
 
-  Future<void> _togglePause() async {
-    if (_pause.enabled) {
-      // Deactivate
-      final updated = SpendPause(enabled: false);
-      await SpendPauseService.setState(updated);
-      setState(() {
-        _pause = updated;
-        _blockedCategories.clear();
-      });
+  Future<void> _handleToggle(SpendPauseProvider provider) async {
+    if (provider.isActive) {
+      await provider.deactivate();
+      setState(() => _selectedCategoryIds.clear());
     } else {
-      // Activate — compute the `until` DateTime from the selected duration label
       final now = DateTime.now();
       DateTime? until;
       switch (_selectedDuration) {
@@ -484,21 +447,44 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
         case 'Custom':
           if (_customUntil == null || !_customUntil!.isAfter(now)) {
             await _pickCustomDate();
-            if (_customUntil == null || !_customUntil!.isAfter(now)) {
-              return; // User cancelled date selection
-            }
+            if (_customUntil == null || !_customUntil!.isAfter(now)) return;
           }
           until = _customUntil;
         default:
           until = null;
       }
-      final updated = SpendPause(
-        enabled: true,
+      await provider.activate(
         until: until,
-        blockedCategories: _blockedCategories.toList(),
+        categoryIds: _selectedCategoryIds.toList(),
       );
-      await SpendPauseService.setState(updated);
-      setState(() => _pause = updated);
     }
+  }
+
+  Future<void> _pickCustomDate() async {
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 23, minute: 59),
+    );
+    if (pickedTime == null) return;
+
+    setState(() {
+      _customUntil = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+      _selectedDuration = 'Custom';
+    });
   }
 }

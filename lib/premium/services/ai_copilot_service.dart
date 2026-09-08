@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:pet/premium/services/ai_rate_limiter.dart';
@@ -59,7 +60,19 @@ class FinancialContext {
     this.lowestProjectedDate,
     this.cashflowRiskLevel,
     this.forecastConfidence,
+    this.isFocusModeActive,
+    this.focusModeBlockedCount,
+    this.focusModeBlockedCategories,
+    this.weeklyLimits,
+    this.activeGoals,
   });
+
+  // --- Focus Mode & Weekly Planner & Goals Context (Phase I) ---
+  final bool? isFocusModeActive;
+  final int? focusModeBlockedCount;
+  final List<String>? focusModeBlockedCategories;
+  final List<Map<String, dynamic>>? weeklyLimits;
+  final List<Map<String, dynamic>>? activeGoals;
 }
 
 /// Exception thrown when the rate limiter denies a request.
@@ -267,6 +280,10 @@ class AiCopilotService {
         'No response.';
   }
 
+  @visibleForTesting
+  String buildSystemPromptForTesting(FinancialContext ctx) =>
+      _buildSystemPrompt(ctx);
+
   /// Builds a concise system prompt — sends totals & top categories only,
   /// NOT the full transaction list, to minimise token usage.
   String _buildSystemPrompt(FinancialContext ctx) {
@@ -349,6 +366,36 @@ class AiCopilotService {
         buf.writeln('Forecast confidence: ${ctx.forecastConfidence}');
       }
       buf.writeln('Note: Forecasts are estimates based on recent activity, not guarantees or formal financial advice.');
+    }
+
+    if (ctx.isFocusModeActive == true) {
+      buf.writeln('\n--- FOCUS MODE (SPEND PAUSE) ---');
+      buf.writeln('Status: ACTIVE (${ctx.focusModeBlockedCount ?? 0} discretionary categories paused)');
+      if (ctx.focusModeBlockedCategories != null && ctx.focusModeBlockedCategories!.isNotEmpty) {
+        buf.writeln('Paused categories: ${ctx.focusModeBlockedCategories!.join(', ')}');
+      }
+    }
+
+    if (ctx.weeklyLimits != null && ctx.weeklyLimits!.isNotEmpty) {
+      buf.writeln('\n--- WEEKLY PLANNER LIMITS ---');
+      for (final w in ctx.weeklyLimits!) {
+        final cat = w['category'] as String? ?? 'Category';
+        final limit = (w['limit'] as num?)?.toDouble() ?? 0.0;
+        final spent = (w['spent'] as num?)?.toDouble() ?? 0.0;
+        final isOver = w['isOver'] as bool? ?? false;
+        buf.writeln('  • $cat: ₹${_fmt(spent)} / ₹${_fmt(limit)} (this week)${isOver ? ' [OVER LIMIT]' : ''}');
+      }
+    }
+
+    if (ctx.activeGoals != null && ctx.activeGoals!.isNotEmpty) {
+      buf.writeln('\n--- SAVINGS GOALS ---');
+      for (final g in ctx.activeGoals!) {
+        final name = g['name'] as String? ?? 'Goal';
+        final current = (g['current'] as num?)?.toDouble() ?? 0.0;
+        final target = (g['target'] as num?)?.toDouble() ?? 0.0;
+        final pct = target > 0 ? ((current / target) * 100).round() : 0;
+        buf.writeln('  • $name: $pct% (₹${_fmt(current)} / ₹${_fmt(target)})');
+      }
     }
 
     buf.writeln('--- END OF SNAPSHOT ---');

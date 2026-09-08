@@ -201,16 +201,18 @@ class _GoalsScreenState extends State<GoalsScreen>
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    AnimatedBuilder(
-                      animation: _animCtrl,
-                      builder: (_, _) {
-                        return CustomPaint(
-                          size: const Size(72, 72),
-                          painter: _ArcPainter(
-                            progress: (progress * _animCtrl.value).clamp(0, 1),
-                          ),
-                        );
-                      },
+                    RepaintBoundary(
+                      child: AnimatedBuilder(
+                        animation: _animCtrl,
+                        builder: (_, _) {
+                          return CustomPaint(
+                            size: const Size(72, 72),
+                            painter: _ArcPainter(
+                              progress: (progress * _animCtrl.value).clamp(0, 1),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                     Column(
                       mainAxisSize: MainAxisSize.min,
@@ -464,13 +466,25 @@ class _GoalsScreenState extends State<GoalsScreen>
                     borderRadius: BorderRadius.circular(14),
                   ),
                   onSelected: (v) async {
-                    if (v == 'pause') {
+                    if (v == 'edit') {
+                      _showEditGoal(context, goal, provider);
+                    } else if (v == 'pause') {
                       await provider.togglePause(goal.id);
                     } else if (v == 'delete') {
                       await provider.deleteGoal(goal.id);
                     }
                   },
                   itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit Goal'),
+                        ],
+                      ),
+                    ),
                     PopupMenuItem(
                       value: 'pause',
                       child: Row(
@@ -702,92 +716,114 @@ class _GoalsScreenState extends State<GoalsScreen>
           top: 20,
           bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        child: StatefulBuilder(
+          builder: (ctx, setS) {
+            String? topUpError;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(goal.emoji ?? '🎯', style: const TextStyle(fontSize: 28)),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    Text(
-                      'Top Up — ${goal.name}',
-                      style: Theme.of(ctx).textTheme.titleLarge,
-                    ),
-                    Text(
-                      '${_fmt.format(goal.currentAmount)} / ${_fmt.format(goal.targetAmount)}',
-                      style: Theme.of(ctx).textTheme.bodySmall,
+                    Text(goal.emoji ?? '🎯', style: const TextStyle(fontSize: 28)),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Top Up — ${goal.name}',
+                          style: Theme.of(ctx).textTheme.titleLarge,
+                        ),
+                        Text(
+                          '${_fmt.format(goal.currentAmount)} / ${_fmt.format(goal.targetAmount)} (Remaining: ${_fmt.format(goal.remainingAmount)})',
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Quick amount chips
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [500, 1000, 2000, 5000].map((amt) {
-                return GestureDetector(
-                  onTap: () => controller.text = amt.toString(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentPurple.withAlpha(20),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: AppTheme.accentPurple.withAlpha(50),
+                const SizedBox(height: 16),
+                // Quick amount chips
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [500, 1000, 2000, 5000].map((amt) {
+                    return GestureDetector(
+                      onTap: () {
+                        controller.text = amt.toString();
+                        setS(() => topUpError = null);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentPurple.withAlpha(20),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: AppTheme.accentPurple.withAlpha(50),
+                          ),
+                        ),
+                        child: Text(
+                          '+₹$amt',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.accentPurple,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      '+₹$amt',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.accentPurple,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Custom amount (₹)',
-                prefixIcon: Icon(Icons.currency_rupee),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  final amount = double.tryParse(controller.text.trim()) ?? 0;
-                  if (amount > 0) {
-                    provider.topUpGoal(goal.id, amount);
-                    Navigator.pop(ctx);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                    );
+                  }).toList(),
                 ),
-                child: const Text('Add to Goal'),
-              ),
-            ),
-          ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Custom amount (₹)',
+                    prefixIcon: const Icon(Icons.currency_rupee),
+                    errorText: topUpError,
+                  ),
+                  onChanged: (_) {
+                    if (topUpError != null) setS(() => topUpError = null);
+                  },
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final amount = double.tryParse(controller.text.trim());
+                      if (amount == null || amount <= 0) {
+                        setS(() => topUpError = 'Please enter an amount greater than ₹0');
+                        return;
+                      }
+                      final res = await provider.topUpGoal(goal.id, amount);
+                      if (res.status == TopUpStatus.exceedsTarget) {
+                        setS(() => topUpError =
+                            'Amount exceeds target by ₹${res.overage.toStringAsFixed(0)}. Remaining needed: ₹${res.allowedAmount.toStringAsFixed(0)}');
+                        return;
+                      } else if (res.status == TopUpStatus.alreadyAchieved) {
+                        setS(() => topUpError = 'This goal has already reached its target!');
+                        return;
+                      }
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Add to Goal'),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -799,6 +835,9 @@ class _GoalsScreenState extends State<GoalsScreen>
     final amountCtrl = TextEditingController();
     DateTime? targetDate;
     String selectedEmoji = _goalEmojis[0];
+
+    String? nameError;
+    String? amountError;
 
     await showModalBottomSheet(
       context: context,
@@ -873,18 +912,26 @@ class _GoalsScreenState extends State<GoalsScreen>
               const SizedBox(height: 14),
               TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Goal name (e.g. Goa Trip)',
+                  errorText: nameError,
                 ),
+                onChanged: (_) {
+                  if (nameError != null) setS(() => nameError = null);
+                },
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: amountCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Target amount (₹)',
-                  prefixIcon: Icon(Icons.currency_rupee),
+                  prefixIcon: const Icon(Icons.currency_rupee),
+                  errorText: amountError,
                 ),
+                onChanged: (_) {
+                  if (amountError != null) setS(() => amountError = null);
+                },
               ),
               const SizedBox(height: 12),
               InkWell(
@@ -934,11 +981,23 @@ class _GoalsScreenState extends State<GoalsScreen>
                 child: ElevatedButton(
                   onPressed: () {
                     final name = nameCtrl.text.trim();
-                    final amount = double.tryParse(amountCtrl.text.trim()) ?? 0;
-                    if (name.isEmpty || amount <= 0) return;
+                    final amount = double.tryParse(amountCtrl.text.trim());
+                    bool hasError = false;
+
+                    if (name.isEmpty) {
+                      setS(() => nameError = 'Please enter a goal name');
+                      hasError = true;
+                    }
+                    if (amount == null || amount <= 0) {
+                      setS(() => amountError = 'Please enter a target greater than ₹0');
+                      hasError = true;
+                    }
+
+                    if (hasError) return;
+
                     provider.addGoal(
                       name: name,
-                      targetAmount: amount,
+                      targetAmount: amount!,
                       targetDate: targetDate,
                       emoji: selectedEmoji,
                     );
@@ -951,6 +1010,229 @@ class _GoalsScreenState extends State<GoalsScreen>
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   child: const Text('Create Goal'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEditGoal(
+    BuildContext context,
+    SavingGoal goal,
+    GoalProvider provider,
+  ) async {
+    final nameCtrl = TextEditingController(text: goal.name);
+    final amountCtrl = TextEditingController(
+      text: goal.targetAmount.toStringAsFixed(0),
+    );
+    DateTime? targetDate = goal.targetDate;
+    String? selectedEmoji = goal.emoji ?? _goalEmojis[0];
+
+    String? nameError;
+    String? amountError;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Edit Goal',
+                    style: Theme.of(ctx).textTheme.titleLarge,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              // Emoji picker
+              const Text(
+                'Pick an icon',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textTertiary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _goalEmojis.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final selected = _goalEmojis[i] == selectedEmoji;
+                    return GestureDetector(
+                      onTap: () => setS(() => selectedEmoji = _goalEmojis[i]),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppTheme.accentPurple.withAlpha(35)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: selected
+                                ? AppTheme.accentPurple
+                                : Colors.transparent,
+                            width: 2,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _goalEmojis[i],
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Goal name',
+                  errorText: nameError,
+                ),
+                onChanged: (_) {
+                  if (nameError != null) setS(() => nameError = null);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Target amount (₹)',
+                  prefixIcon: const Icon(Icons.currency_rupee),
+                  errorText: amountError,
+                ),
+                onChanged: (_) {
+                  if (amountError != null) setS(() => amountError = null);
+                },
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).inputDecorationTheme.fillColor,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withAlpha(15)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_rounded,
+                      size: 18,
+                      color: AppTheme.textTertiary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: ctx,
+                            initialDate: targetDate ??
+                                DateTime.now().add(const Duration(days: 90)),
+                            firstDate: DateTime.now()
+                                .subtract(const Duration(days: 365)),
+                            lastDate: DateTime.now()
+                                .add(const Duration(days: 3650)),
+                          );
+                          if (picked != null) setS(() => targetDate = picked);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            targetDate == null
+                                ? 'No target date set'
+                                : DateFormat('dd MMM yyyy').format(targetDate!),
+                            style: targetDate == null
+                                ? const TextStyle(color: AppTheme.textTertiary)
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (targetDate != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        tooltip: 'Clear target date',
+                        onPressed: () => setS(() => targetDate = null),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final name = nameCtrl.text.trim();
+                    final amount = double.tryParse(amountCtrl.text.trim());
+                    bool hasError = false;
+
+                    if (name.isEmpty) {
+                      setS(() => nameError = 'Please enter a goal name');
+                      hasError = true;
+                    }
+                    if (amount == null || amount <= 0) {
+                      setS(() => amountError =
+                          'Please enter a target greater than ₹0');
+                      hasError = true;
+                    } else if (amount < goal.currentAmount) {
+                      setS(() => amountError =
+                          'Target cannot be lower than saved amount (₹${goal.currentAmount.toStringAsFixed(0)})');
+                      hasError = true;
+                    }
+
+                    if (hasError) return;
+
+                    await provider.editGoal(
+                      id: goal.id,
+                      name: name,
+                      targetAmount: amount!,
+                      targetDate: targetDate,
+                      emoji: selectedEmoji,
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Save Changes'),
                 ),
               ),
             ],

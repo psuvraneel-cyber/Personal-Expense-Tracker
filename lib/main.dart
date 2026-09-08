@@ -31,6 +31,7 @@ import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/services/bill_reminder_scheduler.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
+import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
 import 'package:pet/providers/dashboard_config_provider.dart';
@@ -284,6 +285,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       final taxProv = ctx.read<TaxProvider>();
       final weeklyProv = ctx.read<WeeklyPlannerProvider>();
       final dashProv = ctx.read<DashboardConfigProvider>();
+      final spendPauseProv = ctx.read<SpendPauseProvider>();
 
       await Future.wait([
         txProv.clearData(),
@@ -294,12 +296,13 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
         goalProv.clearData(),
         alertProv.clearData(),
         recTxProv.clearData(),
+        weeklyProv.clearData(),
+        spendPauseProv.clearData(),
       ]);
       smsProv.clearData();
       linkedProv.clearData();
       familyProv.clearData();
       taxProv.clearData();
-      weeklyProv.clearData();
       dashProv.clearData();
 
       if (!kIsWeb) {
@@ -321,6 +324,11 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<RecurringProvider>().load();
       ctx.read<GoalProvider>().load();
       ctx.read<AlertProvider>().load();
+      ctx.read<LinkedAccountProvider>().load();
+      ctx.read<FamilyProvider>().load();
+      ctx.read<WeeklyPlannerProvider>().load();
+      ctx.read<SpendPauseProvider>().load();
+      ctx.read<DashboardConfigProvider>().load();
       ctx.read<PremiumProvider>().logInUser(currentUserId);
     } else {
       AppLogger.debug('[MAIN] No action taken (same user or null→null)');
@@ -441,6 +449,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
         Provider(
           create: (_) => AccountDeletionService(dbHelper: DatabaseHelper()),
         ),
+        ChangeNotifierProvider(create: (_) => SpendPauseProvider()..load()),
         ChangeNotifierProxyProvider<TransactionProvider, WeeklyPlannerProvider>(
           create: (_) => WeeklyPlannerProvider()..load(),
           update: (_, txnProvider, plannerProvider) {

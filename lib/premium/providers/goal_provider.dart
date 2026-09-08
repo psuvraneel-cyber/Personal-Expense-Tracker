@@ -1,14 +1,38 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:pet/core/utils/app_logger.dart';
-import 'package:pet/premium/models/notification_category.dart';
+import 'package:pet/premium/models/goal_history_item.dart';
 import 'package:pet/premium/models/saving_goal.dart';
 import 'package:pet/premium/repositories/saving_goal_repository.dart';
 import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
-import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:uuid/uuid.dart';
+
+enum TopUpStatus {
+  success,
+  alreadyAchieved,
+  exceedsTarget,
+  invalidAmount,
+  goalNotFound,
+  goalPaused,
+}
+
+class TopUpResult {
+  final TopUpStatus status;
+  final double allowedAmount;
+  final double overage;
+  final SavingGoal? updatedGoal;
+
+  const TopUpResult({
+    required this.status,
+    this.allowedAmount = 0.0,
+    this.overage = 0.0,
+    this.updatedGoal,
+  });
+
+  bool get isSuccess => status == TopUpStatus.success;
+}
 
 class GoalProvider extends ChangeNotifier {
   final SavingGoalRepository _repository;
@@ -31,10 +55,11 @@ class GoalProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoaded => _isLoaded;
 
-  /// Total amount saved across active (non-paused) goals that must be protected as reserves.
-  double get totalActiveGoalReserves => _goals
-      .where((g) => !g.isPaused)
-      .fold(0.0, (sum, g) => sum + g.currentAmount);
+  /// Authoritative single source of truth for total protected goal reserves.
+  /// Uses [SavingGoal.activeReserveAmount] which returns 0.0 for paused goals
+  /// and clamps currentAmount to targetAmount to prevent over-saving distortion.
+  double get totalActiveGoalReserves =>
+      _goals.fold(0.0, (sum, g) => sum + g.activeReserveAmount);
 
   /// Total amount saved across all goals regardless of pause status.
   double get totalSavedAmount =>
@@ -56,7 +81,12 @@ class GoalProvider extends ChangeNotifier {
 
       await _subscribeToFirestore();
     } catch (e, st) {
-      AppLogger.error('Failed to load goals', error: e, stack: st, label: 'GoalProvider');
+      AppLogger.error(
+        'Failed to load goals',
+        error: e,
+        stack: st,
+        label: 'GoalProvider',
+      );
     } finally {
       if (!_disposed) {
         _isLoading = false;
@@ -72,42 +102,93 @@ class GoalProvider extends ChangeNotifier {
 
     if (!_firestoreSync.isAuthenticated) return;
 
+    final expectedGeneration = _firestoreSync.sessionGeneration;
+    final expectedUid = _firestoreSync.currentUserId;
+
     final stream = _firestoreSync.savingGoalsStream();
     _firestoreSubscription = stream.listen(
       (remoteGoals) async {
         if (_disposed || AccountDeletionService.isDeletionInProgress) return;
-        if (remoteGoals.isEmpty && _goals.isNotEmpty) return;
-
-        final localMap = {for (final g in _goals) g.id: g};
-        bool changed = false;
-
-        for (final remote in remoteGoals) {
-          final local = localMap[remote.id];
-          if (local == null) {
-            localMap[remote.id] = remote;
-            if (!kIsWeb) await _repository.upsert(remote);
-            changed = true;
-          } else if (remote.createdAt.isAfter(local.createdAt) ||
-                     remote.currentAmount != local.currentAmount ||
-                     remote.isPaused != local.isPaused ||
-                     remote.name != local.name ||
-                     remote.targetAmount != local.targetAmount) {
-            localMap[remote.id] = remote;
-            if (!kIsWeb) await _repository.upsert(remote);
-            changed = true;
-          }
+        // Invalidate stale in-flight snapshot if session generation or user has changed
+        if (_firestoreSync.sessionGeneration != expectedGeneration ||
+            _firestoreSync.currentUserId != expectedUid) {
+          AppLogger.warn(
+            '[GoalProvider] Dropping stale Firestore snapshot from superseded session',
+            label: 'GoalProvider',
+          );
+          return;
         }
-
-        if (changed && !_disposed) {
-          _goals = localMap.values.toList()
-            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          notifyListeners();
-        }
+        await reconcileRemoteGoals(remoteGoals);
       },
       onError: (Object e) {
         AppLogger.debug('[GoalProvider] Firestore stream error: $e');
       },
     );
+  }
+
+  /// Reconciles local SQLite state with remote Firestore snapshot.
+  /// Detects remote deletions and cleans up local ghosts.
+  @visibleForTesting
+  Future<void> reconcileRemoteGoals(List<SavingGoal> remoteGoals) async {
+    if (_disposed || AccountDeletionService.isDeletionInProgress) return;
+
+    final remoteIds = remoteGoals.map((g) => g.id).toSet();
+    final localMap = {for (final g in _goals) g.id: g};
+    bool changed = false;
+
+    // 1. Detect remote deletions (goals present locally but deleted on remote).
+    // Exclude goals created very recently (< 10 seconds) that may not have synced yet.
+    final now = DateTime.now();
+    final goalsToDelete = <String>[];
+    for (final local in _goals) {
+      if (!remoteIds.contains(local.id)) {
+        final isVeryRecent =
+            now.difference(local.createdAt).inSeconds < 10;
+        if (!isVeryRecent) {
+          goalsToDelete.add(local.id);
+        }
+      }
+    }
+
+    for (final id in goalsToDelete) {
+      localMap.remove(id);
+      if (!kIsWeb) await _repository.delete(id);
+      AlertEvaluationCoordinator().onGoalDeleted(id);
+      changed = true;
+    }
+
+    // 2. Reconcile remote creations and updates
+    for (final remote in remoteGoals) {
+      final local = localMap[remote.id];
+      if (local == null) {
+        localMap[remote.id] = remote;
+        if (!kIsWeb) await _repository.upsert(remote);
+        changed = true;
+      } else {
+        // Check if remote is newer or fields differ
+        final remoteUpdated = remote.updatedAt ?? remote.createdAt;
+        final localUpdated = local.updatedAt ?? local.createdAt;
+        final remoteIsNewer = remoteUpdated.isAfter(localUpdated);
+
+        if (remoteIsNewer ||
+            remote.currentAmount != local.currentAmount ||
+            remote.isPaused != local.isPaused ||
+            remote.name != local.name ||
+            remote.targetAmount != local.targetAmount ||
+            remote.emoji != local.emoji ||
+            remote.targetDate != local.targetDate) {
+          localMap[remote.id] = remote;
+          if (!kIsWeb) await _repository.upsert(remote);
+          changed = true;
+        }
+      }
+    }
+
+    if (changed && !_disposed) {
+      _goals = localMap.values.toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      notifyListeners();
+    }
   }
 
   Future<void> addGoal({
@@ -116,17 +197,38 @@ class GoalProvider extends ChangeNotifier {
     DateTime? targetDate,
     String? emoji,
   }) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError('Goal name cannot be empty');
+    }
+    if (targetAmount <= 0) {
+      throw ArgumentError('Target amount must be greater than zero');
+    }
+
+    final now = DateTime.now();
     final goal = SavingGoal(
       id: _uuid.v4(),
-      name: name,
+      name: trimmedName,
       targetAmount: targetAmount,
       currentAmount: 0,
-      createdAt: DateTime.now(),
+      createdAt: now,
       targetDate: targetDate,
       emoji: emoji,
+      updatedAt: now,
     );
     if (!kIsWeb) {
       await _repository.upsert(goal);
+      await _repository.addHistory(GoalHistoryItem(
+        id: _uuid.v4(),
+        goalId: goal.id,
+        amount: 0,
+        actionType: 'created',
+        createdAt: now,
+        note: 'Goal created',
+        previousAmount: 0.0,
+        resultingAmount: 0.0,
+        source: 'manual',
+      ));
     }
     _goals = [goal, ..._goals];
     notifyListeners();
@@ -139,23 +241,43 @@ class GoalProvider extends ChangeNotifier {
   }
 
   Future<void> updateProgress(String id, double amount) async {
+    if (amount < 0) {
+      throw ArgumentError('Progress amount cannot be negative');
+    }
     final index = _goals.indexWhere((g) => g.id == id);
     if (index == -1) return;
 
-    final wasAchieved =
-        _goals[index].currentAmount >= _goals[index].targetAmount;
-    final updated = _goals[index].copyWith(currentAmount: amount);
-    final isNowAchieved = updated.currentAmount >= updated.targetAmount;
+    final goal = _goals[index];
+    final wasAchieved = goal.isAchieved;
+    final now = DateTime.now();
+    final updated = goal.copyWith(
+      currentAmount: amount,
+      updatedAt: now,
+    );
+    final isNowAchieved = updated.isAchieved;
 
     _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     if (!kIsWeb) {
       await _repository.upsert(updated);
+      await _repository.addHistory(GoalHistoryItem(
+        id: _uuid.v4(),
+        goalId: id,
+        amount: amount - goal.currentAmount,
+        actionType: 'progressUpdate',
+        createdAt: now,
+        note: 'Progress update',
+        previousAmount: goal.currentAmount,
+        resultingAmount: amount,
+        source: 'manual',
+      ));
     }
     notifyListeners();
 
     if (_firestoreSync.isAuthenticated) {
       unawaited(_firestoreSync.upsertSavingGoal(updated).catchError((e) {
-        AppLogger.debug('[GoalProvider] Firestore sync updateProgress failed: $e');
+        AppLogger.debug(
+          '[GoalProvider] Firestore sync updateProgress failed: $e',
+        );
       }));
     }
 
@@ -164,21 +286,74 @@ class GoalProvider extends ChangeNotifier {
     }
   }
 
-  /// Add [amount] to a goal's current progress (e.g. from a "Top Up" action).
-  Future<void> topUpGoal(String id, double amount) async {
+  /// Financially coherent top-up adhering to product invariants.
+  ///
+  /// Prevents unbounded over-saving by default. If [amount] exceeds remaining headroom,
+  /// returns [TopUpStatus.exceedsTarget] unless [allowOverfunding] is explicitly set.
+  Future<TopUpResult> topUpGoal(
+    String id,
+    double amount, {
+    bool allowOverfunding = false,
+  }) async {
+    if (amount <= 0) {
+      return const TopUpResult(status: TopUpStatus.invalidAmount);
+    }
     final index = _goals.indexWhere((g) => g.id == id);
-    if (index == -1) return;
+    if (index == -1) {
+      return const TopUpResult(status: TopUpStatus.goalNotFound);
+    }
 
-    final wasAchieved =
-        _goals[index].currentAmount >= _goals[index].targetAmount;
-    final updated = _goals[index].copyWith(
-      currentAmount: _goals[index].currentAmount + amount,
+    final goal = _goals[index];
+    if (goal.isPaused) {
+      return TopUpResult(
+        status: TopUpStatus.goalPaused,
+        allowedAmount: 0.0,
+        overage: amount,
+        updatedGoal: goal,
+      );
+    }
+    final remaining = goal.remainingAmount;
+
+    if (goal.isAchieved && !allowOverfunding) {
+      return TopUpResult(
+        status: TopUpStatus.alreadyAchieved,
+        allowedAmount: 0.0,
+        overage: amount,
+        updatedGoal: goal,
+      );
+    }
+
+    if (amount > remaining && !allowOverfunding) {
+      return TopUpResult(
+        status: TopUpStatus.exceedsTarget,
+        allowedAmount: remaining,
+        overage: amount - remaining,
+        updatedGoal: goal,
+      );
+    }
+
+    final now = DateTime.now();
+    final wasAchieved = goal.isAchieved;
+    final updated = goal.copyWith(
+      currentAmount: goal.currentAmount + amount,
+      updatedAt: now,
     );
-    final isNowAchieved = updated.currentAmount >= updated.targetAmount;
+    final isNowAchieved = updated.isAchieved;
 
     _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     if (!kIsWeb) {
       await _repository.upsert(updated);
+      await _repository.addHistory(GoalHistoryItem(
+        id: _uuid.v4(),
+        goalId: id,
+        amount: amount,
+        actionType: 'topUp',
+        createdAt: now,
+        note: 'Top up',
+        previousAmount: goal.currentAmount,
+        resultingAmount: updated.currentAmount,
+        source: 'manual',
+      ));
     }
     notifyListeners();
 
@@ -191,29 +366,169 @@ class GoalProvider extends ChangeNotifier {
     if (!wasAchieved && isNowAchieved) {
       await _checkAndSendAchievementNotification(updated);
     }
+
+    return TopUpResult(
+      status: TopUpStatus.success,
+      allowedAmount: amount,
+      updatedGoal: updated,
+    );
   }
 
-  Future<void> _checkAndSendAchievementNotification(SavingGoal goal) async {
-    await NotificationService.showInstant(
-      id: NotificationService.collisionSafeId('goal_${goal.id}'),
-      title: '🎉 Goal Achieved!',
-      body: 'Congratulations! You reached your saving goal: ${goal.name}',
-      category: NotificationCategory.goalProgress,
-      payload: 'goal:${goal.id}',
+  /// Withdraw funds from an active goal.
+  ///
+  /// Strictly enforces domain invariants: withdrawal amount must be > 0
+  /// and cannot exceed current saved amount.
+  Future<void> withdrawFromGoal(
+    String id,
+    double amount, {
+    String? note,
+  }) async {
+    if (amount <= 0) {
+      throw ArgumentError('Withdrawal amount must be greater than zero');
+    }
+    final index = _goals.indexWhere((g) => g.id == id);
+    if (index == -1) {
+      throw ArgumentError('Goal with ID $id not found');
+    }
+
+    final goal = _goals[index];
+    if (amount > goal.currentAmount) {
+      throw ArgumentError(
+        'Withdrawal amount ($amount) exceeds current saved amount (${goal.currentAmount})',
+      );
+    }
+
+    final now = DateTime.now();
+    final newAmount = (goal.currentAmount - amount).clamp(0.0, double.infinity);
+    final updated = goal.copyWith(
+      currentAmount: newAmount,
+      updatedAt: now,
     );
+
+    _goals = List<SavingGoal>.from(_goals)..[index] = updated;
+    if (!kIsWeb) {
+      await _repository.upsert(updated);
+      await _repository.addHistory(GoalHistoryItem(
+        id: _uuid.v4(),
+        goalId: id,
+        amount: -amount,
+        actionType: 'withdrawal',
+        createdAt: now,
+        note: note ?? 'Withdrawal',
+        previousAmount: goal.currentAmount,
+        resultingAmount: newAmount,
+        source: 'manual',
+      ));
+    }
+    notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertSavingGoal(updated).catchError((e) {
+        AppLogger.debug('[GoalProvider] Firestore sync withdrawFromGoal failed: $e');
+      }));
+    }
+  }
+
+  /// Edit existing goal attributes (name, target amount, target date, emoji).
+  ///
+  /// Distinguishes between omitted parameters and explicit null values
+  /// using [savingGoalSentinel].
+  Future<void> editGoal({
+    required String id,
+    String? name,
+    double? targetAmount,
+    Object? targetDate = savingGoalSentinel,
+    Object? emoji = savingGoalSentinel,
+  }) async {
+    final index = _goals.indexWhere((g) => g.id == id);
+    if (index == -1) {
+      throw ArgumentError('Goal with ID $id not found');
+    }
+
+    final goal = _goals[index];
+    final wasAchieved = goal.isAchieved;
+    final now = DateTime.now();
+
+    final newName = name != null ? name.trim() : goal.name;
+    if (newName.isEmpty) {
+      throw ArgumentError('Goal name cannot be empty');
+    }
+    final newTarget = targetAmount ?? goal.targetAmount;
+    if (newTarget <= 0) {
+      throw ArgumentError('Target amount must be greater than zero');
+    }
+
+    final updated = goal.copyWith(
+      name: newName,
+      targetAmount: newTarget,
+      targetDate: targetDate,
+      emoji: emoji,
+      updatedAt: now,
+    );
+    final isNowAchieved = updated.isAchieved;
+
+    _goals = List<SavingGoal>.from(_goals)..[index] = updated;
+    if (!kIsWeb) {
+      await _repository.upsert(updated);
+      await _repository.addHistory(GoalHistoryItem(
+        id: _uuid.v4(),
+        goalId: id,
+        amount: 0,
+        actionType: 'goalEdited',
+        createdAt: now,
+        note: 'Goal edited: $newName',
+        previousAmount: goal.currentAmount,
+        resultingAmount: goal.currentAmount,
+        source: 'manual',
+      ));
+    }
+    notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertSavingGoal(updated).catchError((e) {
+        AppLogger.debug('[GoalProvider] Firestore sync editGoal failed: $e');
+      }));
+    }
+
+    if (!wasAchieved && isNowAchieved) {
+      await _checkAndSendAchievementNotification(updated);
+    }
+  }
+
+  /// Single authoritative path for goal achievement notification.
+  /// Delegated solely to [AlertEvaluationCoordinator] to prevent double notifications.
+  Future<void> _checkAndSendAchievementNotification(SavingGoal goal) async {
     try {
       await AlertEvaluationCoordinator().onGoalsChanged([goal]);
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.debug('[GoalProvider] Alert coordinator notification failed: $e');
+    }
   }
 
   /// Toggle pause state on a goal.
   Future<void> togglePause(String id) async {
     final index = _goals.indexWhere((g) => g.id == id);
     if (index == -1) return;
-    final updated = _goals[index].copyWith(isPaused: !_goals[index].isPaused);
+    final goal = _goals[index];
+    final now = DateTime.now();
+    final updated = goal.copyWith(
+      isPaused: !goal.isPaused,
+      updatedAt: now,
+    );
     _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     if (!kIsWeb) {
       await _repository.upsert(updated);
+      await _repository.addHistory(GoalHistoryItem(
+        id: _uuid.v4(),
+        goalId: id,
+        amount: 0,
+        actionType: updated.isPaused ? 'goalPaused' : 'goalResumed',
+        createdAt: now,
+        note: updated.isPaused ? 'Goal paused' : 'Goal resumed',
+        previousAmount: goal.currentAmount,
+        resultingAmount: goal.currentAmount,
+        source: 'manual',
+      ));
     }
     notifyListeners();
 
@@ -239,6 +554,12 @@ class GoalProvider extends ChangeNotifier {
     }
   }
 
+  /// Retrieve goal contribution audit history.
+  Future<List<GoalHistoryItem>> getHistory(String goalId) async {
+    if (kIsWeb) return [];
+    return _repository.getHistory(goalId);
+  }
+
   Future<void> clearData() async {
     _goals = [];
     _isLoading = false;
@@ -251,7 +572,11 @@ class GoalProvider extends ChangeNotifier {
 
     if (!kIsWeb) {
       await _repository.deleteAll().catchError((e) {
-        AppLogger.error('SavingGoal clear failed', error: e, label: 'GoalProvider');
+        AppLogger.error(
+          'SavingGoal clear failed',
+          error: e,
+          label: 'GoalProvider',
+        );
       });
     }
   }
