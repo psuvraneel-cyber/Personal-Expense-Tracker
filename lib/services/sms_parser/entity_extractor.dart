@@ -305,7 +305,7 @@ class EntityExtractor {
 
   /// Generic Ref/TxnId.
   static final RegExp _genericRefPattern = RegExp(
-    r'(?:Ref\.?\s*(?:No\.?\s*|ID\s*)?[:.]?\s*|TxnId\s*[:.]?\s*|Txn\s*(?:No\.?\s*)?[:.]?\s*|Transaction\s*(?:ID|No\.?\s*)?[:.]?\s*)(\d{6,16})',
+    r'(?:Ref\.?\s*(?:No\.?\s*|ID\s*)?[:.]?\s*(?:UPI\s*[-/]?\s*)?|TxnId\s*[:.]?\s*|Txn\s*(?:No\.?\s*)?[:.]?\s*|Transaction\s*(?:ID|No\.?\s*)?[:.]?\s*)(\d{6,16})',
     caseSensitive: false,
   );
 
@@ -368,7 +368,7 @@ class EntityExtractor {
     // ICICI: "for UPI-merchant@upi"
     (
       RegExp(
-        r'for\s+UPI[-/]?\s*([A-Za-z0-9][\w\s&.*@/-]{1,60}?)(?:\s*\.?\s*UPI\s*Ref|\.\s|$)',
+        r'for\s+UPI[-/]?\s*(?!txn\b|ref\b|transaction\b)([A-Za-z0-9][\w\s&.*@/-]{1,60}?)(?:\s*\.?\s*UPI\s*Ref|\.\s|$)',
         caseSensitive: false,
       ),
       'ICICI UPI pattern',
@@ -416,7 +416,7 @@ class EntityExtractor {
     // Generic: "at MERCHANT on"
     (
       RegExp(
-        r'\bat\s+([A-Za-z0-9][\w\s&.*-]{1,50}?)(?:\s+on\b|\s+ref\b|\s+Ref\b|\s+UPI\b|\s+via\b|\.(?:\s|$)|$)',
+        r'\bat\s+([A-Za-z0-9][\w\s&.*-]{1,50}?)(?:\s*[—–-]\s*|\s+on\b|\s+ref\b|\s+Ref\b|\s+UPI\b|\s+via\b|\.(?:\s|$)|$)',
         caseSensitive: false,
       ),
       'At merchant pattern',
@@ -424,7 +424,7 @@ class EntityExtractor {
     // "paid to X" / "sent to X"
     (
       RegExp(
-        r'(?:paid\s+to|to\s+VPA|transfer(?:red)?\s+to|sent\s+to|payment\s+to|paying\s+to)\s+([A-Za-z0-9][\w\s&.*@/-]{1,60}?)(?:\s+on\b|\s+from\b|\s+ref\b|\s+Ref\b|\s+UPI\b|\s+via\b|\.\s|$)',
+        r'(?:paid\s+to|to\s+VPA|transfer(?:red)?\s+to|sent\s+to|payment\s+to|paying\s+to)\s+([A-Za-z0-9][\w\s&.*@/-]{1,60}?)(?:\s*[—–-]\s*|\s+on\b|\s+from\b|\s+ref\b|\s+Ref\b|\s+UPI\b|\s+via\b|\.\s|$)',
         caseSensitive: false,
       ),
       'Paid/sent to pattern',
@@ -432,7 +432,7 @@ class EntityExtractor {
     // "received from X" / "from X"
     (
       RegExp(
-        r'(?:received\s+from|from\s+VPA|from)\s+([A-Za-z0-9][\w\s&.*@/-]{1,60}?)(?:\s+on\b|\s+to\b|\s+in\b|\s+ref\b|\s+Ref\b|\s+UPI\b|\s+via\b|\.\s|$)',
+        r'(?:received\s+from|from\s+VPA|from)\s+([A-Za-z0-9][\w\s&.*@/-]{1,60}?)(?:\s*[—–-]\s*|\s+on\b|\s+to\b|\s+in\b|\s+ref\b|\s+Ref\b|\s+UPI\b|\s+via\b|\.\s|$)',
         caseSensitive: false,
       ),
       'From pattern',
@@ -484,6 +484,7 @@ class EntityExtractor {
     if (cleaned.contains('@')) return cleaned;
 
     cleaned = cleaned
+        .replaceAll(RegExp(r'\s*[—–-]\s*$'), '')
         .replaceAll(RegExp(r'\s+on$', caseSensitive: false), '')
         .replaceAll(RegExp(r'\s+from$', caseSensitive: false), '')
         .replaceAll(RegExp(r'\s+to$', caseSensitive: false), '')
@@ -493,7 +494,8 @@ class EntityExtractor {
         .trim();
 
     if (cleaned.length > 60) cleaned = cleaned.substring(0, 60).trim();
-    return cleaned.isEmpty ? 'Unknown' : cleaned;
+    if (cleaned.isEmpty || cleaned.toLowerCase().startsWith('unknown')) return 'Unknown';
+    return cleaned;
   }
 
   // ═══════════════════════════════════════════════════════════════════

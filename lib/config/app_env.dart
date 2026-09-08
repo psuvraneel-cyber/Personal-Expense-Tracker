@@ -12,10 +12,6 @@
 class AppEnv {
   AppEnv._(); // non-instantiable
 
-  // ── Supabase ──────────────────────────────────────────────────────────────
-  static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-
   // ── Groq AI Copilot ───────────────────────────────────────────────────────
   static const groqModel = String.fromEnvironment(
     'GROQ_MODEL',
@@ -23,7 +19,17 @@ class AppEnv {
   );
 
   // ── RevenueCat (Premium/IAP) ───────────────────────────────────────────────
-  static const revenueCatGoogleApiKey = String.fromEnvironment(
-    'REVENUECAT_GOOGLE_API_KEY',
+  /// RevenueCat Test Store public SDK key (used in Debug builds).
+  static const revenueCatTestStoreApiKey = String.fromEnvironment(
+    'REVENUECAT_TEST_STORE_API_KEY',
   );
+
+  /// RevenueCat Android / Google Play production public SDK key (used in Release builds).
+  static const revenueCatAndroidApiKey = String.fromEnvironment(
+    'REVENUECAT_ANDROID_API_KEY',
+    defaultValue: String.fromEnvironment('REVENUECAT_GOOGLE_API_KEY'),
+  );
+
+  /// Legacy / backward-compatible alias pointing to [revenueCatAndroidApiKey].
+  static const revenueCatGoogleApiKey = revenueCatAndroidApiKey;
 }

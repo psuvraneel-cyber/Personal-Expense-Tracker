@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/budget.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/repositories/budget_repository.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/services/firestore_sync_service.dart';
+import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:uuid/uuid.dart';
 
 class BudgetProvider extends ChangeNotifier {
@@ -54,7 +57,7 @@ class BudgetProvider extends ChangeNotifier {
       // On web, budgets are populated via refreshSpentFromTransactions()
       // and setBudget() which writes directly to Firestore.
     } catch (e) {
-      debugPrint('Error loading budgets: $e');
+      AppLogger.error('Error loading budgets', error: e, label: 'BudgetProvider');
     }
 
     _isLoading = false;
@@ -80,7 +83,7 @@ class BudgetProvider extends ChangeNotifier {
       await _budgetRepository
           .insertOrUpdateBudget(budget)
           .catchError(
-            (Object e) => debugPrint('SQLite budget insert failed: $e'),
+            (Object e) => AppLogger.error('SQLite budget insert failed', error: e, label: 'DB'),
           );
 
       // Update spent amount from SQLite
@@ -93,16 +96,24 @@ class BudgetProvider extends ChangeNotifier {
     }
 
     if (existingIndex >= 0) {
-      _budgets[existingIndex] = budget;
+      _budgets = List<Budget>.from(_budgets)..[existingIndex] = budget;
     } else {
-      _budgets.add(budget);
+      _budgets = [..._budgets, budget];
     }
     notifyListeners();
 
     // Mirror to Firestore in background.
     _firestoreSync
         .upsertBudget(budget)
-        .catchError((Object e) => debugPrint('[Sync] budget upsert: $e'));
+        .catchError((Object e) => AppLogger.error('budget upsert failed', error: e, label: 'Sync'));
+
+    unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
+      budgets: {for (final b in _budgets) b.categoryId: b.amount},
+      spent: _spentAmounts,
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error('Alert evaluation failed in setBudget',
+          error: e, stack: st, label: 'AlertCoordinator');
+    }));
   }
 
   Future<void> deleteBudget(String categoryId) async {
@@ -121,19 +132,27 @@ class BudgetProvider extends ChangeNotifier {
       await _budgetRepository
           .deleteBudgetForCategory(categoryId, _currentMonth, _currentYear)
           .catchError(
-            (Object e) => debugPrint('SQLite budget delete failed: $e'),
+            (Object e) => AppLogger.error('SQLite budget delete failed', error: e, label: 'DB'),
           );
     }
 
-    _budgets.removeWhere((b) => b.categoryId == categoryId);
+    _budgets = _budgets.where((b) => b.categoryId != categoryId).toList();
     _spentAmounts.remove(categoryId);
     notifyListeners();
 
     if (budget.id.isNotEmpty) {
       _firestoreSync
           .deleteBudget(budget.id)
-          .catchError((Object e) => debugPrint('[Sync] budget delete: $e'));
+          .catchError((Object e) => AppLogger.error('budget delete failed', error: e, label: 'Sync'));
     }
+
+    unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
+      budgets: {for (final b in _budgets) b.categoryId: b.amount},
+      spent: _spentAmounts,
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error('Alert evaluation failed in deleteBudget',
+          error: e, stack: st, label: 'AlertCoordinator');
+    }));
   }
 
   double getSpentForCategory(String categoryId) {
@@ -182,6 +201,17 @@ class BudgetProvider extends ChangeNotifier {
 
     _spentAmounts = spent;
     notifyListeners();
+
+    unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
+      budgets: {for (final b in _budgets) b.categoryId: b.amount},
+      spent: _spentAmounts,
+    ).catchError((Object e, StackTrace st) {
+      AppLogger.error(
+          'Alert evaluation failed in refreshSpentFromTransactions',
+          error: e,
+          stack: st,
+          label: 'AlertCoordinator');
+    }));
   }
 
   /// Clear all in-memory state and wipe budgets from SQLite.
@@ -194,7 +224,7 @@ class BudgetProvider extends ChangeNotifier {
     // Wipe budgets from SQLite.
     if (!kIsWeb) {
       await _budgetRepository.deleteAllBudgets().catchError(
-        (Object e) => debugPrint('SQLite budget clear failed: $e'),
+        (Object e) => AppLogger.error('SQLite budget clear failed', error: e, label: 'DB'),
       );
     }
   }

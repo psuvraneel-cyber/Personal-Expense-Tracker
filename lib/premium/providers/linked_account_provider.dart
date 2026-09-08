@@ -49,7 +49,7 @@ class LinkedAccountProvider extends ChangeNotifier {
   Future<void> disconnectAccount(String id) async {
     await _provider.disconnectAccount(id);
     await _repository.delete(id);
-    _accounts.removeWhere((a) => a.id == id);
+    _accounts = _accounts.where((a) => a.id != id).toList();
     notifyListeners();
   }
 

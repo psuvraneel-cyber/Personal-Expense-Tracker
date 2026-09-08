@@ -12,12 +12,18 @@ class NativeSmsMessage {
   final String body;
   final int dateMillis;
   final int type; // 1=inbox, 2=sent, 3=draft
+  final String? title;
+  final String? packageName;
+  final String source; // 'sms' or 'notification'
 
   NativeSmsMessage({
     required this.address,
     required this.body,
     required this.dateMillis,
     this.type = 1,
+    this.title,
+    this.packageName,
+    this.source = 'sms',
   });
 
   DateTime get dateTime => DateTime.fromMillisecondsSinceEpoch(dateMillis);
@@ -28,6 +34,17 @@ class NativeSmsMessage {
   /// Whether this message is from the sent box.
   bool get isSent => type == 2;
 
+  /// Semantic text representing the full message content.
+  /// If [title] is present and not duplicated in [body], prefixes title.
+  String get semanticText {
+    final cleanBody = body.trim();
+    final cleanTitle = title?.trim() ?? '';
+    if (cleanTitle.isEmpty || cleanBody.contains(cleanTitle)) {
+      return cleanBody;
+    }
+    return '$cleanTitle — $cleanBody';
+  }
+
   factory NativeSmsMessage.fromMap(Map<dynamic, dynamic> map) {
     // Prioritize `date` (device receipt time) over `date_sent` (SMSC time).
     // SMSC times are notoriously buggy on some Indian carrier networks and can
@@ -37,11 +54,21 @@ class NativeSmsMessage {
     final int dateSent = (map['date_sent'] as num?)?.toInt() ?? 0;
     final int finalDateMillis = dateReceived > 0 ? dateReceived : dateSent;
 
+    final String? pkg = map['package'] as String?;
+    final String rawAddress = map['address'] as String? ?? '';
+    // If address is empty but package is provided (notification), use package as address
+    final String finalAddress = rawAddress.isNotEmpty ? rawAddress : (pkg ?? '');
+    final String? title = map['title'] as String?;
+    final String source = map['source'] as String? ?? (pkg != null ? 'notification' : 'sms');
+
     return NativeSmsMessage(
-      address: map['address'] as String? ?? '',
+      address: finalAddress,
       body: map['body'] as String? ?? '',
       dateMillis: finalDateMillis,
       type: (map['type'] as num?)?.toInt() ?? 1,
+      title: title,
+      packageName: pkg,
+      source: source,
     );
   }
 }
@@ -66,11 +93,18 @@ class NativeSmsReader {
   factory NativeSmsReader() => _instance;
   NativeSmsReader._internal();
 
+  @visibleForTesting
+  NativeSmsReader.forTesting();
+
   Stream<NativeSmsMessage>? _incomingSmsStream;
   Stream<NativeSmsMessage>? _incomingNotificationStream;
 
+  @visibleForTesting
+  static bool? debugOverrideIsSupported;
+
   /// Whether the native reader is available (Android only).
-  static bool get isSupported => !kIsWeb && platform.isAndroid;
+  static bool get isSupported =>
+      debugOverrideIsSupported ?? (!kIsWeb && platform.isAndroid);
 
   // ─── Read Inbox ───────────────────────────────────────────────────
 
@@ -224,6 +258,69 @@ class NativeSmsReader {
       await _methodChannel.invokeMethod('stopListening');
     } catch (e) {
       AppLogger.debug('[NativeSmsReader] Error stopping listener: $e');
+    }
+  }
+
+  /// Read and clear any pending encrypted notifications from the native cache.
+  Future<List<NativeSmsMessage>> popPendingNotifications() async {
+    if (!isSupported) return [];
+    try {
+      final List<dynamic>? result = await _methodChannel.invokeMethod(
+        'popPendingNotifications',
+      );
+      if (result == null) return [];
+      return result
+          .map(
+            (item) => NativeSmsMessage.fromMap(item as Map<dynamic, dynamic>),
+          )
+          .toList();
+    } on PlatformException catch (e) {
+      AppLogger.debug(
+        '[NativeSmsReader] Platform error popping pending notifications: ${e.message}',
+      );
+      return [];
+    } catch (e) {
+      AppLogger.debug('[NativeSmsReader] Error popping pending notifications: $e');
+      return [];
+    }
+  }
+
+  /// Read pending encrypted notifications without clearing them.
+  Future<List<NativeSmsMessage>> peekPendingNotifications() async {
+    if (!isSupported) return [];
+    try {
+      final List<dynamic>? result = await _methodChannel.invokeMethod(
+        'peekPendingNotifications',
+      );
+      if (result == null) return [];
+      return result
+          .map(
+            (item) => NativeSmsMessage.fromMap(item as Map<dynamic, dynamic>),
+          )
+          .toList();
+    } on PlatformException catch (e) {
+      AppLogger.debug(
+        '[NativeSmsReader] Platform error peeking pending notifications: ${e.message}',
+      );
+      return [];
+    } catch (e) {
+      AppLogger.debug('[NativeSmsReader] Error peeking pending notifications: $e');
+      return [];
+    }
+  }
+
+  /// Acknowledge processed notifications from the native cache.
+  Future<bool> acknowledgeNotifications(int count) async {
+    if (!isSupported || count <= 0) return true;
+    try {
+      final bool? success = await _methodChannel.invokeMethod(
+        'acknowledgeNotifications',
+        {'count': count},
+      );
+      return success ?? false;
+    } catch (e) {
+      AppLogger.debug('[NativeSmsReader] Error acknowledging notifications: $e');
+      return false;
     }
   }
 

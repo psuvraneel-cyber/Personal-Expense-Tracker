@@ -3,10 +3,17 @@ import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/models/budget.dart';
 
 class BudgetRepository {
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final DatabaseHelper _dbHelper;
+  final Database? _database;
+
+  BudgetRepository({DatabaseHelper? dbHelper, Database? database})
+      : _dbHelper = dbHelper ?? DatabaseHelper(),
+        _database = database;
+
+  Future<Database> get _db async => _database ?? await _dbHelper.database;
 
   Future<List<Budget>> getBudgetsByMonth(int month, int year) async {
-    final db = await _dbHelper.database;
+    final db = await _db;
     final List<Map<String, dynamic>> maps = await db.query(
       'budgets',
       where: 'month = ? AND year = ?',
@@ -20,7 +27,7 @@ class BudgetRepository {
     int month,
     int year,
   ) async {
-    final db = await _dbHelper.database;
+    final db = await _db;
     final List<Map<String, dynamic>> maps = await db.query(
       'budgets',
       where: 'categoryId = ? AND month = ? AND year = ?',
@@ -31,7 +38,7 @@ class BudgetRepository {
   }
 
   Future<void> insertOrUpdateBudget(Budget budget) async {
-    final db = await _dbHelper.database;
+    final db = await _db;
     await db.insert(
       'budgets',
       budget.toMap(),
@@ -40,7 +47,7 @@ class BudgetRepository {
   }
 
   Future<void> deleteBudget(String id) async {
-    final db = await _dbHelper.database;
+    final db = await _db;
     await db.delete('budgets', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -49,7 +56,7 @@ class BudgetRepository {
     int month,
     int year,
   ) async {
-    final db = await _dbHelper.database;
+    final db = await _db;
     await db.delete(
       'budgets',
       where: 'categoryId = ? AND month = ? AND year = ?',

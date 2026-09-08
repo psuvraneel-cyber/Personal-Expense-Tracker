@@ -18,11 +18,13 @@ class AppLogger {
 
   /// Informational message for normal operations.
   static void info(String message, {String? label}) {
+    if (!kDebugMode) return;
     _log('INFO', message, label: label);
   }
 
   /// Warning — something unexpected but recoverable.
   static void warn(String message, {String? label}) {
+    if (!kDebugMode) return;
     _log('WARN', message, label: label);
   }
 
@@ -45,6 +47,7 @@ class AppLogger {
 
   /// Debug — verbose, only interesting during development.
   static void debug(String message, {String? label}) {
+    if (!kDebugMode) return;
     _log('DEBUG', message, label: label);
   }
 

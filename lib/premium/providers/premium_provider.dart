@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:pet/premium/services/premium_entitlement_service.dart';
 
@@ -11,6 +12,11 @@ class PremiumProvider extends ChangeNotifier {
   bool get experimentalEnabled => _experimentalEnabled;
   bool get isLoading => _isLoading;
 
+  /// Whether developer premium access is currently enabled (debug only).
+  /// Always returns `false` in release builds.
+  bool get isDeveloperPremiumAccessEnabled =>
+      PremiumEntitlementService.isDeveloperPremiumAccessEnabled();
+
   /// The Firebase UID of the currently logged-in user.
   /// Used to scope RevenueCat identity and entitlement cache.
   String? _currentUid;
@@ -22,6 +28,14 @@ class PremiumProvider extends ChangeNotifier {
   }
 
   void _updatePremiumStatus(CustomerInfo customerInfo) {
+    if (PremiumEntitlementService.isDeveloperPremiumAccessEnabled()) {
+      if (!_isPremium) {
+        _isPremium = true;
+        notifyListeners();
+      }
+      return;
+    }
+
     final newPremiumState =
         customerInfo.entitlements.all["P.E.T Premium"]?.isActive == true;
     if (_isPremium != newPremiumState) {
@@ -49,7 +63,7 @@ class PremiumProvider extends ChangeNotifier {
       _experimentalEnabled =
           await PremiumEntitlementService.isExperimentalEnabled();
     } catch (e) {
-      debugPrint('[PremiumProvider] load() failed: $e');
+      AppLogger.error('load() failed', error: e, label: 'PremiumProvider');
       // Ensure premium defaults to false on unrecoverable errors
       _isPremium = false;
     } finally {
@@ -89,4 +103,28 @@ class PremiumProvider extends ChangeNotifier {
     _experimentalEnabled = enabled;
     notifyListeners();
   }
+
+  /// Toggle developer premium access (debug builds only).
+  ///
+  /// When enabled, all premium features are unlocked without a subscription.
+  /// When disabled, normal RevenueCat entitlement checking resumes.
+  /// No-op in release builds.
+  Future<void> setDeveloperPremiumAccess(bool enabled) async {
+    PremiumEntitlementService.setDeveloperPremiumAccess(enabled);
+    // Re-evaluate premium state immediately
+    if (enabled) {
+      _isPremium = true;
+    } else {
+      // Falling back to real entitlement — re-check via RevenueCat
+      try {
+        _isPremium = await PremiumEntitlementService.isPremiumEnabled(
+          uid: _currentUid,
+        );
+      } catch (_) {
+        _isPremium = false;
+      }
+    }
+    notifyListeners();
+  }
 }
+

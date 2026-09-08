@@ -16,6 +16,10 @@ class TransactionRecord {
   final TransactionSource source;
   final String? accountId;
   final DateTime? updatedAt;
+  final String? recurringRuleId;
+  final DateTime? occurrenceDate;
+  final String? sourceObservationId;
+  final String? sourceFingerprint;
 
   TransactionRecord({
     required this.id,
@@ -32,6 +36,10 @@ class TransactionRecord {
     this.source = TransactionSource.manual,
     this.accountId,
     this.updatedAt,
+    this.recurringRuleId,
+    this.occurrenceDate,
+    this.sourceObservationId,
+    this.sourceFingerprint,
   });
 
   /// Serialize to SQLite row — enums are stored as their string representation
@@ -51,8 +59,7 @@ class TransactionRecord {
       'taxCategory': taxCategory,
       'source': source.toJson(),
       'accountId': accountId,
-      'updatedAt':
-          updatedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+
     };
   }
 
@@ -75,9 +82,7 @@ class TransactionRecord {
       taxCategory: map['taxCategory'] as String?,
       source: TransactionSource.fromJson(map['source'] as String?),
       accountId: map['accountId'] as String?,
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.parse(map['updatedAt'] as String)
-          : null,
+
     );
   }
 
@@ -96,6 +101,10 @@ class TransactionRecord {
     TransactionSource? source,
     String? accountId,
     DateTime? updatedAt,
+    String? recurringRuleId,
+    DateTime? occurrenceDate,
+    String? sourceObservationId,
+    String? sourceFingerprint,
   }) {
     return TransactionRecord(
       id: id ?? this.id,
@@ -112,6 +121,10 @@ class TransactionRecord {
       source: source ?? this.source,
       accountId: accountId ?? this.accountId,
       updatedAt: updatedAt ?? this.updatedAt,
+      recurringRuleId: recurringRuleId ?? this.recurringRuleId,
+      occurrenceDate: occurrenceDate ?? this.occurrenceDate,
+      sourceObservationId: sourceObservationId ?? this.sourceObservationId,
+      sourceFingerprint: sourceFingerprint ?? this.sourceFingerprint,
     );
   }
 
@@ -131,6 +144,12 @@ class TransactionRecord {
       'source': source.toJson(),
       'accountId': accountId,
       'updatedAt': FieldValue.serverTimestamp(),
+      'recurringRuleId': recurringRuleId,
+      'occurrenceDate': occurrenceDate != null
+          ? Timestamp.fromDate(occurrenceDate!)
+          : null,
+      'sourceObservationId': sourceObservationId,
+      'sourceFingerprint': sourceFingerprint,
     };
   }
 
@@ -156,6 +175,10 @@ class TransactionRecord {
       source: TransactionSource.fromJson(data['source'] as String?),
       accountId: data['accountId'] as String?,
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+      recurringRuleId: data['recurringRuleId'] as String?,
+      occurrenceDate: (data['occurrenceDate'] as Timestamp?)?.toDate(),
+      sourceObservationId: data['sourceObservationId'] as String?,
+      sourceFingerprint: data['sourceFingerprint'] as String?,
     );
   }
 }

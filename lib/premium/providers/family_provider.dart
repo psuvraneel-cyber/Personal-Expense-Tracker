@@ -31,13 +31,13 @@ class FamilyProvider extends ChangeNotifier {
       monthlyLimit: monthlyLimit,
     );
     await _repository.upsert(member);
-    _members.add(member);
+    _members = [..._members, member];
     notifyListeners();
   }
 
   Future<void> removeMember(String id) async {
     await _repository.delete(id);
-    _members.removeWhere((m) => m.id == id);
+    _members = _members.where((m) => m.id != id).toList();
     notifyListeners();
   }
 

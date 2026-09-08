@@ -9,61 +9,82 @@ import android.os.Looper
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.util.Log
+import androidx.annotation.GuardedBy
+import androidx.annotation.VisibleForTesting
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequest
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkManager
+import dev.fluttercommunity.workmanager.BackgroundWorker
 import io.flutter.plugin.common.EventChannel
-import org.json.JSONArray
-import org.json.JSONObject
 
 /**
  * Optional NotificationListenerService for capturing UPI app notifications.
  *
- * ## Why this exists
- * Some UPI apps (Google Pay, PhonePe, Paytm) send transaction confirmations
- * as push notifications rather than SMS. This service captures those
- * notifications and forwards them to the Dart parser.
- *
- * ## How it works
- * 1. User grants Notification Access permission in system settings.
- * 2. Android calls [onNotificationPosted] for every new notification.
- * 3. We filter for known UPI/bank app packages.
- * 4. Extract notification title + text and forward to Dart via EventChannel.
- *
- * ## Play Store Compliance
- * NotificationListenerService requires BIND_NOTIFICATION_LISTENER_SERVICE
- * permission and explicit user consent (system settings toggle).
- * This is less sensitive than READ_SMS but still requires justification
- * in the Play Console declaration.
- *
- * ## Privacy
- * - Only notifications from whitelisted financial app packages are captured.
- * - No notification content is sent to any server.
- * - All processing is on-device.
- *
- * ## Integration
- * 1. Add to AndroidManifest.xml:
- *    <service
- *        android:name=".TransactionNotificationListener"
- *        android:exported="true"
- *        android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
- *        <intent-filter>
- *            <action android:name="android.service.notification.NotificationListenerService" />
- *        </intent-filter>
- *    </service>
- *
- * 2. Request permission: TransactionNotificationListener.requestAccess(context)
- * 3. Check permission: TransactionNotificationListener.hasAccess(context)
+ * ## Threading & Concurrency Architecture:
+ * - [onNotificationPosted] runs asynchronously on background Binder IPC threads.
+ * - Flutter's [EventChannel.EventSink] MUST be invoked strictly on the Android Main (UI) thread.
+ * - To prevent check-then-act race conditions between background dispatching and main thread [onCancel]
+ *   or listener re-creation, all sink mutations and version tokens are synchronized under [sinkLock].
+ * - Event delivery uses a double-checked version token verification on the Main Thread:
+ *   If the sink was cancelled or replaced while the task was enqueued on the Main Looper, the task
+ *   never invokes [EventChannel.EventSink.success] on a stale sink (preventing [IllegalStateException]),
+ *   and instead safely delivers to any newly active sink or persists to [EncryptedNotificationCache].
+ * - When persisting to [EncryptedNotificationCache] while the app is closed / engine unattached,
+ *   an expedited [OneTimeWorkRequest] is enqueued to process the notification and evaluate budget/anomaly
+ *   alerts in a background Dart isolate within seconds.
  */
 class TransactionNotificationListener : NotificationListenerService() {
 
     companion object {
         private const val TAG = "PET-NotifListener"
+        const val TASK_PROCESS_NOTIFICATIONS = "com.pet.tracker.processNotifications"
+        const val WORK_NAME_EXPEDITED_NOTIF = "com.pet.tracker.processNotifications.immediate"
+
+        private val sinkLock = Any()
+
+        @GuardedBy("sinkLock")
+        private var _eventSink: EventChannel.EventSink? = null
+
+        @GuardedBy("sinkLock")
+        private var _sinkVersion: Long = 0L
 
         /**
-         * EventSink to forward notification data to Dart.
-         * Set by the FlutterPlugin when the EventChannel is opened.
+         * Visible for testing: Context fallback for unattached service instances in unit tests.
          */
-        @Volatile
-        var eventSink: EventChannel.EventSink? = null
+        @VisibleForTesting
+        var listenerContext: Context? = null
+
+        /**
+         * Thread-safe property for managing EventSink subscription.
+         * Setting a new sink automatically increments the session version token atomically.
+         */
+        var eventSink: EventChannel.EventSink?
+            get() = synchronized(sinkLock) { _eventSink }
+            set(value) = synchronized(sinkLock) {
+                _eventSink = value
+                _sinkVersion++
+                SafeLog.d(TAG, "EventSink updated (version=$_sinkVersion, active=${value != null})")
+            }
+
+        /**
+         * Visible for testing: Resets static synchronization state.
+         */
+        @VisibleForTesting
+        fun resetForTesting() {
+            synchronized(sinkLock) {
+                _eventSink = null
+                _sinkVersion = 0L
+                listenerContext = null
+            }
+        }
+
+        /**
+         * Visible for testing: Gets current sink version token.
+         */
+        @VisibleForTesting
+        fun getSinkVersionForTesting(): Long = synchronized(sinkLock) { _sinkVersion }
 
         /**
          * Whitelisted UPI/bank app package names.
@@ -97,6 +118,14 @@ class TransactionNotificationListener : NotificationListenerService() {
             "com.slice",                                  // Slice
             "com.jupiter.money",                          // Jupiter
             "com.epifi.paisa",                           // Fi Money
+            "com.dreamplug.androidapp",                   // CRED
+            "com.naviapp",                                // Navi
+            "com.hdfcbank.payzapp",                       // PayZapp
+            "money.super.payments",                       // Super.money
+            "com.tatadigital.tcp",                        // Tata Neu
+            "com.freecharge.android",                     // Freecharge
+            "com.myairtelapp",                            // Airtel Thanks
+            "com.mobikwik_new",                           // MobiKwik
         )
 
         /**
@@ -121,10 +150,49 @@ class TransactionNotificationListener : NotificationListenerService() {
         }
 
         /**
-         * Save notification data to SharedPreferences cache when the app is in background or closed.
+         * Save notification data to SharedPreferences cache when the app is in background or closed,
+         * and enqueue an expedited WorkManager request for immediate background Dart isolate execution.
          */
         fun saveNotificationToCache(context: Context, data: Map<String, Any?>) {
             EncryptedNotificationCache.saveNotification(context, data)
+            enqueueExpeditedNotificationProcessing(context)
+        }
+
+        /**
+         * Enqueue an expedited WorkManager one-off task to process cached notifications.
+         */
+        fun enqueueExpeditedNotificationProcessing(context: Context) {
+            try {
+                val inputData = Data.Builder()
+                    .putString(BackgroundWorker.DART_TASK_KEY, TASK_PROCESS_NOTIFICATIONS)
+                    .build()
+
+                val workRequestBuilder = OneTimeWorkRequest.Builder(BackgroundWorker::class.java)
+                    .setInputData(inputData)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    workRequestBuilder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                }
+
+                val workRequest = workRequestBuilder.build()
+
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    WORK_NAME_EXPEDITED_NOTIF,
+                    ExistingWorkPolicy.REPLACE,
+                    workRequest
+                )
+                SafeLog.d(TAG, "Enqueued expedited WorkManager task ($WORK_NAME_EXPEDITED_NOTIF)")
+            } catch (e: Exception) {
+                SafeLog.e(TAG, "Failed to enqueue expedited notification processing: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun resolveContext(): Context? {
+        return try {
+            applicationContext ?: listenerContext
+        } catch (e: Exception) {
+            listenerContext
         }
     }
 
@@ -146,30 +214,52 @@ class TransactionNotificationListener : NotificationListenerService() {
         // Use bigText if available (contains full transaction details)
         val body = bigText ?: text
 
-        if (body.isBlank()) return
+        if (body.isBlank() && title.isBlank()) return
 
-        // Tighter financial check:
-        // Require BOTH a currency/amount indicator AND a transaction verb.
-        // This prevents promotional push notifications ("Get ₹100 cashback!")
-        // from being forwarded while still catching real txn confirmations.
-        val hasCurrencyOrAmount = body.contains("Rs", ignoreCase = true) ||
-                body.contains("INR", ignoreCase = true) ||
-                body.contains("₹")
+        // Combined inspection across both title and body
+        val combinedText = "$title $body"
 
-        val hasTransactionVerb = body.contains("paid", ignoreCase = true) ||
-                body.contains("received", ignoreCase = true) ||
-                body.contains("debited", ignoreCase = true) ||
-                body.contains("credited", ignoreCase = true) ||
-                body.contains("sent", ignoreCase = true) ||
-                body.contains("transferred", ignoreCase = true)
+        // Require currency or amount indicator
+        val hasCurrencyOrAmount = combinedText.contains("Rs", ignoreCase = true) ||
+                combinedText.contains("INR", ignoreCase = true) ||
+                combinedText.contains("₹")
+
+        // Comprehensive financial verbs to avoid false negatives
+        val hasTransactionVerb = combinedText.contains("paid", ignoreCase = true) ||
+                combinedText.contains("received", ignoreCase = true) ||
+                combinedText.contains("debited", ignoreCase = true) ||
+                combinedText.contains("credited", ignoreCase = true) ||
+                combinedText.contains("sent", ignoreCase = true) ||
+                combinedText.contains("transferred", ignoreCase = true) ||
+                combinedText.contains("spent", ignoreCase = true) ||
+                combinedText.contains("deducted", ignoreCase = true) ||
+                combinedText.contains("successful", ignoreCase = true) ||
+                combinedText.contains("payment", ignoreCase = true) ||
+                combinedText.contains("withdrawn", ignoreCase = true) ||
+                combinedText.contains("charged", ignoreCase = true) ||
+                combinedText.contains("purchase", ignoreCase = true) ||
+                combinedText.contains("refund", ignoreCase = true) ||
+                combinedText.contains("reversed", ignoreCase = true) ||
+                combinedText.contains("completed", ignoreCase = true) ||
+                combinedText.contains("cashback", ignoreCase = true) ||
+                combinedText.contains("added", ignoreCase = true)
 
         if (!hasCurrencyOrAmount || !hasTransactionVerb) return
 
-        // CRITICAL-1: Log event occurrence ONLY — NEVER interpolate body, amount, or merchant details.
+        // Conservative native filter against obvious non-transaction noise
+        val isNegativePromoOrOtp = combinedText.contains("OTP", ignoreCase = true) ||
+                combinedText.contains("one time password", ignoreCase = true) ||
+                combinedText.contains("use coupon", ignoreCase = true) ||
+                combinedText.contains("get flat", ignoreCase = true) ||
+                combinedText.contains("claim cashback offer", ignoreCase = true) ||
+                combinedText.contains("apply for loan", ignoreCase = true)
+
+        if (isNegativePromoOrOtp) return
+
         SafeLog.d(TAG, "Financial notification captured from $packageName")
 
-        // Forward to Dart
         val data = mapOf(
+            "schemaVersion" to 1,
             "source" to "notification",
             "package" to packageName,
             "title" to title,
@@ -178,24 +268,47 @@ class TransactionNotificationListener : NotificationListenerService() {
             "type" to 1  // Treat as inbox-type
         )
 
-        try {
-            val sink = eventSink
-            if (sink != null) {
-                Handler(Looper.getMainLooper()).post {
-                    try {
-                        sink.success(data)
-                    } catch (e: Exception) {
-                        SafeLog.e(TAG, "Failed to deliver notification to EventSink: ${e.message}")
-                        saveNotificationToCache(applicationContext ?: this, data)
+        // Snapshot current sink & version under lock
+        val (capturedSink, capturedVersion) = synchronized(sinkLock) {
+            Pair(_eventSink, _sinkVersion)
+        }
+
+        val targetCtx = resolveContext()
+
+        if (capturedSink == null) {
+            SafeLog.d(TAG, "eventSink is null, caching notification")
+            if (targetCtx != null) {
+                saveNotificationToCache(targetCtx, data)
+            }
+            return
+        }
+
+        // Post to Main Thread for EventChannel delivery with version verification
+        Handler(Looper.getMainLooper()).post {
+            try {
+                val (currentSink, currentVersion) = synchronized(sinkLock) {
+                    Pair(_eventSink, _sinkVersion)
+                }
+
+                if (currentSink === capturedSink && currentVersion == capturedVersion) {
+                    // Sink is 100% active, un-cancelled, and un-replaced
+                    capturedSink.success(data)
+                } else if (currentSink != null) {
+                    // Sink was reconnected/recreated while Runnable was in Main Looper queue
+                    currentSink.success(data)
+                } else {
+                    // Sink was cancelled (onCancel). Cache notification safely
+                    SafeLog.d(TAG, "EventSink was cancelled prior to execution. Caching notification.")
+                    if (targetCtx != null) {
+                        saveNotificationToCache(targetCtx, data)
                     }
                 }
-            } else {
-                SafeLog.d(TAG, "eventSink is null, caching notification")
-                saveNotificationToCache(applicationContext ?: this, data)
+            } catch (e: Exception) {
+                SafeLog.e(TAG, "Failed to deliver notification to EventSink: ${e.message}")
+                if (targetCtx != null) {
+                    saveNotificationToCache(targetCtx, data)
+                }
             }
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error forwarding notification: ${e.message}")
-            saveNotificationToCache(applicationContext ?: this, data)
         }
     }
 

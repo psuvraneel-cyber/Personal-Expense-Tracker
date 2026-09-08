@@ -27,4 +27,9 @@ class SavingGoalRepository {
     final db = await _dbHelper.database;
     await db.delete('saving_goals', where: 'id = ?', whereArgs: [id]);
   }
+
+  Future<void> deleteAll() async {
+    final db = await _dbHelper.database;
+    await db.delete('saving_goals');
+  }
 }

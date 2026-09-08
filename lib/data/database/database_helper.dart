@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io' show Directory, File;
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:meta/meta.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/services/platform_stub.dart'
     if (dart.library.io) 'package:pet/services/platform_native.dart'
     as platform;
@@ -11,6 +12,10 @@ import 'package:sqflite_sqlcipher/sqflite.dart' hide databaseFactory;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart'
     show databaseFactory, databaseFactoryFfi, sqfliteFfiInit;
 import 'package:pet/core/constants/categories.dart';
+import 'package:pet/data/models/enums.dart';
+import 'package:pet/services/canonical_identity_resolver.dart';
+import 'package:pet/services/category_mapper.dart';
+import 'package:pet/services/recurrence_calculator.dart';
 import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
 
@@ -36,18 +41,7 @@ class DatabaseHelper {
   Future<Database> get database async {
     if (_database != null) return _database!;
 
-    if (_dbCompleter == null) {
-      _dbCompleter = Completer<Database>();
-      try {
-        _database = await _initDatabase();
-        _dbCompleter!.complete(_database);
-      } catch (e) {
-        _dbCompleter!.completeError(e);
-        _dbCompleter = null;
-        rethrow;
-      }
     }
-    return _dbCompleter!.future;
   }
 
   /// Check if SQLCipher is supported at runtime.
@@ -113,16 +107,14 @@ class DatabaseHelper {
     if (cipherSupported) {
       final File dbFile = File(path);
       if (await dbFile.exists() && await _isDatabasePlaintext(path)) {
-        debugPrint(
-          '[DB] ⚠️ Plaintext database detected. Migrating to encrypted database...',
-        );
+
         try {
           final password = await SecureStorageService.instance
               .getDatabaseEncryptionKey();
           await _encryptDatabaseInPlace(path, password);
-          debugPrint('[DB] ✅ Migration to encrypted database complete.');
+          AppLogger.info('Migration to encrypted database complete.', label: 'DB');
         } catch (e) {
-          debugPrint('[DB] ❌ Encryption migration failed: $e');
+          AppLogger.error('Encryption migration failed', error: e, label: 'DB');
         }
       }
 
@@ -130,7 +122,7 @@ class DatabaseHelper {
           .getDatabaseEncryptionKey();
       return await openDatabase(
         path,
-        version: 12,
+        version: 18,
         password: password,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -140,12 +132,10 @@ class DatabaseHelper {
         },
       );
     } else {
-      debugPrint(
-        '[DB] SQLCipher is not supported on this platform. Opening in plaintext.',
-      );
+
       return await openDatabase(
         path,
-        version: 12,
+        version: 18,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
         onOpen: (db) async {
@@ -167,14 +157,14 @@ class DatabaseHelper {
       final result = await db.rawQuery('PRAGMA integrity_check');
       final status = result.firstOrNull?['integrity_check'] as String? ?? '';
       if (status == 'ok') {
-        debugPrint('[DB] Integrity check: ok');
+        AppLogger.info('Integrity check: ok', label: 'DB');
         return true;
       } else {
-        debugPrint('[DB] ⚠️ Integrity check FAILED: $status');
+        AppLogger.error('Integrity check FAILED: $status', label: 'DB');
         return false;
       }
     } catch (e) {
-      debugPrint('[DB] Integrity check error: $e');
+      AppLogger.error('Integrity check error', error: e, label: 'DB');
       return false;
     }
   }
@@ -182,6 +172,11 @@ class DatabaseHelper {
   @visibleForTesting
   Future<void> onCreateForTesting(Database db, int version) async {
     await _onCreate(db, version);
+  }
+
+  @visibleForTesting
+  Future<void> onUpgradeForTesting(Database db, int oldVersion, int newVersion) async {
+    await _onUpgrade(db, oldVersion, newVersion);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -201,8 +196,22 @@ class DatabaseHelper {
         taxCategory TEXT,
         source TEXT DEFAULT 'manual',
         accountId TEXT,
-        updatedAt TEXT
+        updatedAt TEXT,
+        recurringRuleId TEXT,
+        occurrenceDate TEXT,
+        sourceObservationId TEXT,
+        sourceFingerprint TEXT
       )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_txn_recurring
+      ON transactions (recurringRuleId)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_txn_source_fingerprint
+      ON transactions (sourceFingerprint)
     ''');
 
     // Create categories table
@@ -233,6 +242,15 @@ class DatabaseHelper {
     // Create sms_transactions table
     await _createSmsTransactionsTable(db);
 
+    // Create sms_processing_state table
+    await _createSmsProcessingStateTable(db);
+
+    // Create financial_observations table
+    await _createFinancialObservationsTable(db);
+
+    // Create merchant learned rules table
+    await _createMerchantLearnedRulesTable(db);
+
     // Create classification system tables
     await _createClassificationTables(db);
 
@@ -242,8 +260,14 @@ class DatabaseHelper {
     // Create premium feature tables
     await _createPremiumTables(db);
 
+    // Create recurring transaction tables (rules and occurrences)
+    await _createRecurringTables(db);
+
     // Create sync queue table
     await _createSyncQueueTable(db);
+
+    // Create system watermarks table
+    await _createSystemWatermarksTable(db);
 
     // Seed default categories
     await _seedDefaultCategories(db);
@@ -351,6 +375,590 @@ class DatabaseHelper {
     if (oldVersion < 12) {
       await _migrateUnknownFormatLogsV12(db);
     }
+    if (oldVersion < 13) {
+      await _createSmsProcessingStateTable(db);
+      await db.execute('''
+        INSERT OR IGNORE INTO sms_processing_state (id, smsHash, status, processedAt, reason)
+        SELECT id, smsHash, 'accepted', timestamp, 'migrated_from_sms_transactions'
+        FROM sms_transactions
+      ''');
+    }
+    if (oldVersion < 14) {
+      await _createSystemWatermarksTable(db);
+    }
+    if (oldVersion < 15) {
+      await _migrateToV15(db);
+    }
+    if (oldVersion < 16) {
+      await _migrateToV16(db);
+    }
+    if (oldVersion < 17) {
+      await _migrateToV17(db);
+    }
+    if (oldVersion < 18) {
+      await _migrateToV18(db);
+    }
+  }
+
+  /// Create recurring_rules and recurring_occurrences tables for recurring transaction scheduling.
+  Future<void> _createRecurringTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS recurring_rules (
+        id TEXT PRIMARY KEY,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL,
+        categoryId TEXT NOT NULL,
+        note TEXT DEFAULT '',
+        paymentMethod TEXT DEFAULT 'UPI',
+        frequency TEXT NOT NULL,
+        interval INTEGER DEFAULT 1,
+        startDate TEXT NOT NULL,
+        endDate TEXT,
+        nextOccurrenceDate TEXT NOT NULL,
+        lastGeneratedDate TEXT,
+        isActive INTEGER DEFAULT 1,
+        merchantName TEXT,
+        taxCategory TEXT,
+        source TEXT DEFAULT 'manual',
+        accountId TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        userId TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_recurring_rules_active
+      ON recurring_rules (isActive, nextOccurrenceDate)
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS recurring_occurrences (
+        id TEXT PRIMARY KEY,
+        ruleId TEXT NOT NULL,
+        scheduledDate TEXT NOT NULL,
+        status TEXT NOT NULL,
+        transactionId TEXT,
+        generatedAt TEXT,
+        updatedAt TEXT NOT NULL,
+        UNIQUE(ruleId, scheduledDate)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_recurring_occ_rule
+      ON recurring_occurrences (ruleId)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_recurring_occ_txn
+      ON recurring_occurrences (transactionId)
+    ''');
+  }
+
+  /// Migration v15: Add recurring columns to transactions, create recurring_rules
+  /// and recurring_occurrences tables, and safely backfill legacy recurring transactions.
+  Future<void> _migrateToV15(Database db) async {
+    // 1. Add recurringRuleId and occurrenceDate columns to transactions if missing
+    final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
+    final hasRecurringRuleId = txnCols.any((c) => c['name'] == 'recurringRuleId');
+    if (!hasRecurringRuleId) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN recurringRuleId TEXT');
+    }
+    final hasOccurrenceDate = txnCols.any((c) => c['name'] == 'occurrenceDate');
+    if (!hasOccurrenceDate) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN occurrenceDate TEXT');
+    }
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_txn_recurring
+      ON transactions (recurringRuleId)
+    ''');
+
+    // 2. Create recurring tables
+    await _createRecurringTables(db);
+
+    // 3. Backfill legacy recurring transactions
+    try {
+      final legacyRows = await db.query(
+        'transactions',
+        where: 'isRecurring = 1 AND recurringFrequency IS NOT NULL AND (recurringRuleId IS NULL OR recurringRuleId = \'\')',
+      );
+
+      for (final row in legacyRows) {
+        final txnId = row['id'] as String;
+        final amount = (row['amount'] as num).toDouble();
+        final type = row['type'] as String? ?? 'expense';
+        final categoryId = row['categoryId'] as String? ?? 'other';
+        final dateStr = row['date'] as String;
+        final note = row['note'] as String? ?? '';
+        final paymentMethod = row['paymentMethod'] as String? ?? 'UPI';
+        final freqStr = row['recurringFrequency'] as String?;
+        final merchantName = row['merchantName'] as String?;
+        final taxCategory = row['taxCategory'] as String?;
+        final source = row['source'] as String? ?? 'manual';
+        final accountId = row['accountId'] as String?;
+
+        final date = DateTime.tryParse(dateStr) ?? DateTime.now();
+        final freq = RecurringFrequency.fromJson(freqStr) ?? RecurringFrequency.monthly;
+        final nextDate = RecurrenceCalculator.computeNextOccurrence(
+          anchorDate: date,
+          currentOccurrence: date,
+          frequency: freq,
+        );
+
+        final ruleId = 'rule_legacy_$txnId';
+        final nowStr = DateTime.now().toIso8601String();
+
+        await db.insert('recurring_rules', {
+          'id': ruleId,
+          'amount': amount,
+          'type': type,
+          'categoryId': categoryId,
+          'note': note,
+          'paymentMethod': paymentMethod,
+          'frequency': freq.toJson(),
+          'interval': 1,
+          'startDate': date.toIso8601String(),
+          'endDate': null,
+          'nextOccurrenceDate': nextDate.toIso8601String(),
+          'lastGeneratedDate': date.toIso8601String(),
+          'isActive': 1,
+          'merchantName': merchantName,
+          'taxCategory': taxCategory,
+          'source': source,
+          'accountId': accountId,
+          'createdAt': date.toIso8601String(),
+          'updatedAt': nowStr,
+          'userId': null,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+        final occId = '${ruleId}_${date.toIso8601String()}';
+        await db.insert('recurring_occurrences', {
+          'id': occId,
+          'ruleId': ruleId,
+          'scheduledDate': date.toIso8601String(),
+          'status': 'generated',
+          'transactionId': txnId,
+          'generatedAt': date.toIso8601String(),
+          'updatedAt': nowStr,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+        await db.update(
+          'transactions',
+          {
+            'recurringRuleId': ruleId,
+            'occurrenceDate': date.toIso8601String(),
+          },
+          where: 'id = ?',
+          whereArgs: [txnId],
+        );
+      }
+    } catch (e) {
+      AppLogger.error('Failed to backfill legacy recurring transactions', error: e, label: 'DB');
+    }
+  }
+
+  /// Create system_watermarks table for atomic transaction-bound watermark persistence.
+  Future<void> _createSystemWatermarksTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS system_watermarks (
+        key TEXT PRIMARY KEY,
+        value INTEGER NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// Create sms_processing_state table for tracking processed, ignored, rejected, and deleted SMS messages.
+  Future<void> _createSmsProcessingStateTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sms_processing_state (
+        id TEXT PRIMARY KEY,
+        smsHash TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL,
+        processedAt TEXT NOT NULL,
+        reason TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_sms_processing_hash ON sms_processing_state (smsHash)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_sms_processing_status ON sms_processing_state (status)
+    ''');
+  }
+
+  /// Migrate to v16: Recurring Financial Commitments upgrade (status, autopay, price changes, payment history).
+  Future<void> _migrateToV16(Database db) async {
+    try {
+      final cols = await db.rawQuery('PRAGMA table_info(recurring_payments)');
+      final colNames = cols.map((c) => c['name'] as String).toSet();
+
+      if (!colNames.contains('status')) {
+        await db.execute("ALTER TABLE recurring_payments ADD COLUMN status TEXT DEFAULT 'confirmed'");
+      }
+      if (!colNames.contains('isAutopay')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN isAutopay INTEGER DEFAULT 0');
+      }
+      if (!colNames.contains('previousAmount')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN previousAmount REAL');
+      }
+      if (!colNames.contains('priceChangeDetectedAt')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN priceChangeDetectedAt TEXT');
+      }
+      if (!colNames.contains('notes')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN notes TEXT');
+      }
+      if (!colNames.contains('createdAt')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN createdAt TEXT');
+        await db.execute('UPDATE recurring_payments SET createdAt = lastPaidAt WHERE createdAt IS NULL');
+      }
+      if (!colNames.contains('updatedAt')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN updatedAt TEXT');
+        await db.execute('UPDATE recurring_payments SET updatedAt = lastPaidAt WHERE updatedAt IS NULL');
+      }
+      if (!colNames.contains('detectionReason')) {
+        await db.execute('ALTER TABLE recurring_payments ADD COLUMN detectionReason TEXT');
+      }
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS recurring_payment_history (
+          id TEXT PRIMARY KEY,
+          recurringPaymentId TEXT NOT NULL,
+          amount REAL NOT NULL,
+          paidAt TEXT NOT NULL,
+          source TEXT DEFAULT 'manual',
+          transactionId TEXT,
+          notes TEXT,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_rec_hist_payment_id
+        ON recurring_payment_history (recurringPaymentId)
+      ''');
+    } catch (e) {
+      AppLogger.error('Failed to run v16 database migration', error: e, label: 'DB');
+    }
+  }
+
+  /// Migrate to v17: Alerts Centre 2.0 (production-grade financial intelligence upgrade).
+  Future<void> _migrateToV17(Database db) async {
+    try {
+      final cols = await db.rawQuery('PRAGMA table_info(alerts)');
+      final colNames = cols.map((c) => c['name'] as String).toSet();
+
+      final newColumns = <String, String>{
+        'stage': 'TEXT',
+        'severity': "TEXT NOT NULL DEFAULT 'warning'",
+        'isDismissed': 'INTEGER DEFAULT 0',
+        'amount': 'REAL',
+        'targetAmount': 'REAL',
+        'ratio': 'REAL',
+        'transactionId': 'TEXT',
+        'recurringPaymentId': 'TEXT',
+        'goalId': 'TEXT',
+        'period': 'TEXT',
+        'actionType': 'TEXT',
+        'actionPayload': 'TEXT',
+        'updatedAt': 'TEXT',
+        'resolvedAt': 'TEXT',
+        'expiresAt': 'TEXT',
+      };
+
+      for (final entry in newColumns.entries) {
+        if (!colNames.contains(entry.key)) {
+          await db.execute('ALTER TABLE alerts ADD COLUMN ${entry.key} ${entry.value}');
+        }
+      }
+
+      // Backfill existing alerts with sensible defaults
+      await db.execute('''
+        UPDATE alerts 
+        SET severity = CASE 
+          WHEN type = 'budget' AND title LIKE '%exceeded%' THEN 'critical'
+          WHEN type = 'cashflow' THEN 'critical'
+          WHEN type = 'bill' THEN 'info'
+          ELSE 'warning'
+        END
+        WHERE severity IS NULL OR severity = ''
+      ''');
+
+      // Deduplicate any historical identical alertKeys before enforcing unique index
+      await db.execute('''
+        DELETE FROM alerts 
+        WHERE rowid NOT IN (
+          SELECT MIN(rowid) FROM alerts GROUP BY alertKey
+        ) AND alertKey IS NOT NULL AND alertKey != ''
+      ''');
+
+      // Drop old non-unique index and create unique index on alertKey
+      await db.execute('DROP INDEX IF EXISTS idx_alert_key');
+      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_key ON alerts (alertKey)');
+
+      // Create composite and filtering indexes
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_alerts_active 
+        ON alerts (isDismissed, isRead, createdAt DESC)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_alerts_type 
+        ON alerts (type, createdAt DESC)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_alerts_period 
+        ON alerts (period)
+      ''');
+    } catch (e) {
+      AppLogger.error('Failed to run v17 database migration', error: e, label: 'DB');
+    }
+  }
+
+  /// Create financial_observations table for canonical observation tracking and provenance.
+  Future<void> _createFinancialObservationsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS financial_observations (
+        observationId TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        sourceIdentifier TEXT,
+        sender TEXT,
+        packageName TEXT,
+        title TEXT,
+        body TEXT NOT NULL,
+        normalizedText TEXT NOT NULL,
+        receivedAt TEXT NOT NULL,
+        sourceTimestamp TEXT NOT NULL,
+        accountHint TEXT,
+        schemaVersion INTEGER DEFAULT 1,
+        observationHash TEXT NOT NULL UNIQUE,
+        sourceFingerprint TEXT,
+        state TEXT NOT NULL,
+        stateReason TEXT,
+        confidence REAL NOT NULL,
+        canonicalTransactionId TEXT,
+        relatedBillId TEXT,
+        observedBalance REAL,
+        accountTail TEXT,
+        rawPayload TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_obs_hash ON financial_observations (observationHash)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_obs_fingerprint ON financial_observations (sourceFingerprint)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_obs_state ON financial_observations (state)
+    ''');
+  }
+
+  /// Create merchant_learned_rules table for persistent user corrections.
+  Future<void> _createMerchantLearnedRulesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS merchant_learned_rules (
+        id TEXT PRIMARY KEY,
+        identifier TEXT UNIQUE NOT NULL,
+        learnedMerchantName TEXT NOT NULL,
+        learnedCategoryId TEXT,
+        learnedPaymentType TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_merchant_learned_identifier
+      ON merchant_learned_rules (identifier)
+    ''');
+  }
+
+  /// Migrate to v18: Unified Financial Ingestion Pipeline & Canonical Observation Ledger.
+  Future<void> _migrateToV18(Database db) async {
+    try {
+      // 1. Add sourceObservationId and sourceFingerprint to transactions table
+      final txnTableCheck = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'",
+      );
+      if (txnTableCheck.isNotEmpty) {
+        final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
+        final txnColNames = txnCols.map((c) => c['name'] as String).toSet();
+
+        if (!txnColNames.contains('sourceObservationId')) {
+          await db.execute('ALTER TABLE transactions ADD COLUMN sourceObservationId TEXT');
+        }
+        if (!txnColNames.contains('sourceFingerprint')) {
+          await db.execute('ALTER TABLE transactions ADD COLUMN sourceFingerprint TEXT');
+        }
+        await db.execute('''
+          CREATE INDEX IF NOT EXISTS idx_txn_source_fingerprint 
+          ON transactions (sourceFingerprint)
+        ''');
+      }
+
+      // 2. Create financial_observations table and merchant_learned_rules table
+      await _createFinancialObservationsTable(db);
+      await _createMerchantLearnedRulesTable(db);
+
+      // 3. Add accountTail, lastObservedBalance, lastObservedAt, bankName to linked_accounts
+      try {
+        final acctTableCheck = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='linked_accounts'",
+        );
+        if (acctTableCheck.isNotEmpty) {
+          final acctCols = await db.rawQuery('PRAGMA table_info(linked_accounts)');
+          final acctColNames = acctCols.map((c) => c['name'] as String).toSet();
+
+          if (!acctColNames.contains('accountTail')) {
+            await db.execute('ALTER TABLE linked_accounts ADD COLUMN accountTail TEXT');
+          }
+          if (!acctColNames.contains('lastObservedBalance')) {
+            await db.execute('ALTER TABLE linked_accounts ADD COLUMN lastObservedBalance REAL');
+          }
+          if (!acctColNames.contains('lastObservedAt')) {
+            await db.execute('ALTER TABLE linked_accounts ADD COLUMN lastObservedAt TEXT');
+          }
+          if (!acctColNames.contains('bankName')) {
+            await db.execute('ALTER TABLE linked_accounts ADD COLUMN bankName TEXT');
+          }
+        }
+      } catch (e) {
+        AppLogger.warn('linked_accounts table migration check: $e', label: 'DB');
+      }
+
+      // 4. Safe, idempotent backfill of existing confirmed/high-confidence SMS transactions
+      try {
+        final tables = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='sms_transactions'",
+        );
+        if (tables.isNotEmpty) {
+          final eligibleRows = await db.query(
+            'sms_transactions',
+            where: 'isVerified = 1 OR confidence >= 0.80',
+          );
+
+          for (final row in eligibleRows) {
+            final smsId = row['id'] as String;
+            final smsHash = row['smsHash'] as String? ?? '';
+            final rawBody = row['rawSmsBody'] as String? ?? '';
+            final sender = row['smsSender'] as String? ?? '';
+            final amount = (row['amount'] as num).toDouble();
+            final merchant = row['merchantName'] as String? ?? 'Unknown';
+            final bank = row['bankName'] as String? ?? '';
+            final txnTypeStr = row['transactionType'] as String? ?? 'debit';
+            final timestampStr = row['timestamp'] as String;
+            final timestamp = DateTime.tryParse(timestampStr) ?? DateTime.now();
+            final rawCat = row['category'] as String? ?? 'Uncategorized';
+            final refId = row['referenceId'] as String?;
+            final conf = (row['confidence'] as num?)?.toDouble() ?? 0.8;
+
+            // Check if user rejected or deleted this SMS
+            final stateRows = await db.query(
+              'sms_processing_state',
+              where: 'smsHash = ?',
+              whereArgs: [smsHash],
+              limit: 1,
+            );
+            if (stateRows.isNotEmpty) {
+              final status = stateRows.first['status'] as String?;
+              if (status == 'rejected' || status == 'deleted' || status == 'ignored') {
+                continue; // Do not resurrect
+              }
+            }
+
+            final isIncome = txnTypeStr == 'credit';
+            final mappedCategoryId = CategoryMapper.mapToCategoryId(
+              parserCategory: rawCat,
+              merchantName: merchant,
+              isIncome: isIncome,
+            );
+
+            final fingerprint = CanonicalIdentityResolver.generateFingerprint(
+              referenceId: refId,
+              merchantName: merchant,
+              amount: amount,
+              timestamp: timestamp,
+            );
+
+            // Check if already backfilled or exists in transactions
+            final existingTxn = await db.query(
+              'transactions',
+              where: 'sourceObservationId = ? OR sourceFingerprint = ?',
+              whereArgs: [smsId, fingerprint],
+              limit: 1,
+            );
+
+            if (existingTxn.isEmpty) {
+              final txnId = 'txn_backfill_$smsId';
+              final nowIso = DateTime.now().toIso8601String();
+
+              await db.insert(
+                'transactions',
+                {
+                  'id': txnId,
+                  'amount': amount,
+                  'type': isIncome ? 'income' : 'expense',
+                  'categoryId': mappedCategoryId,
+                  'date': timestamp.toIso8601String(),
+                  'note': 'Imported from SMS ($bank)',
+                  'paymentMethod': 'UPI',
+                  'isRecurring': 0,
+                  'recurringFrequency': null,
+                  'merchantName': merchant,
+                  'taxCategory': null,
+                  'source': 'sms',
+                  'accountId': null,
+                  'updatedAt': nowIso,
+                  'recurringRuleId': null,
+                  'occurrenceDate': null,
+                  'sourceObservationId': smsId,
+                  'sourceFingerprint': fingerprint,
+                },
+                conflictAlgorithm: ConflictAlgorithm.ignore,
+              );
+
+              await db.insert(
+                'financial_observations',
+                {
+                  'observationId': smsId,
+                  'source': 'sms',
+                  'sourceIdentifier': sender,
+                  'sender': sender,
+                  'packageName': null,
+                  'title': null,
+                  'body': rawBody,
+                  'normalizedText': rawBody,
+                  'receivedAt': timestamp.toIso8601String(),
+                  'sourceTimestamp': timestamp.toIso8601String(),
+                  'accountHint': bank,
+                  'schemaVersion': 1,
+                  'observationHash': smsHash.isNotEmpty ? smsHash : smsId,
+                  'sourceFingerprint': fingerprint,
+                  'state': 'promoted',
+                  'stateReason': 'backfilled_from_sms_transactions',
+                  'confidence': conf,
+                  'canonicalTransactionId': txnId,
+                  'relatedBillId': null,
+                  'observedBalance': null,
+                  'accountTail': null,
+                  'rawPayload': null,
+                },
+                conflictAlgorithm: ConflictAlgorithm.ignore,
+              );
+            }
+          }
+        }
+      } catch (e) {
+        AppLogger.warn('Backfill of sms_transactions failed or skipped: $e', label: 'DB');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to run v18 database migration', error: e, label: 'DB');
+    }
   }
 
   Future<void> _createPremiumTables(Database db) async {
@@ -364,8 +972,34 @@ class DatabaseHelper {
         nextDueAt TEXT NOT NULL,
         categoryId TEXT NOT NULL,
         confidence REAL DEFAULT 0.6,
-        source TEXT DEFAULT 'sms'
+        source TEXT DEFAULT 'sms',
+        status TEXT DEFAULT 'confirmed',
+        isAutopay INTEGER DEFAULT 0,
+        previousAmount REAL,
+        priceChangeDetectedAt TEXT,
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        detectionReason TEXT
       )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS recurring_payment_history (
+        id TEXT PRIMARY KEY,
+        recurringPaymentId TEXT NOT NULL,
+        amount REAL NOT NULL,
+        paidAt TEXT NOT NULL,
+        source TEXT DEFAULT 'manual',
+        transactionId TEXT,
+        notes TEXT,
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_rec_hist_payment_id
+      ON recurring_payment_history (recurringPaymentId)
     ''');
 
     await db.execute('''
@@ -385,18 +1019,48 @@ class DatabaseHelper {
       CREATE TABLE IF NOT EXISTS alerts (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
+        stage TEXT,
+        severity TEXT NOT NULL DEFAULT 'warning',
         title TEXT NOT NULL,
         message TEXT NOT NULL,
+        alertKey TEXT UNIQUE,
         categoryId TEXT,
-        createdAt TEXT NOT NULL,
+        amount REAL,
+        targetAmount REAL,
+        ratio REAL,
+        transactionId TEXT,
+        recurringPaymentId TEXT,
+        goalId TEXT,
+        period TEXT,
         isRead INTEGER DEFAULT 0,
-        alertKey TEXT
+        isDismissed INTEGER DEFAULT 0,
+        actionType TEXT,
+        actionPayload TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT,
+        resolvedAt TEXT,
+        expiresAt TEXT
       )
     ''');
 
     await db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_alert_key
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_key
       ON alerts (alertKey)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_alerts_active
+      ON alerts (isDismissed, isRead, createdAt DESC)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_alerts_type
+      ON alerts (type, createdAt DESC)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_alerts_period
+      ON alerts (period)
     ''');
 
     await db.execute('''
@@ -406,7 +1070,11 @@ class DatabaseHelper {
         accountName TEXT NOT NULL,
         accountType TEXT NOT NULL,
         lastSyncedAt TEXT,
-        status TEXT DEFAULT 'active'
+        status TEXT DEFAULT 'active',
+        accountTail TEXT,
+        lastObservedBalance REAL,
+        lastObservedAt TEXT,
+        bankName TEXT
       )
     ''');
 
@@ -620,6 +1288,44 @@ class DatabaseHelper {
         LIMIT 500
       )
     ''');
+  }
+
+  /// Atomically wipe all user financial data across all tables during sign-out or account deletion.
+  /// Preserves system/metadata seed definitions like default categories and seed rules.
+  Future<void> wipeAllUserData() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      const tablesToClear = [
+        'user_feedback',
+        'unknown_format_logs',
+        'sms_transactions',
+        'sms_processing_state',
+        'tax_categories',
+        'linked_accounts',
+        'family_members',
+        'alerts',
+        'recurring_payment_history',
+        'recurring_payments',
+        'recurring_occurrences',
+        'recurring_rules',
+        'saving_goals',
+        'transactions',
+        'budgets',
+        'transaction_sync_queue',
+        'financial_observations',
+      ];
+
+      for (final table in tablesToClear) {
+        try {
+          await txn.delete(table);
+        } catch (_) {}
+      }
+
+      // Clear custom categories, preserve system defaults
+      try {
+        await txn.delete('categories', where: 'isCustom = 1');
+      } catch (_) {}
+    });
   }
 
   Future<void> close() async {

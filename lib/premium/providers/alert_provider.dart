@@ -1,79 +1,186 @@
-import 'package:flutter/material.dart';
-import 'package:pet/data/models/enums.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/transaction.dart';
-import 'package:pet/premium/models/budget_alert.dart';
+import 'package:pet/premium/models/app_alert.dart';
 import 'package:pet/premium/repositories/alert_repository.dart';
-import 'package:pet/premium/services/anomaly_detection_service.dart';
-import 'package:pet/premium/services/notification_service.dart';
-import 'package:uuid/uuid.dart';
+import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
+import 'package:pet/premium/services/alert_evaluator.dart';
+import 'package:pet/services/firestore_sync_service.dart';
+
+/// Maximum number of individual notifications to show per batch before collapsing to a summary.
+const int kMaxIndividualAlertNotifications = 2;
+
+/// Window duration for collecting/debouncing rapid alerts before batch dispatch.
+const Duration kAlertDebounceWindow = Duration(seconds: 2);
 
 class AlertProvider extends ChangeNotifier {
-  final AlertRepository _repository = AlertRepository();
-  final Uuid _uuid = const Uuid();
+  final AlertRepository _repository;
+  final AlertEvaluationCoordinator _coordinator;
+  final FirestoreSyncService _firestoreSync;
 
-  List<BudgetAlert> _alerts = [];
+  List<AppAlert> _alerts = [];
+  int _unreadCount = 0;
+  int _activeCount = 0;
   bool _isLoading = false;
+  bool _isLoaded = false;
+  bool _hasMore = true;
+  static const int _pageSize = 20;
+
+  // Filter state
+  AppAlertType? _filterType;
+  AlertSeverity? _filterSeverity;
+  bool _filterUnreadOnly = false;
+
   List<TransactionRecord>? _lastTransactionsForAnomalies;
   Map<String, double>? _lastSpentForBudgets;
 
-  List<BudgetAlert> get alerts => _alerts;
-  bool get isLoading => _isLoading;
+  AlertProvider({
+    AlertRepository? repository,
+    AlertEvaluationCoordinator? coordinator,
+    FirestoreSyncService? firestoreSync,
+  })  : _repository = repository ?? AlertRepository(),
+        _coordinator = coordinator ?? AlertEvaluationCoordinator(),
+        _firestoreSync = firestoreSync ?? FirestoreSyncService() {
+    _coordinator.attachProvider(this);
+  }
 
-  Future<void> load() async {
+  List<AppAlert> get alerts => _alerts;
+  int get unreadCount => _unreadCount;
+  int get activeCount => _activeCount;
+  bool get isLoading => _isLoading;
+  bool get isLoaded => _isLoaded;
+  bool get hasMore => _hasMore;
+  AppAlertType? get filterType => _filterType;
+  AlertSeverity? get filterSeverity => _filterSeverity;
+  bool get filterUnreadOnly => _filterUnreadOnly;
+
+  /// Loads the first page of alerts along with direct SQL badge counts.
+  Future<void> load({bool refresh = true}) async {
     _isLoading = true;
     notifyListeners();
 
-    _alerts = await _repository.getAll();
+    try {
+      _unreadCount = await _repository.getUnreadCount();
+      _activeCount = await _repository.getActiveCount();
 
-    _isLoading = false;
+      final firstPage = await _repository.getPage(
+        limit: _pageSize,
+        offset: 0,
+        type: _filterType,
+        severity: _filterSeverity,
+        unreadOnly: _filterUnreadOnly ? true : null,
+      );
+
+      _alerts = firstPage;
+      _hasMore = firstPage.length >= _pageSize;
+
+      // Retention cleanup: purge dismissed/read alerts older than 90 days in background
+      _repository.purgeOldDismissedAlerts().catchError((_) => 0);
+    } catch (_) {
+      // Keep existing alerts on failure
+    } finally {
+      _isLoading = false;
+      _isLoaded = true;
+      notifyListeners();
+    }
+  }
+
+  /// Loads the next page for pagination.
+  Future<void> loadMore() async {
+    if (_isLoading || !_hasMore) return;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final nextPage = await _repository.getPage(
+        limit: _pageSize,
+        offset: _alerts.length,
+        type: _filterType,
+        severity: _filterSeverity,
+        unreadOnly: _filterUnreadOnly ? true : null,
+      );
+
+      _alerts = [..._alerts, ...nextPage];
+      _hasMore = nextPage.length >= _pageSize;
+    } catch (_) {
+      // Keep state
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Set type filter (null for all).
+  Future<void> setFilterType(AppAlertType? type) async {
+    if (_filterType == type) return;
+    _filterType = type;
+    await load();
+  }
+
+  /// Set severity filter (null for all).
+  Future<void> setFilterSeverity(AlertSeverity? severity) async {
+    if (_filterSeverity == severity) return;
+    _filterSeverity = severity;
+    await load();
+  }
+
+  /// Toggle or set unread-only filter.
+  Future<void> setFilterUnreadOnly(bool unreadOnly) async {
+    if (_filterUnreadOnly == unreadOnly) return;
+    _filterUnreadOnly = unreadOnly;
+    await load();
+  }
+
+  Future<void> clearFilters() async {
+    _filterType = null;
+    _filterSeverity = null;
+    _filterUnreadOnly = false;
+    await load();
+  }
+
+  /// Called by the Coordinator to inject newly persisted alerts into in-memory state.
+  void injectNewAlerts(List<AppAlert> newAlerts) {
+    if (newAlerts.isEmpty) return;
+
+    // Eagerly materialize to avoid lazy re-evaluation against mutated _alerts
+    final fresh =
+        newAlerts.where((na) => !_alerts.any((a) => a.id == na.id)).toList();
+    if (fresh.isEmpty) return;
+
+    _alerts = [...fresh, ..._alerts];
+    _unreadCount += fresh.where((a) => !a.isRead).length;
+    _activeCount += fresh.length;
     notifyListeners();
   }
 
-  Future<void> recordAlert(BudgetAlert alert) async {
-    if (alert.alertKey != null) {
-      if (_alerts.any((a) => a.alertKey == alert.alertKey)) return;
-      final exists = await _repository.existsByKey(alert.alertKey!);
-      if (exists) return;
-    }
+  /// Records a single alert and dispatches through coordinator pipeline.
+  Future<void> recordAlert(AppAlert alert) async {
+    await recordAlerts([alert]);
+  }
 
-    await _repository.insert(alert);
-    _alerts.insert(0, alert);
-    notifyListeners();
-
-    await NotificationService.showInstant(
-      id: NotificationService.collisionSafeId(alert.id),
-      title: alert.title,
-      body: alert.message,
-    );
+  /// Records a batch of alerts, deduplicates against stored keys, persists to database,
+  /// updates provider state, and dispatches throttled/grouped notifications.
+  Future<void> recordAlerts(List<AppAlert> alerts) async {
+    await _coordinator.processAndDispatch(alerts);
   }
 
   Future<void> detectAnomalies({
     required List<TransactionRecord> transactions,
     required Map<String, double> baseline,
   }) async {
-    final spikes = AnomalyDetectionService.detectCategorySpikes(
-      transactions,
-      baseline,
+    final alerts = AlertEvaluator.evaluateAnomalies(
+      transactions: transactions,
+      baseline: baseline,
     );
-    for (final entry in spikes.entries) {
-      final alert = BudgetAlert(
-        id: _uuid.v4(),
-        type: 'anomaly',
-        title: 'Spending spike detected',
-        message:
-            'This category is ${entry.value.toStringAsFixed(1)}x higher than usual.',
-        categoryId: entry.key,
-        createdAt: DateTime.now(),
-        alertKey: 'anomaly_${entry.key}_${DateTime.now().month}',
-      );
-      await recordAlert(alert);
-    }
+    await recordAlerts(alerts);
   }
 
   Future<void> refreshAnomalies(List<TransactionRecord> transactions) async {
     if (identical(_lastTransactionsForAnomalies, transactions)) return;
     _lastTransactionsForAnomalies = transactions;
-    final baseline = _computeBaseline(transactions);
+    final baseline = AlertEvaluator.computeBaseline(transactions);
     await detectAnomalies(transactions: transactions, baseline: baseline);
   }
 
@@ -83,64 +190,120 @@ class AlertProvider extends ChangeNotifier {
   }) async {
     if (identical(_lastSpentForBudgets, spent)) return;
     _lastSpentForBudgets = spent;
-    for (final entry in budgets.entries) {
-      final budgetAmount = entry.value;
-      final spentAmount = spent[entry.key] ?? 0;
-      if (budgetAmount <= 0) continue;
-
-      final progress = spentAmount / budgetAmount;
-      if (progress < 0.9) continue;
-
-      final alert = BudgetAlert(
-        id: _uuid.v4(),
-        type: 'budget',
-        title: progress >= 1.0 ? 'Budget exceeded' : 'Budget warning',
-        message: progress >= 1.0
-            ? 'You have crossed your budget in this category.'
-            : 'You are close to your budget limit.',
-        categoryId: entry.key,
-        createdAt: DateTime.now(),
-        alertKey: 'budget_${entry.key}_${DateTime.now().month}',
-      );
-      await recordAlert(alert);
-    }
+    final alerts = AlertEvaluator.evaluateBudgetAlerts(
+      budgets: budgets,
+      spent: spent,
+    );
+    await recordAlerts(alerts);
   }
 
-  Map<String, double> _computeBaseline(List<TransactionRecord> transactions) {
-    final now = DateTime.now();
-    final from = DateTime(now.year, now.month - 3, 1);
-    final byCategory = <String, double>{};
-    final months = <String, Set<int>>{};
-
-    for (final t in transactions) {
-      if (t.type != TransactionType.expense) continue;
-      if (t.date.isBefore(from)) continue;
-      byCategory[t.categoryId] = (byCategory[t.categoryId] ?? 0) + t.amount;
-      months.putIfAbsent(t.categoryId, () => <int>{});
-      months[t.categoryId]!.add(t.date.month);
-    }
-
-    final baseline = <String, double>{};
-    for (final entry in byCategory.entries) {
-      final count = months[entry.key]?.length ?? 1;
-      baseline[entry.key] = entry.value / count;
-    }
-    return baseline;
-  }
-
+  /// Mark an alert as read.
   Future<void> markRead(String id) async {
     await _repository.markRead(id);
     final index = _alerts.indexWhere((a) => a.id == id);
-    if (index == -1) return;
-    _alerts[index] = _alerts[index].copyWith(isRead: true);
+    if (index != -1) {
+      if (!_alerts[index].isRead) {
+        _unreadCount = (_unreadCount - 1).clamp(0, 999999);
+      }
+      final updated = _alerts[index].copyWith(isRead: true);
+      _alerts = List<AppAlert>.from(_alerts)..[index] = updated;
+      notifyListeners();
+
+      if (_firestoreSync.isAuthenticated) {
+        unawaited(_firestoreSync.upsertAlert(updated).catchError((e) {
+          AppLogger.debug('[AlertProvider] Firestore markAsRead error: $e');
+        }));
+      }
+    }
+  }
+
+  /// Mark all active alerts as read in a single SQL operation.
+  Future<void> markAllRead() async {
+    await _repository.markAllRead(type: _filterType);
+    _unreadCount = 0;
+    _alerts = _alerts.map((a) => a.copyWith(isRead: true)).toList();
     notifyListeners();
   }
 
-  void clearData() {
+  /// Soft-dismiss an alert.
+  Future<void> dismiss(String id) async {
+    final index = _alerts.indexWhere((a) => a.id == id);
+    if (index == -1) return;
+
+    final alert = _alerts[index];
+    _alerts = List<AppAlert>.from(_alerts)..removeAt(index);
+    _activeCount = (_activeCount - 1).clamp(0, 999999);
+    if (!alert.isRead) {
+      _unreadCount = (_unreadCount - 1).clamp(0, 999999);
+    }
+    notifyListeners();
+
+    await _repository.dismiss(id);
+
+    if (_firestoreSync.isAuthenticated) {
+      final updated = alert.copyWith(isDismissed: true);
+      unawaited(_firestoreSync.upsertAlert(updated).catchError((e) {
+        AppLogger.debug('[AlertProvider] Firestore dismiss error: $e');
+      }));
+    }
+  }
+
+  /// Undo soft-dismissal.
+  Future<void> undoDismiss(AppAlert alert) async {
+    final restored = alert.copyWith(
+      isDismissed: false,
+      updatedAt: DateTime.now(),
+    );
+    _alerts = [restored, ..._alerts];
+    _activeCount++;
+    if (!alert.isRead) {
+      _unreadCount++;
+    }
+    notifyListeners();
+    await _repository.undoDismiss(alert.id);
+  }
+
+  /// Dismiss all read alerts.
+  Future<void> dismissAllRead() async {
+    await _repository.dismissAllRead();
+    final dismissedCount = _alerts.where((a) => a.isRead).length;
+    _alerts = _alerts.where((a) => !a.isRead).toList();
+    _activeCount = (_activeCount - dismissedCount).clamp(0, 999999);
+    notifyListeners();
+  }
+
+  /// Removes alerts matching the predicate from in-memory state and updates badge counts.
+  void removeAlertsWhere(bool Function(AppAlert) test) {
+    final removed = _alerts.where(test).toList();
+    if (removed.isEmpty) return;
+
+    _alerts = _alerts.where((a) => !test(a)).toList();
+    _activeCount = (_activeCount - removed.length).clamp(0, 999999);
+    final unreadRemoved = removed.where((a) => !a.isRead).length;
+    _unreadCount = (_unreadCount - unreadRemoved).clamp(0, 999999);
+    notifyListeners();
+  }
+
+  Future<void> clearData() async {
     _alerts = [];
+    _unreadCount = 0;
+    _activeCount = 0;
     _isLoading = false;
+    _hasMore = true;
     _lastTransactionsForAnomalies = null;
     _lastSpentForBudgets = null;
     notifyListeners();
+
+    if (!kIsWeb) {
+      await _repository.deleteAll().catchError((e) {
+        AppLogger.error('Alerts clear failed', error: e, label: 'AlertProvider');
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _coordinator.detachProvider();
+    super.dispose();
   }
 }

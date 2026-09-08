@@ -8,12 +8,17 @@ import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:pet/premium/providers/goal_provider.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';
+import 'package:pet/premium/providers/alert_provider.dart';
+import 'package:pet/premium/screens/alerts_screen.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/pet_colors.dart';
 import 'package:pet/core/theme/spacing.dart';
 import 'package:pet/core/theme/typography.dart';
 import 'package:pet/core/widgets/gradient_background.dart';
 import 'package:pet/core/widgets/hero_greeting_card.dart';
+import 'package:pet/core/widgets/notification_permission_banner.dart';
+import 'package:pet/core/widgets/oem_battery_dialog.dart';
+import 'package:pet/premium/services/oem_optimization_service.dart';
 import 'package:pet/core/widgets/metric_pill_row.dart';
 import 'package:pet/core/widgets/category_progress_bar_new.dart';
 import 'package:pet/core/widgets/spend_health_card.dart';
@@ -89,6 +94,19 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
     _fadeController.forward();
     _loadUserName();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final oemService = OemOptimizationService.instance;
+      final isAggressive = await oemService.isAggressiveOem();
+      final hasShown = await oemService.hasPromptBeenShown();
+
+      if (isAggressive && !hasShown && mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => const OemBatteryDialog(),
+        );
+      }
+    });
   }
 
   Future<void> _loadUserName() async {
@@ -270,9 +288,69 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _buildIconButton(
-                            Icons.notifications_none_rounded,
-                            isDark,
+                          Consumer<AlertProvider>(
+                            builder: (context, alertProvider, _) {
+                              final unread = alertProvider.unreadCount;
+                              return GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const AlertsScreen(),
+                                  ),
+                                ),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.white.withAlpha(8)
+                                            : Colors.black.withAlpha(6),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        unread > 0
+                                            ? Icons.notifications_active_rounded
+                                            : Icons.notifications_none_rounded,
+                                        size: 20,
+                                        color: unread > 0
+                                            ? AppTheme.expenseRed
+                                            : (isDark
+                                                ? AppTheme.textSecondary
+                                                : AppTheme.textSecondaryLight),
+                                      ),
+                                    ),
+                                    if (unread > 0)
+                                      Positioned(
+                                        top: -3,
+                                        right: -3,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: AppTheme.expenseRed,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 16,
+                                            minHeight: 16,
+                                          ),
+                                          child: Text(
+                                            unread > 9 ? '9+' : '$unread',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              height: 1,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -289,6 +367,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
+                        const NotificationPermissionBanner(),
                         // ── Hero Greeting Card
                         HeroGreetingCard(
                           greeting: _getGreeting(),

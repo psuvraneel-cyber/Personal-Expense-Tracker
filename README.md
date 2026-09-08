@@ -60,13 +60,17 @@ flutterfire configure --project=<your-firebase-project-id>
 * **⚠️ Warning on Repository Export / Audit Tools (e.g., Repomix)**: If you use repo-flattening or export tools such as `repomix` to create code snapshot files (`repomix-output.txt`) for reviews or AI prompts, **NEVER commit the generated output file**. Repomix inlines full file contents from your workspace, which will expose locally-present gitignored secret files if committed.
 
 ### 4. Setup Environment Variables
-Create a `.env` file in the root of the project. **Do not commit this file to version control.**
+Create a `.env` file in the root of the project (copy from `.env.example`). **Do not commit this file to version control.**
 ```env
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_key
 GROQ_MODEL=llama-3.3-70b-versatile
+
+# Debug / Development builds use the RevenueCat Test Store public SDK key:
+REVENUECAT_TEST_STORE_API_KEY=test_your_test_store_public_key
+
+# Release / Production builds use the Google Play Android public SDK key:
+REVENUECAT_ANDROID_API_KEY=goog_your_google_play_public_key
 ```
-*Note: P.E.T uses compile-time variables. You'll run the app using `--dart-define-from-file=.env`.*
+*Note: P.E.T uses compile-time environment injection. Run and build the app using `--dart-define-from-file=.env`.*
 
 ### 5. Setup AI Copilot Proxy (Cloudflare Worker)
 To secure the Groq API Key from malicious actors, we route AI requests through a Cloudflare Worker.

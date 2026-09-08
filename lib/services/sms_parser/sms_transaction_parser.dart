@@ -86,15 +86,29 @@ class SmsTransactionParser {
     // ═════════════════════════════════════════════════════════════════
     //  STAGE 1: PREPROCESS
     // ═════════════════════════════════════════════════════════════════
-    // Normalize body for consistent matching. Keep original for display.
-    final normalizedBody = body.trim();
+    // Normalize body: replace zero-width spaces, RTL/LTR marks, and non-breaking spaces with standard space.
+    final normalizedBody = body
+        .replaceAll(RegExp(r'[\u200B-\u200D\uFEFF\u200E\u200F\u00A0]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
 
     // ═════════════════════════════════════════════════════════════════
-    //  STAGE 2: NEGATIVE FILTERS
+    //  STAGE 2: INTENT DETECTION (EARLY EVALUATION)
     // ═════════════════════════════════════════════════════════════════
-    // Fail-fast: reject OTP, promo, scam, offers before doing any
-    // extraction work. This is the cheapest stage.
-    final filterResult = NegativeFilter.apply(normalizedBody, sender);
+    // Evaluate transaction intent early so negative filters know whether
+    // the SMS represents a completed financial transaction.
+    final intent = IntentDetector.detect(normalizedBody);
+
+    // ═════════════════════════════════════════════════════════════════
+    //  STAGE 3: NEGATIVE FILTERS
+    // ═════════════════════════════════════════════════════════════════
+    // Fail-fast: reject OTP, promo, scam, offers before doing extraction.
+    // Bypasses reminder filter if SMS is a completed financial transaction.
+    final filterResult = NegativeFilter.apply(
+      normalizedBody,
+      sender,
+      hasCompletedTransaction: intent.hasIntent,
+    );
     if (filterResult.rejected) {
       allReasons.add(
         'REJECTED by ${filterResult.filterName}: ${filterResult.reason}',
@@ -103,18 +117,75 @@ class SmsTransactionParser {
     }
     allReasons.add('Passed all negative filters');
 
-    // ═════════════════════════════════════════════════════════════════
-    //  STAGE 3: INTENT DETECTION
-    // ═════════════════════════════════════════════════════════════════
-    // Confirm transaction intent BEFORE extracting amounts.
-    // This prevents "Get ₹500 cashback" from becoming a transaction.
-    final intent = IntentDetector.detect(normalizedBody);
     allReasons.addAll(intent.reasons);
 
     if (!intent.hasIntent) {
       if (intent.isPendingCollect) {
         allReasons.add('Pending collect request — not a completed transaction');
+        return TransactionParseResult.rejected(reasons: allReasons);
       }
+
+      // Check if this is a bill statement / credit card statement
+      final billMatch = RegExp(
+        r'(?:statement\s+(?:generated|for)|total\s*(?:amt|amount)?\s*due|bill\s*(?:generated|due)|credit\s*card\s*statement)',
+        caseSensitive: false,
+      ).hasMatch(normalizedBody);
+
+      if (billMatch) {
+        allReasons.add('Detected bill / statement generation notice');
+        final amtMatch = RegExp(
+          r'(?:total\s*(?:amt|amount)?\s*due|bill\s*amount|statement\s*amount|due\s*amount)[\s\S]{0,100}?(?:Rs\.?\s*|INR\.?\s*|₹\s?)([0-9]+(?:,[0-9]{2,3})*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ).firstMatch(normalizedBody);
+        final billAmt = amtMatch != null
+            ? double.tryParse(amtMatch.group(1)!.replaceAll(',', ''))
+            : AmountExtractor.extract(normalizedBody).amount;
+
+        final entities = EntityExtractor.extractAll(
+          normalizedBody,
+          sender,
+          'bill',
+          smsTimestamp: timestamp,
+        );
+
+        return TransactionParseResult(
+          isTransaction: false,
+          isUncertain: false,
+          isBill: true,
+          billAmountDue: billAmt,
+          billDueDate: entities.date,
+          merchant: entities.merchantName,
+          bank: entities.bankName,
+          accountTail: entities.accountTail,
+          date: entities.date ?? timestamp,
+          confidence: 85,
+          reasons: allReasons,
+        );
+      }
+
+      // Check if this is a balance-only informational message
+      final balResult = AmountExtractor.extract(normalizedBody);
+      if (balResult.balanceAfter != null) {
+        allReasons.add('Balance-only observation detected (₹${balResult.balanceAfter})');
+        final entities = EntityExtractor.extractAll(
+          normalizedBody,
+          sender,
+          'balance',
+          smsTimestamp: timestamp,
+        );
+        return TransactionParseResult(
+          isTransaction: false,
+          isUncertain: false,
+          balanceAfter: balResult.balanceAfter,
+          merchant: entities.merchantName,
+          bank: entities.bankName,
+          accountTail: entities.accountTail,
+          date: entities.date ?? timestamp,
+          confidence: 80,
+          reasons: allReasons,
+        );
+      }
+
       return TransactionParseResult.rejected(reasons: allReasons);
     }
 
@@ -125,6 +196,26 @@ class SmsTransactionParser {
     allReasons.addAll(amountResult.reasons);
 
     if (amountResult.amount == null) {
+      if (amountResult.balanceAfter != null) {
+        allReasons.add('Balance-only observation detected despite intent (₹${amountResult.balanceAfter})');
+        final entities = EntityExtractor.extractAll(
+          normalizedBody,
+          sender,
+          'balance',
+          smsTimestamp: timestamp,
+        );
+        return TransactionParseResult(
+          isTransaction: false,
+          isUncertain: false,
+          balanceAfter: amountResult.balanceAfter,
+          merchant: entities.merchantName,
+          bank: entities.bankName,
+          accountTail: entities.accountTail,
+          date: entities.date ?? timestamp,
+          confidence: 80,
+          reasons: allReasons,
+        );
+      }
       allReasons.add('REJECTED: No valid amount found despite intent');
       return TransactionParseResult.rejected(reasons: allReasons);
     }
@@ -231,6 +322,7 @@ class SmsTransactionParser {
             : null,
         channel: intent.channel,
         subType: intent.subType,
+        balanceAfter: amountResult.balanceAfter,
         confidence: scoreBreakdown.totalScore,
         reasons: allReasons,
       );
@@ -255,6 +347,7 @@ class SmsTransactionParser {
             : null,
         channel: intent.channel,
         subType: intent.subType,
+        balanceAfter: amountResult.balanceAfter,
         confidence: scoreBreakdown.totalScore,
         reasons: allReasons,
       );

@@ -24,13 +24,21 @@ class AmountResult {
   /// Extracted amount in INR, or null if no valid amount found.
   final double? amount;
 
+  /// Available balance after transaction, or null if not present in SMS.
+  final double? balanceAfter;
+
   /// Position in the body where the amount was found (for diagnostics).
   final int? position;
 
   /// Reasons explaining extraction decisions.
   final List<String> reasons;
 
-  const AmountResult({this.amount, this.position, required this.reasons});
+  const AmountResult({
+    this.amount,
+    this.balanceAfter,
+    this.position,
+    required this.reasons,
+  });
 }
 
 /// Extracts monetary amounts from Indian bank SMS messages.
@@ -81,8 +89,9 @@ class AmountExtractor {
   /// Matches: "Avl Bal Rs 15,000", "Balance: ₹10,000",
   ///          "Remaining balance Rs 3,500"
   static final RegExp _balanceAmountPattern = RegExp(
-    r'(?:avl\.?|available|remaining|current|closing|total)\s*'
-    r'(?:bal(?:ance)?|bal\.?)\s*(?:(?:is|:)\s*)?(?:Rs\.?\s*|INR\.?\s*|₹\s?)',
+    r'(?:avl\.?|available|remaining|current|closing|total|clear|account|a/c)?\s*'
+    r'(?:bal(?:ance)?|bal\.?)\s*(?:(?:in|for|of)?\s*(?:your\s*)?(?:a/c|account|card)?\s*(?:[xX*]*\d+)?\s*(?:is|:)?\s*)'
+    r'(?:Rs\.?\s*|INR\.?\s*|₹\s?)',
     caseSensitive: false,
   );
 
@@ -106,18 +115,24 @@ class AmountExtractor {
   /// 4. If no primary match, try "amount of Rs X" pattern.
   static AmountResult extract(String body) {
     final reasons = <String>[];
+    // Sanitize zero-width spaces, LTR/RTL markers, and non-breaking spaces
+    final cleanedBody = body
+        .replaceAll(RegExp(r'[\u200B-\u200D\uFEFF\u200E\u200F]'), '')
+        .replaceAll('\u00A0', ' ');
 
     // Find all balance keyword positions to exclude their amounts
     final balancePositions = <int>{};
-    for (final match in _balanceAmountPattern.allMatches(body)) {
+    for (final match in _balanceAmountPattern.allMatches(cleanedBody)) {
       // Mark the end position of the balance keyword as the start
       // of the amount to exclude
       balancePositions.add(match.end);
     }
 
     // Find all amount matches
-    final allMatches = _amountPattern.allMatches(body).toList();
+    final allMatches = _amountPattern.allMatches(cleanedBody).toList();
     reasons.add('Found ${allMatches.length} amount pattern(s) in body');
+
+    double? balanceAfter;
 
     for (final match in allMatches) {
       // Check if this amount is a balance amount
@@ -126,9 +141,14 @@ class AmountExtractor {
       );
 
       if (isBalance) {
-        reasons.add(
-          'Skipping balance amount at position ${match.start}: "${match.group(0)}"',
-        );
+        final rawBal = match.group(1)!.replaceAll(',', '');
+        final parsedBal = double.tryParse(rawBal);
+        if (parsedBal != null) {
+          balanceAfter ??= parsedBal;
+          reasons.add(
+            'Extracted balance-after at position ${match.start}: ₹$parsedBal',
+          );
+        }
         continue;
       }
 
@@ -156,13 +176,14 @@ class AmountExtractor {
       reasons.add('Extracted amount: ₹$amount at position ${match.start}');
       return AmountResult(
         amount: amount,
+        balanceAfter: balanceAfter,
         position: match.start,
         reasons: reasons,
       );
     }
 
     // Fallback: try "amount of Rs X" pattern
-    final altMatch = _amountOfPattern.firstMatch(body);
+    final altMatch = _amountOfPattern.firstMatch(cleanedBody);
     if (altMatch != null) {
       final raw = altMatch.group(1)!.replaceAll(',', '');
       final amount = double.tryParse(raw);
@@ -170,6 +191,7 @@ class AmountExtractor {
         reasons.add('Extracted amount via "amount of" pattern: ₹$amount');
         return AmountResult(
           amount: amount,
+          balanceAfter: balanceAfter,
           position: altMatch.start,
           reasons: reasons,
         );
@@ -177,6 +199,6 @@ class AmountExtractor {
     }
 
     reasons.add('No valid transaction amount found');
-    return AmountResult(reasons: reasons);
+    return AmountResult(balanceAfter: balanceAfter, reasons: reasons);
   }
 }

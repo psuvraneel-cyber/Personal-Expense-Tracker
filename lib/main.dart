@@ -1,6 +1,7 @@
 import 'package:pet/core/utils/app_logger.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kReleaseMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,10 +10,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/theme_mode_notifier.dart';
 import 'package:pet/providers/transaction_provider.dart';
+import 'package:pet/providers/recurring_transaction_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'dart:ui' show PlatformDispatcher;
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/firebase_options.example.dart';
 import 'package:pet/screens/splash/splash_screen.dart';
@@ -23,6 +27,8 @@ import 'package:pet/premium/providers/alert_provider.dart';
 import 'package:pet/premium/providers/linked_account_provider.dart';
 import 'package:pet/premium/providers/family_provider.dart';
 import 'package:pet/premium/providers/tax_provider.dart';
+import 'package:pet/premium/repositories/recurring_payment_repository.dart';
+import 'package:pet/premium/services/bill_reminder_scheduler.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/services/firebase_auth_service.dart';
@@ -31,10 +37,24 @@ import 'package:pet/providers/dashboard_config_provider.dart';
 import 'package:pet/services/haptic_service.dart';
 import 'package:pet/services/biometric_service.dart';
 import 'package:pet/screens/biometric/biometric_lock_screen.dart';
+import 'package:pet/screens/budget/budget_screen.dart';
+import 'package:pet/screens/sms_transactions/pending_review_screen.dart';
+import 'package:pet/premium/screens/alerts_screen.dart';
+import 'package:pet/premium/screens/recurring_bills_screen.dart';
+import 'package:pet/premium/screens/goals_screen.dart';
+import 'package:pet/premium/screens/cashflow_screen.dart';
 
 import 'package:timezone/data/latest.dart' as tz;
 
 void main() async {
+  // Global Privacy & Security Guard:
+  // In release builds, override debugPrint to be a complete NO-OP.
+  // This guarantees zero logs reach Logcat or stdout even if third-party packages
+  // or legacy components attempt to invoke debugPrint directly.
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+
   WidgetsFlutterBinding.ensureInitialized();
   tz.initializeTimeZones();
 
@@ -48,6 +68,13 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    FlutterError.onError = (errorDetails) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
   } catch (e) {
     AppLogger.debug('Firebase init failed: $e');
   }
@@ -83,8 +110,12 @@ void main() async {
   try {
     // Initialize notifications
     await NotificationService.initialize();
+    // Re-arm pending bill reminders from durable SQLite storage on app boot
+    final recurringRepo = RecurringPaymentRepository();
+    final recurringPayments = await recurringRepo.getAll();
+    await BillReminderScheduler.scheduleReminders(recurringPayments);
   } catch (e) {
-    AppLogger.debug('Notification init failed: $e');
+    AppLogger.debug('Notification init or reminder re-arm failed: $e');
   }
 
   ThemeMode themeMode = ThemeMode.system;
@@ -114,6 +145,29 @@ class PETApp extends StatefulWidget {
   final ThemeMode themeMode;
 
   const PETApp({super.key, required this.themeMode});
+
+  /// Maps a notification payload string (e.g. `obs:observationId`) to the destination Widget.
+  static Widget screenForPayload(String payload) {
+    final parts = payload.split(':');
+    final type = parts.first;
+    final observationId = parts.length > 1 ? parts.sublist(1).join(':') : null;
+
+    switch (type) {
+      case 'obs':
+        return PendingReviewScreen(initialObservationId: observationId);
+      case 'bill':
+        return const RecurringBillsScreen();
+      case 'budget':
+        return const BudgetScreen();
+      case 'goal':
+        return const GoalsScreen();
+      case 'cashflow':
+        return const CashflowScreen();
+      case 'anomaly':
+      default:
+        return const AlertsScreen();
+    }
+  }
 
   @override
   State<PETApp> createState() => _PETAppState();
@@ -147,6 +201,22 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       _onAuthStateChanged,
     );
 
+    // Query notification permission status
+    NotificationService.permissionStatus();
+
+    // Listen to notification tap responses (warm taps)
+    NotificationService.selectNotificationNotifier
+        .addListener(_handleNotificationPayload);
+
+    // Check cold-start notification launch payload post-frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final coldPayload = NotificationService.initialPayload;
+      if (coldPayload != null && coldPayload.isNotEmpty) {
+        NotificationService.clearInitialPayload();
+        _navigateToPayload(coldPayload);
+      }
+    });
+
     // Show biometric lock on cold start if enabled
     if (BiometricService.instance.isEnabled) {
       _showBiometricLock = true;
@@ -156,7 +226,32 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
     }
   }
 
-  void _onAuthStateChanged(User? user) {
+  void _handleNotificationPayload() {
+    final payload = NotificationService.selectNotificationNotifier.value;
+    if (payload != null && payload.isNotEmpty) {
+      NotificationService.selectNotificationNotifier.value = null;
+      _navigateToPayload(payload);
+    }
+  }
+
+  void _navigateToPayload(String payload) {
+    final nav = _navigatorKey.currentState;
+    if (nav == null) {
+      AppLogger.debug(
+        '[MAIN] Navigator state null, ignoring payload: $payload',
+      );
+      return;
+    }
+
+    AppLogger.debug('[MAIN] Deep linking to notification payload: $payload');
+    final targetScreen = PETApp.screenForPayload(payload);
+
+    nav.push(
+      MaterialPageRoute(builder: (_) => targetScreen),
+    );
+  }
+
+  Future<void> _onAuthStateChanged(User? user) async {
     if (AccountDeletionService.isDeletionInProgress) {
       AppLogger.debug(
         '[MAIN] Account deletion in progress — ignoring auth change',
@@ -176,19 +271,46 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
     if (currentUserId == null && _lastUid != null) {
       AppLogger.debug('[MAIN] Real sign-out detected — clearing data');
-      ctx.read<TransactionProvider>().clearData();
-      ctx.read<CategoryProvider>().clearData();
-      ctx.read<BudgetProvider>().clearData();
-      ctx.read<SmsTransactionProvider>().clearData();
-      ctx.read<PremiumProvider>().clearData();
-      ctx.read<GoalProvider>().clearData();
-      ctx.read<AlertProvider>().clearData();
-      ctx.read<LinkedAccountProvider>().clearData();
-      ctx.read<FamilyProvider>().clearData();
-      ctx.read<TaxProvider>().clearData();
-      ctx.read<WeeklyPlannerProvider>().clearData();
-      ctx.read<DashboardConfigProvider>().clearData();
       _lastUid = null;
+      final txProv = ctx.read<TransactionProvider>();
+      final catProv = ctx.read<CategoryProvider>();
+      final budProv = ctx.read<BudgetProvider>();
+      final premProv = ctx.read<PremiumProvider>();
+      final recProv = ctx.read<RecurringProvider>();
+      final goalProv = ctx.read<GoalProvider>();
+      final alertProv = ctx.read<AlertProvider>();
+      final recTxProv = ctx.read<RecurringTransactionProvider>();
+      final smsProv = ctx.read<SmsTransactionProvider>();
+      final linkedProv = ctx.read<LinkedAccountProvider>();
+      final familyProv = ctx.read<FamilyProvider>();
+      final taxProv = ctx.read<TaxProvider>();
+      final weeklyProv = ctx.read<WeeklyPlannerProvider>();
+      final dashProv = ctx.read<DashboardConfigProvider>();
+
+      await Future.wait([
+        txProv.clearData(),
+        catProv.clearData(),
+        budProv.clearData(),
+        premProv.clearData(),
+        recProv.clearData(),
+        goalProv.clearData(),
+        alertProv.clearData(),
+        recTxProv.clearData(),
+      ]);
+      smsProv.clearData();
+      linkedProv.clearData();
+      familyProv.clearData();
+      taxProv.clearData();
+      weeklyProv.clearData();
+      dashProv.clearData();
+
+      if (!kIsWeb) {
+        await DatabaseHelper().wipeAllUserData().catchError((e) {
+          AppLogger.error('Database wipeAllUserData failed in auth state change', error: e);
+        });
+      }
+
+      await NotificationService.cancelAllNotifications();
     } else if (currentUserId != null && currentUserId != _lastUid) {
       AppLogger.debug(
         '[MAIN] New user signed in ($currentUserId) — reloading data',
@@ -197,6 +319,11 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<CategoryProvider>().loadCategories();
       ctx.read<TransactionProvider>().loadTransactions();
       ctx.read<BudgetProvider>().loadBudgets();
+      ctx.read<RecurringTransactionProvider>().loadRules();
+      ctx.read<RecurringProvider>().load();
+      ctx.read<GoalProvider>().load();
+      ctx.read<AlertProvider>().load();
+      ctx.read<PremiumProvider>().logInUser(currentUserId);
     } else {
       AppLogger.debug('[MAIN] No action taken (same user or null→null)');
     }
@@ -204,6 +331,8 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    NotificationService.selectNotificationNotifier
+        .removeListener(_handleNotificationPayload);
     WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _themeMode.dispose();
@@ -219,6 +348,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       return;
     }
     if (state == AppLifecycleState.resumed) {
+      NotificationService.permissionStatus();
       try {
         _navigatorKey.currentContext
             ?.read<TransactionProvider>()
@@ -227,9 +357,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
         AppLogger.debug('[MAIN] Failed to trigger sync queue on resume: $e');
       }
       try {
-        _navigatorKey.currentContext
-            ?.read<SmsTransactionProvider>()
-            .runReconciliation();
+
       } catch (e) {
         AppLogger.debug(
           '[MAIN] Failed to trigger SMS reconciliation on resume: $e',
@@ -277,6 +405,9 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(
           create: (_) => TransactionProvider()..loadTransactions(),
         ),
+        ChangeNotifierProvider(
+          create: (_) => RecurringTransactionProvider()..loadRules(),
+        ),
         ChangeNotifierProxyProvider<TransactionProvider, BudgetProvider>(
           create: (_) => BudgetProvider()..loadBudgets(),
           update: (_, txnProvider, budgetProvider) {
@@ -300,27 +431,8 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
           },
         ),
         ChangeNotifierProvider(create: (_) => GoalProvider()..load()),
-        ChangeNotifierProxyProvider2<
-          TransactionProvider,
-          BudgetProvider,
-          AlertProvider
-        >(
+        ChangeNotifierProvider(
           create: (_) => AlertProvider()..load(),
-          update: (_, txnProvider, budgetProvider, alertProvider) {
-            if (txnProvider.allTransactions.isNotEmpty) {
-              alertProvider?.refreshAnomalies(txnProvider.allTransactions);
-            }
-            if (budgetProvider.budgets.isNotEmpty) {
-              final budgets = {
-                for (final b in budgetProvider.budgets) b.categoryId: b.amount,
-              };
-              alertProvider?.refreshBudgetAlerts(
-                budgets: budgets,
-                spent: budgetProvider.spentAmounts,
-              );
-            }
-            return alertProvider ?? AlertProvider();
-          },
         ),
         ChangeNotifierProvider(create: (_) => LinkedAccountProvider()..load()),
         ChangeNotifierProvider(create: (_) => FamilyProvider()..load()),

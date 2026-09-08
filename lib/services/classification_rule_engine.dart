@@ -46,12 +46,14 @@ class ClassificationRuleEngine {
 
     final result = consensus.result;
 
-    if (result.isTransaction || result.isUncertain) {
+    if (result.isTransaction || result.isUncertain || result.isBill || result.balanceAfter != null) {
       AppLogger.debug(
         '[PET-Rules] ${consensus.source.name} → '
         '${result.direction?.name ?? "?"} ₹${result.amount} '
         '(confidence=${result.confidence}, '
-        'agreement=${consensus.agreement.name})',
+        'agreement=${consensus.agreement.name}, '
+        'isBill=${result.isBill}, '
+        'bal=${result.balanceAfter})',
       );
 
       return ClassifiedTransaction(
@@ -68,6 +70,10 @@ class ClassificationRuleEngine {
         confidence: result.confidence / 100.0,
         category: null, // Will be inferred by SmsService._inferCategory
         classifiedBy: _mapSource(consensus.source),
+        balanceAfter: result.balanceAfter,
+        isBill: result.isBill,
+        billAmountDue: result.billAmountDue,
+        billDueDate: result.billDueDate,
       );
     }
 
@@ -189,6 +195,18 @@ class ClassifiedTransaction {
   /// Which classification method handled this SMS.
   final ClassificationSource classifiedBy;
 
+  /// Available balance observed after the transaction, or null.
+  final double? balanceAfter;
+
+  /// Whether this observation describes a bill/statement.
+  final bool isBill;
+
+  /// Amount due for the bill / statement, or null.
+  final double? billAmountDue;
+
+  /// Due date for the bill / statement, or null.
+  final DateTime? billDueDate;
+
   const ClassifiedTransaction({
     required this.amount,
     required this.merchantName,
@@ -203,6 +221,10 @@ class ClassifiedTransaction {
     this.confidence = 0.5,
     this.category,
     required this.classifiedBy,
+    this.balanceAfter,
+    this.isBill = false,
+    this.billAmountDue,
+    this.billDueDate,
     // Kept for API compatibility — unused after rule removal
     String? matchedRuleId,
     String? matchedRuleName,

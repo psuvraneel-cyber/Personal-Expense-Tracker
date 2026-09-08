@@ -1,6 +1,6 @@
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/transaction_provider.dart';
@@ -22,6 +22,19 @@ import 'package:pet/services/platform_stub.dart'
     if (dart.library.io) 'package:pet/services/platform_native.dart'
     as platform;
 import 'package:pet/screens/settings/account_deletion_sheet.dart';
+import 'package:pet/screens/settings/notification_settings_screen.dart';
+import 'package:pet/core/widgets/oem_battery_dialog.dart';
+import 'package:pet/premium/providers/recurring_provider.dart';
+import 'package:pet/premium/providers/goal_provider.dart';
+import 'package:pet/premium/providers/alert_provider.dart';
+import 'package:pet/premium/providers/linked_account_provider.dart';
+import 'package:pet/premium/providers/family_provider.dart';
+import 'package:pet/premium/providers/tax_provider.dart';
+import 'package:pet/premium/providers/weekly_planner_provider.dart';
+import 'package:pet/providers/dashboard_config_provider.dart';
+import 'package:pet/providers/recurring_transaction_provider.dart';
+import 'package:pet/data/database/database_helper.dart';
+import 'package:pet/premium/services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -90,6 +103,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionTitle(context, 'Appearance'),
           const SizedBox(height: 8),
           _buildThemePicker(context, isDark, currentThemeMode),
+          const SizedBox(height: 16),
+
+          // Notifications
+          _buildSectionTitle(context, 'Notifications'),
+          const SizedBox(height: 8),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.notifications_none_rounded,
+            iconColor: AppTheme.accentPurple,
+            title: 'Notification Preferences',
+            subtitle: 'Manage budget, anomaly, and bill alert categories',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const NotificationSettingsScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.battery_charging_full_rounded,
+            iconColor: AppTheme.incomeGreen,
+            title: 'Battery & Autostart Settings',
+            subtitle: 'Prevent MIUI/ColorOS/FuntouchOS from stopping SMS alerts',
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (_) => const OemBatteryDialog(),
+              );
+            },
+          ),
           const SizedBox(height: 16),
 
           // Premium
@@ -390,6 +439,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _showTimeoutPicker(context),
             ),
           const SizedBox(height: 16),
+
+          // Developer Options — DEBUG builds only.
+          // Compile-time constant: entire block tree-shaken in release.
+          if (kDebugMode) ...[
+            _buildSectionTitle(context, 'Developer Options'),
+            const SizedBox(height: 8),
+            Consumer<PremiumProvider>(
+              builder: (context, premium, _) {
+                return _buildSettingTile(
+                  context,
+                  isDark: isDark,
+                  icon: Icons.developer_mode_rounded,
+                  iconColor: Colors.orange,
+                  title: 'Developer Premium Access',
+                  subtitle: premium.isDeveloperPremiumAccessEnabled
+                      ? 'ON \u2014 All premium features unlocked'
+                      : 'OFF \u2014 Using real RevenueCat entitlements',
+                  trailing: Switch(
+                    value: premium.isDeveloperPremiumAccessEnabled,
+                    activeThumbColor: Colors.orange,
+                    onChanged: (v) => premium.setDeveloperPremiumAccess(v),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // About
           _buildSectionTitle(context, 'About'),
@@ -1158,13 +1234,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final categoryProvider = context.read<CategoryProvider>();
       final budgetProvider = context.read<BudgetProvider>();
       final premiumProvider = context.read<PremiumProvider>();
+      final recurringProvider = context.read<RecurringProvider>();
+      final goalProvider = context.read<GoalProvider>();
+      final familyProvider = context.read<FamilyProvider>();
+      final taxProvider = context.read<TaxProvider>();
+      final alertProvider = context.read<AlertProvider>();
+      final linkedAccountProvider = context.read<LinkedAccountProvider>();
+      final weeklyPlannerProvider = context.read<WeeklyPlannerProvider>();
+      final recurringTxnProvider = context.read<RecurringTransactionProvider>();
+      final smsProvider = context.read<SmsTransactionProvider>();
+      final dashboardConfigProvider = context.read<DashboardConfigProvider>();
 
       // Clear all provider state BEFORE signing out so no stale data
       // remains in memory or SQLite when a different account signs in.
-      await transactionProvider.clearData();
-      await categoryProvider.clearData();
-      await budgetProvider.clearData();
-      await premiumProvider.clearData();
+      await Future.wait([
+        transactionProvider.clearData(),
+        categoryProvider.clearData(),
+        budgetProvider.clearData(),
+        premiumProvider.clearData(),
+        recurringProvider.clearData(),
+        goalProvider.clearData(),
+        alertProvider.clearData(),
+        recurringTxnProvider.clearData(),
+      ]);
+      familyProvider.clearData();
+      taxProvider.clearData();
+      linkedAccountProvider.clearData();
+      weeklyPlannerProvider.clearData();
+      dashboardConfigProvider.clearData();
+      smsProvider.clearData();
+
+      if (!kIsWeb) {
+        await DatabaseHelper().wipeAllUserData().catchError((e) {
+          AppLogger.error('Database wipeAllUserData failed during logout', error: e);
+        });
+      }
+
+      await NotificationService.cancelAllNotifications();
 
       await AuthService.signOut();
 

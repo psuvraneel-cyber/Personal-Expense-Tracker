@@ -7,9 +7,9 @@ import 'package:pet/services/platform_stub.dart'
 
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/data/repositories/sms_transaction_repository.dart';
+import 'package:pet/services/financial_ingestion_service.dart';
 import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/services/classification_rule_engine.dart';
 import 'package:pet/premium/services/merchant_normalizer.dart';
@@ -20,22 +20,30 @@ import 'package:pet/premium/services/merchant_normalizer.dart';
 /// All SMS parsing is performed entirely on-device.
 class SmsService {
   static final SmsService _instance = SmsService._internal();
-  factory SmsService() => _instance;
+  factory SmsService({
+    NativeSmsReader? nativeReader,
+    SmsTransactionRepository? repository,
+  }) {
+    if (nativeReader != null) _instance._nativeReader = nativeReader;
+    if (repository != null) _instance._repository = repository;
+    return _instance;
+  }
   SmsService._internal();
 
-  /// SharedPreferences key for incremental scan watermark.
-  static const String _kLastProcessedTimestamp = 'pet_last_sms_timestamp';
-  final NativeSmsReader _nativeReader = NativeSmsReader();
-  final SmsTransactionRepository _repository = SmsTransactionRepository();
-  final Uuid _uuid = const Uuid();
+  NativeSmsReader _nativeReader = NativeSmsReader();
+  SmsTransactionRepository _repository = SmsTransactionRepository();
 
   bool _isListening = false;
   bool get isListening => _isListening;
   StreamSubscription<NativeSmsMessage>? _nativeSmsSubscription;
   StreamSubscription<NativeSmsMessage>? _notificationSubscription;
 
+  @visibleForTesting
+  static bool? debugOverrideIsSupported;
+
   /// Check if the platform supports SMS reading (Android only).
-  static bool get isSupported => !kIsWeb && platform.isAndroid;
+  static bool get isSupported =>
+      debugOverrideIsSupported ?? (!kIsWeb && platform.isAndroid);
 
   // ─── Permission Handling ──────────────────────────────────────────
 
@@ -160,66 +168,31 @@ class SmsService {
     }
   }
 
+  /// Ingests retrieved SMS messages through the canonical FinancialIngestionService.
+  /// Ensures full consensus classification, FinancialObservation lifecycle,
+  /// cross-source deduplication, merchant rule application, and ledger promotion.
   Future<int> _processMessages(List<NativeSmsMessage> messages) async {
-    AppLogger.debug(
-      '[PET-SMS] Processing ${messages.length} messages from native reader (dispatching to isolate)',
-    );
+    if (messages.isEmpty) return 0;
 
-    // Run the CPU-heavy classification inside an isolate
-    final parsed = await compute(_parseMessagesIsolate, _IsolateData(messages));
-
-    AppLogger.debug(
-      '[PET-SMS] Isolate returned ${parsed.length} parsed transactions',
-    );
-
-    final List<SmsTransaction> newTxns = [];
-    int duplicateCount = 0;
-
-    for (final txn in parsed) {
-      // DB dedup: skip if already persisted from a previous scan.
-      final exists = await _repository.existsByHash(txn.smsHash);
-      if (exists) {
-        duplicateCount++;
-        continue;
-      }
-
-      // Cross-source dedup: check if a notification already captured this
-      if (txn.referenceId != null) {
-        final refDup = await _repository.existsByReferenceAndAmount(
-          txn.referenceId!,
-          txn.amount,
-          txn.timestamp,
-        );
-        if (refDup) {
-          duplicateCount++;
-          continue;
-        }
-      }
-
-      newTxns.add(txn);
-    }
+    final int latestMs = messages
+        .map((m) => m.dateMillis)
+        .reduce((a, b) => a > b ? a : b);
 
     AppLogger.debug(
-      '[PET-SMS] Main Thread: Skipped $duplicateCount duplicates, '
-      'new ${newTxns.length}',
+      '[PET-SMS] Routing ${messages.length} messages to FinancialIngestionService.ingestBatch (latestMs=$latestMs)',
     );
 
-    final insertedCount = await _repository.insertBatch(newTxns);
-    AppLogger.debug('[PET-SMS] Inserted $insertedCount new transactions');
+    final count = await FinancialIngestionService().ingestBatch(
+      messages: messages,
+      watermarkTimestamp: latestMs,
+      watermarkKeys: const ['sms_watermark'],
+    );
 
-    // Update the last-processed watermark for incremental scans
-    if (messages.isNotEmpty) {
-      final latestMs = messages
-          .map((m) => m.dateMillis)
-          .reduce((a, b) => a > b ? a : b);
-      final prefs = await SharedPreferences.getInstance();
-      final existing = prefs.getInt(_kLastProcessedTimestamp) ?? 0;
-      if (latestMs > existing) {
-        await prefs.setInt(_kLastProcessedTimestamp, latestMs);
-      }
-    }
+    AppLogger.debug(
+      '[PET-SMS] Canonical Ingestion completed: $count transactions promoted to primary ledger',
+    );
 
-    return insertedCount;
+    return count;
   }
 
   // ─── Live Listener ────────────────────────────────────────────────
@@ -235,65 +208,17 @@ class SmsService {
     // PRIMARY: Native EventChannel listener (default-SMS-app independent)
     _nativeSmsSubscription = _nativeReader.incomingSmsStream.listen(
       (NativeSmsMessage nativeMsg) async {
-        final body = nativeMsg.body;
-        final sender = nativeMsg.address;
-        final timestamp = nativeMsg.dateTime;
-
-        if (body.isEmpty) return;
-
-        // Use two-tier classification engine
-        final classified = await ClassificationRuleEngine.classify(
-          body,
-          sender,
-          timestamp,
-        );
-        if (classified == null) return;
-
-        final hash = SmsTransaction.generateHash(body, timestamp);
-        final exists = await _repository.existsByHash(hash);
-        if (exists) return;
-
-        // Cross-source dedup: check if a notification already captured this
-        if (classified.referenceId != null) {
-          final refDup = await _repository.existsByReferenceAndAmount(
-            classified.referenceId!,
-            classified.amount,
-            classified.parsedDate,
-          );
-          if (refDup) return;
-        }
-
-        final category =
-            classified.category ?? inferCategoryFromClassified(classified);
-        final normalizedMerchant = MerchantNormalizer.normalize(
-          classified.merchantName,
-        );
-
-        final transaction = SmsTransaction(
-          id: _uuid.v4(),
-          amount: classified.amount,
-          merchantName: normalizedMerchant,
-          bankName: classified.bankName,
-          transactionType: classified.transactionType,
-          transactionSubType: classified.transactionSubType,
-          timestamp: classified.parsedDate,
-          rawSmsBody: redactSensitiveData(body),
-          smsSender: sender,
-          smsHash: hash,
-          category: category,
-          referenceId: classified.referenceId,
-          upiId: classified.upiId,
-          confidence: classified.confidence,
-          source: 'sms',
-        );
-
-        final inserted = await _repository.insertSmsTransaction(transaction);
-        if (inserted) {
-          AppLogger.debug(
-            '[PET-SMS] Native listener: new transaction (${classified.classifiedBy.name}): '
-            '${transaction.amount} ${transaction.transactionType} at ${transaction.merchantName}',
-          );
-          onNewTransaction?.call(transaction);
+        try {
+          final promoted = await FinancialIngestionService().ingestMessage(nativeMsg);
+          if (promoted != null) {
+            final allSms = await _repository.getAllSmsTransactions();
+            final matching = allSms.where((s) => s.id == promoted.sourceObservationId).firstOrNull;
+            if (matching != null) {
+              onNewTransaction?.call(matching);
+            }
+          }
+        } catch (e) {
+          AppLogger.debug('[PET-SMS] Error handling incoming SMS: $e');
         }
       },
       onError: (error) {
@@ -304,64 +229,9 @@ class SmsService {
     // NOTIFICATION LISTENER: Capture UPI app notifications (GPay, PhonePe, Paytm)
     _notificationSubscription = _nativeReader.incomingNotificationStream.listen(
       (NativeSmsMessage notifMsg) async {
-        final body = notifMsg.body;
-        final sender = notifMsg.address;
-        final timestamp = notifMsg.dateTime;
-
-        if (body.isEmpty) return;
-
-        final classified = await ClassificationRuleEngine.classify(
-          body,
-          sender,
-          timestamp,
-        );
-        if (classified == null) return;
-
-        final hash = SmsTransaction.generateHash(body, timestamp);
-        final exists = await _repository.existsByHash(hash);
-        if (exists) return;
-
-        // Cross-source dedup: check if SMS already captured this transaction
-        if (classified.referenceId != null) {
-          final refDup = await _repository.existsByReferenceAndAmount(
-            classified.referenceId!,
-            classified.amount,
-            classified.parsedDate,
-          );
-          if (refDup) return;
-        }
-
-        final category =
-            classified.category ?? inferCategoryFromClassified(classified);
-        final normalizedMerchant = MerchantNormalizer.normalize(
-          classified.merchantName,
-        );
-
-        final transaction = SmsTransaction(
-          id: _uuid.v4(),
-          amount: classified.amount,
-          merchantName: normalizedMerchant,
-          bankName: classified.bankName,
-          transactionType: classified.transactionType,
-          transactionSubType: classified.transactionSubType,
-          timestamp: classified.parsedDate,
-          rawSmsBody: redactSensitiveData(body),
-          smsSender: sender,
-          smsHash: hash,
-          category: category,
-          referenceId: classified.referenceId,
-          upiId: classified.upiId,
-          confidence: classified.confidence,
-          source: 'notification',
-        );
-
-        final inserted = await _repository.insertSmsTransaction(transaction);
-        if (inserted) {
-          AppLogger.debug(
-            '[PET-SMS] Notification listener: new transaction: '
-            '${transaction.amount} ${transaction.transactionType} at ${transaction.merchantName}',
-          );
-          onNewTransaction?.call(transaction);
+        final txn = await processNotificationMessage(notifMsg);
+        if (txn != null) {
+          onNewTransaction?.call(txn);
         }
       },
       onError: (error) {
@@ -373,6 +243,47 @@ class SmsService {
     AppLogger.debug(
       '[PET-SMS] Started listening for incoming SMS via native reader',
     );
+  }
+
+  /// Parses, deduplicates, and ingests a single notification message using FinancialIngestionService.
+  /// Returns the inserted [SmsTransaction] or `null` if the message is non-financial,
+  /// unclassifiable, or a duplicate.
+  Future<SmsTransaction?> processNotificationMessage(
+    NativeSmsMessage notifMsg,
+  ) async {
+    try {
+      final promoted = await FinancialIngestionService().ingestMessage(notifMsg);
+      if (promoted != null) {
+        final allSms = await _repository.getAllSmsTransactions();
+        return allSms.where((s) => s.id == promoted.sourceObservationId).firstOrNull;
+      }
+      return null;
+    } catch (e) {
+      AppLogger.debug('[PET-SMS] Error ingesting notification message: $e');
+      return null;
+    }
+  }
+
+  /// Process all pending notifications from the native encrypted cache.
+  /// Uses non-destructive peek-and-acknowledge via FinancialIngestionService.
+  /// Returns the list of newly created and stored transactions.
+  Future<List<SmsTransaction>> processPendingNotifications() async {
+    if (!isSupported) return [];
+    try {
+      final promotedList = await FinancialIngestionService().processPendingNotifications();
+      if (promotedList.isEmpty) return [];
+
+      final allSms = await _repository.getAllSmsTransactions();
+      final promotedIds = promotedList.map((p) => p.sourceObservationId).toSet();
+      final matched = allSms.where((s) => promotedIds.contains(s.id)).toList();
+      AppLogger.debug(
+        '[PET-SMS] Processed ${promotedList.length} cached notifications -> ${matched.length} core ledger transactions',
+      );
+      return matched;
+    } catch (e) {
+      AppLogger.debug('[PET-SMS] Error processing pending notifications: $e');
+      return [];
+    }
   }
 
   /// Stop listening for incoming SMS messages.

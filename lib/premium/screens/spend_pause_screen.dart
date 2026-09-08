@@ -18,6 +18,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
   late final AnimationController _breathCtrl;
   late final Animation<double> _breathAnim;
   String _selectedDuration = 'Until midnight';
+  DateTime? _customUntil;
   Timer? _countdownTimer;
 
   static const _durations = ['1 hour', 'Until midnight', '3 days', 'Custom'];
@@ -202,6 +203,29 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
     );
   }
 
+  Future<void> _pickCustomDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _customUntil = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          23,
+          59,
+          59,
+        );
+        _selectedDuration = 'Custom';
+      });
+    }
+  }
+
   Widget _buildDurationSection(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,10 +242,21 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
           runSpacing: 8,
           children: _durations.map((d) {
             final selected = d == _selectedDuration;
+            final labelText = (d == 'Custom' && _customUntil != null)
+                ? 'Custom (${_customUntil!.day}/${_customUntil!.month})'
+                : d;
             return ChoiceChip(
-              label: Text(d),
+              label: Text(labelText),
               selected: selected,
-              onSelected: (_) => setState(() => _selectedDuration = d),
+              onSelected: (_) {
+                if (d == 'Custom') {
+                  _pickCustomDate();
+                } else {
+                  setState(() {
+                    _selectedDuration = d;
+                  });
+                }
+              },
               selectedColor: AppTheme.accentPurple.withAlpha(40),
               backgroundColor: isDark
                   ? Colors.white.withAlpha(8)
@@ -446,8 +481,16 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
           until = DateTime(now.year, now.month, now.day, 23, 59, 59);
         case '3 days':
           until = now.add(const Duration(days: 3));
+        case 'Custom':
+          if (_customUntil == null || !_customUntil!.isAfter(now)) {
+            await _pickCustomDate();
+            if (_customUntil == null || !_customUntil!.isAfter(now)) {
+              return; // User cancelled date selection
+            }
+          }
+          until = _customUntil;
         default:
-          until = null; // 'Custom' or unknown — indefinite
+          until = null;
       }
       final updated = SpendPause(
         enabled: true,

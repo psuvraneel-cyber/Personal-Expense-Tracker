@@ -29,6 +29,18 @@ class FinancialContext {
   /// (Capped at 10 to reduce token usage — was 30 before.)
   final List<String> recentTransactions;
 
+  // --- Canonical Cashflow Forecast Metrics (CF-20) ---
+  final double? projectedEndingBalance;
+  final double? safeToSpend;
+  final int? cashflowRunwayDays;
+  final bool? isCashflowPositive;
+  final double? monthlyNetCashflow;
+  final double? upcomingBillsNext14Days;
+  final double? lowestProjectedBalance;
+  final DateTime? lowestProjectedDate;
+  final String? cashflowRiskLevel;
+  final String? forecastConfidence;
+
   const FinancialContext({
     required this.monthLabel,
     required this.totalIncome,
@@ -37,6 +49,16 @@ class FinancialContext {
     required this.categorySpending,
     required this.budgets,
     required this.recentTransactions,
+    this.projectedEndingBalance,
+    this.safeToSpend,
+    this.cashflowRunwayDays,
+    this.isCashflowPositive,
+    this.monthlyNetCashflow,
+    this.upcomingBillsNext14Days,
+    this.lowestProjectedBalance,
+    this.lowestProjectedDate,
+    this.cashflowRiskLevel,
+    this.forecastConfidence,
   });
 }
 
@@ -55,6 +77,22 @@ class ClientErrorException implements Exception {
   const ClientErrorException(this.statusCode, this.message);
   @override
   String toString() => message;
+}
+
+/// Exception thrown when the server returns a 401 authentication error.
+class AuthErrorException implements Exception {
+  final int statusCode;
+  final String message;
+  final String? errorCode;
+  const AuthErrorException(this.statusCode, this.message, {this.errorCode});
+  @override
+  String toString() => message;
+
+  /// Whether this auth error is potentially resolvable by refreshing the token.
+  bool get isRetryable =>
+      errorCode == null ||
+      errorCode == 'AUTH_TOKEN_EXPIRED' ||
+      errorCode == 'AUTH_TOKEN_UNKNOWN_KEY';
 }
 
 class AiCopilotService {
@@ -118,10 +156,22 @@ class AiCopilotService {
       {'role': 'user', 'content': message},
     ];
 
-    // ── 5. API call with single retry ────────────────────────────────────────
+    // ── 5. API call with auth retry + general retry ──────────────────────────
     String reply;
     try {
       reply = await _callApi(messages);
+    } on AuthErrorException catch (e) {
+      // On 401, force-refresh the Firebase ID token and retry exactly once
+      if (e.isRetryable) {
+        try {
+          reply = await _callApi(messages, forceRefresh: true);
+        } on AuthErrorException {
+          // Second 401 — do not retry further
+          rethrow;
+        }
+      } else {
+        rethrow;
+      }
     } on ClientErrorException {
       rethrow;
     } on Exception {
@@ -154,13 +204,13 @@ class AiCopilotService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  Future<String> _callApi(List<Map<String, String>> messages) async {
+  Future<String> _callApi(List<Map<String, String>> messages, {bool forceRefresh = false}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw Exception('Login required to use the AI Copilot.');
     }
 
-    final idToken = await user.getIdToken();
+    final idToken = await user.getIdToken(forceRefresh);
     if (idToken == null) {
       throw Exception('Failed to get authentication token.');
     }
@@ -179,6 +229,22 @@ class AiCopilotService {
           }),
         )
         .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 401) {
+      // Parse structured error code if available
+      String? errorCode;
+      String errMsg = response.body;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) {
+          errorCode = decoded['errorCode']?.toString();
+          if (decoded['error'] != null) {
+            errMsg = decoded['error'].toString();
+          }
+        }
+      } catch (_) {}
+      throw AuthErrorException(response.statusCode, errMsg, errorCode: errorCode);
+    }
 
     if (response.statusCode >= 400 && response.statusCode < 500) {
       String errMsg = response.body;
@@ -249,6 +315,40 @@ class AiCopilotService {
       for (final t in ctx.recentTransactions.take(10)) {
         buf.writeln('  • $t');
       }
+    }
+
+    // --- Canonical Cashflow Forecast Section (CF-20) ---
+    if (ctx.projectedEndingBalance != null || ctx.safeToSpend != null) {
+      buf.writeln('\n--- 30-DAY CASHFLOW FORECAST (ESTIMATED) ---');
+      if (ctx.safeToSpend != null) {
+        buf.writeln('Safe-to-spend allowance: ₹${_fmt(ctx.safeToSpend!)}/day');
+      }
+      if (ctx.projectedEndingBalance != null) {
+        buf.writeln('Projected 30-day ending balance: ₹${_fmt(ctx.projectedEndingBalance!)}');
+      }
+      if (ctx.cashflowRunwayDays != null) {
+        if (ctx.isCashflowPositive == true) {
+          buf.writeln('Runway: Cashflow positive (+₹${_fmt(ctx.monthlyNetCashflow ?? 0)}/mo surplus)');
+        } else {
+          buf.writeln('Runway: ~${ctx.cashflowRunwayDays} days of liquidity');
+        }
+      }
+      if (ctx.lowestProjectedBalance != null) {
+        final dateStr = ctx.lowestProjectedDate != null
+            ? ' on ${ctx.lowestProjectedDate!.day}/${ctx.lowestProjectedDate!.month}'
+            : '';
+        buf.writeln('Lowest projected trough: ₹${_fmt(ctx.lowestProjectedBalance!)}$dateStr');
+      }
+      if (ctx.upcomingBillsNext14Days != null && ctx.upcomingBillsNext14Days! > 0) {
+        buf.writeln('Upcoming confirmed bills (next 14 days): ₹${_fmt(ctx.upcomingBillsNext14Days!)}');
+      }
+      if (ctx.cashflowRiskLevel != null) {
+        buf.writeln('Forecast risk status: ${ctx.cashflowRiskLevel}');
+      }
+      if (ctx.forecastConfidence != null) {
+        buf.writeln('Forecast confidence: ${ctx.forecastConfidence}');
+      }
+      buf.writeln('Note: Forecasts are estimates based on recent activity, not guarantees or formal financial advice.');
     }
 
     buf.writeln('--- END OF SNAPSHOT ---');

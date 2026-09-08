@@ -84,27 +84,29 @@ class WeeklyPlannerProvider extends ChangeNotifier {
   }) async {
     final idx = _entries.indexWhere((e) => e.categoryId == categoryId);
     if (idx >= 0) {
-      _entries[idx] = WeeklyPlannerEntry(
-        categoryId: categoryId,
-        categoryName: categoryName,
-        weeklyLimit: weeklyLimit,
-        weeklySpent: _entries[idx].weeklySpent,
-      );
+      _entries = List<WeeklyPlannerEntry>.from(_entries)
+        ..[idx] = WeeklyPlannerEntry(
+          categoryId: categoryId,
+          categoryName: categoryName,
+          weeklyLimit: weeklyLimit,
+          weeklySpent: _entries[idx].weeklySpent,
+        );
     } else {
-      _entries.add(
+      _entries = [
+        ..._entries,
         WeeklyPlannerEntry(
           categoryId: categoryId,
           categoryName: categoryName,
           weeklyLimit: weeklyLimit,
         ),
-      );
+      ];
     }
     await _persist();
     notifyListeners();
   }
 
   Future<void> removeLimit(String categoryId) async {
-    _entries.removeWhere((e) => e.categoryId == categoryId);
+    _entries = _entries.where((e) => e.categoryId != categoryId).toList();
     await _persist();
     notifyListeners();
   }

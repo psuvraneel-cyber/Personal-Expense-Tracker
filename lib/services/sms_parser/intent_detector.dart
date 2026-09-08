@@ -99,41 +99,34 @@ class IntentDetector {
   ///
   /// No backtracking risk: all alternatives use \b anchors and fixed text.
   static final RegExp debitKeywords = RegExp(
+    r'(?:'
     r'\b(?:'
-    r'debited|debit(?:ed)?\b|' // "debited from your account"
-    r'spent\b|' // "Rs 500 spent on"
-    r'paid\b|' // "paid to merchant"
-    r'purchase[d]?\b|' // "purchase at Amazon"
-    r'withdrawn\b|' // "withdrawn from ATM"
-    r'sent\s+to\b|' // "sent to merchant@upi"
-    r'sent\s+(?:Rs\.?|INR|₹)|' // "sent Rs.500"
-    r'deducted\b|' // "Rs 500 deducted"
-    r'transferred\b|' // "transferred to beneficiary"
-    r'payment\s+(?:of|successful|made|done|completed)|' // UPI payment
-    r'money\s+sent\b|' // GPay "Money sent"
-    r'you\s+paid\b|' // GPay "You paid Rs.500"
-    r'txn\s+of\b|' // "Txn of Rs.500"
-    r'paying\b|' // "paying to"
-    r'paid\s+to\b|' // "paid to merchant"
-    r'auto.?pay\b|' // "auto-pay executed"
-    r'emi\s+(?:paid|debited|deducted)|' // "EMI paid/debited"
-    // Credit card debit patterns
-    r'used\s+(?:for|at)\b|' // "Card used at Amazon"
-    r'charged\s+(?:Rs\.?|INR|₹)|' // "charged Rs.500"
-    r'transaction\s+of\s+(?:Rs\.?|INR|₹)|' // "Transaction of Rs.200"
-    r'card\s+(?:txn|transaction)\b|' // "Card txn at POS"
-    r'swip(?:ed|e)\s+at\b|' // "card swiped at"
-    // Hindi keywords (SBI, PNB, BOB send in Devanagari)
-    r'निकासी\b|' // "nikasi" — withdrawal
-    r'नामे\b|' // "naame" — debited (SBI Hindi)
-    r'भुगतान\b|' // "bhugtan" — payment
-    r'कटौती\b|' // "katauti" — deduction
-    r'खाते\s+से\b|' // "khate se" — from account
-    r'भेजा\b|' // "bheja" — sent
-    // BOB/PNB-style short debit indicator
-    r'dr\.' // "Dr." — debited (Bank of Baroda, PNB)
-    r')(?:\b|(?<=\.))',
+    r'debited|debit(?:ed)?|'
+    r'spent|'
+    r'paid|'
+    r'purchase[d]?|'
+    r'withdrawn|'
+    r'sent\s+to|'
+    r'deducted|'
+    r'transferred|'
+    r'money\s+sent|'
+    r'you\s+paid|'
+    r'txn\s+of|'
+    r'paying|'
+    r'paid\s+to|'
+    r'auto.?pay|'
+    r'emi\s+(?:paid|debited|deducted)|'
+    r'used\s+(?:for|at)|'
+    r'card\s+(?:txn|transaction)|'
+    r'swip(?:ed|e)\s+at'
+    r')\b|'
+    r'\b(?:sent|charged|transaction\s+of)\s+(?:Rs\.?|INR|₹)|'
+    r'\bpayment\s+(?:successful|made|done|completed|processed)|'
+    r'\bdr\.|'
+    r'(?:^|[\s\p{P}\W])(?:निकासी|नामे|भुगतान|कटौती|खाते\s+से|भेजा)(?=$|[\s\p{P}\W])'
+    r')',
     caseSensitive: false,
+    unicode: true,
   );
 
   // ═══════════════════════════════════════════════════════════════════
@@ -146,26 +139,25 @@ class IntentDetector {
   /// credit-confirming context — "cashback credited" or "cashback of Rs X
   /// received". Standalone "cashback" could be promotional.
   static final RegExp creditKeywords = RegExp(
+    r'(?:'
     r'\b(?:'
-    r'credited\b|credit(?:ed)?\b|' // "credited to your account"
-    r'received\b|' // "received from"
-    r'deposited?\b|' // "deposited to a/c"
-    r'refund(?:ed)?\b|' // "refund of Rs 200"
-    r'cashback\b|cash\s*back\b|' // "cashback credited"
-    r'reversed?\b|reversal\b|' // "reversal of Rs 200"
-    r'added\b|' // "Rs 500 added to wallet"
-    r'money\s+received\b|' // "Money received"
-    r'payment\s+received\b|' // "Payment received"
-    r'settled\b|' // "settlement credited"
-    r'reimburs(?:ed|ement)\b|' // "reimbursement credited"
-    r'(?:amount|money)\s+credited|' // "amount credited"
-    // Hindi credit keywords (SBI, PNB, BOB)
-    r'जमा\b|' // "jama" — credited / deposited
-    r'प्राप्त\b|' // "prapt" — received
-    r'खाते\s+में\b|' // "khate mein" — into account
-    r'वापसी\b' // "vaapsi" — refund / return
-    r')\b',
+    r'credited|credit(?:ed)?|'
+    r'received|'
+    r'deposited?|'
+    r'refund(?:ed)?|'
+    r'cashback|cash\s*back|'
+    r'reversed?|reversal|'
+    r'added|'
+    r'money\s+received|'
+    r'payment\s+received|'
+    r'settled|'
+    r'reimburs(?:ed|ement)|'
+    r'(?:amount|money)\s+credited'
+    r')\b|'
+    r'(?:^|[\s\p{P}\W])(?:जमा|प्राप्त|खाते\s+में|वापसी)(?=$|[\s\p{P}\W])'
+    r')',
     caseSensitive: false,
+    unicode: true,
   );
 
   // ═══════════════════════════════════════════════════════════════════
@@ -271,6 +263,30 @@ class IntentDetector {
     caseSensitive: false,
   );
 
+  /// Pure payment reminder patterns — messages containing these without
+  /// completed execution verbs (debited, spent, paid to, credited, swiped, charged)
+  /// are reminders for future/pending payments, not completed transactions.
+  static final RegExp pureReminderPattern = RegExp(
+    r'(?:'
+    r'\b(?:is|are)\s+due\b|'
+    r'\bdue\s+(?:date|by|on|amount)\b|'
+    r'\b(?:payment|bill|emi|installment|dues?)\s+(?:due|reminder|pending|overdue)\b|'
+    r'\breminder\s*[:|-]?\s*(?:to\s*)?(?:pay|for)?\b|'
+    r'\boverdue\b|'
+    r'\bmin(?:imum)?\s*amt\s*due\b|'
+    r'\btotal\s*dues?\b|'
+    r'\bpay\s*(?:your|the)\s*(?:bill|dues?|amount)\s*(?:by|before|on)\b'
+    r')',
+    caseSensitive: false,
+  );
+
+  /// Completed execution verbs required to override a pure reminder phrase.
+  /// Note: avoids bare "credit" or "debit" which would falsely match "credit card" or "debit card".
+  static final RegExp completedExecutionVerbs = RegExp(
+    r'\b(?:debited|debit\s+(?:of|from|a/c|account)|credited|credit\s+(?:of|to|into|a/c|account)|spent|paid\s+to|you\s+paid|swip(?:ed|e)|charged|transferred|withdrawn|refunded|reversed|dr\.|cr\.)\b',
+    caseSensitive: false,
+  );
+
   // ═══════════════════════════════════════════════════════════════════
   //  PUBLIC API
   // ═══════════════════════════════════════════════════════════════════
@@ -289,6 +305,19 @@ class IntentDetector {
     // Without a currency indicator, it can't be a financial transaction.
     if (!currencyPattern.hasMatch(body)) {
       return const IntentResult.none();
+    }
+
+    // ── Step 1.5: Pure Payment Reminder check ───────────────────
+    // Messages that express bill/EMI due dates without completed execution
+    // verbs are reminders, NOT completed financial transactions.
+    if (pureReminderPattern.hasMatch(body) &&
+        !completedExecutionVerbs.hasMatch(body)) {
+      return const IntentResult(
+        hasIntent: false,
+        reasons: [
+          'Pure payment reminder/due notice without completed transaction execution verb',
+        ],
+      );
     }
 
     // ── Step 2: Check for collect request special cases ──────────
