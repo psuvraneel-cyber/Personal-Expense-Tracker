@@ -494,7 +494,6 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     required NumberFormat formatter,
     required bool isDark,
   }) {
-
     final isMaxed = progress >= 1.0;
 
     return Container(

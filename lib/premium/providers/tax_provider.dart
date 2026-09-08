@@ -39,7 +39,7 @@ class TaxProvider extends ChangeNotifier {
 
   Future<void> setLimit(String section, double value) async {
     if (section == '80E') return; // Cannot edit 80E
-    
+
     _limits[section] = value;
     notifyListeners();
 

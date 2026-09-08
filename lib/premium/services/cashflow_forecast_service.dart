@@ -108,6 +108,15 @@ class CashflowForecastService {
       }
     }
 
+    final avgDailyExpense = _avgDailyAmount(
+      pastTransactions,
+      TransactionType.expense,
+    );
+    final avgDailyIncome = _avgDailyAmount(
+      pastTransactions,
+      TransactionType.income,
+    );
+    final netDaily = avgDailyIncome - avgDailyExpense;
     final hasNegativeStartingBalance = balance < 0;
 
     // ── 3. Unified Rolling Baseline Window (CF-01 & CF-02 Fix) ───────────────
@@ -243,6 +252,27 @@ class CashflowForecastService {
 
     for (var i = 0; i < days; i++) {
       final date = DateTime(now.year, now.month, now.day + i);
+      balance += netDaily;
+      // Clamp future balance to 0 if we keep spending and drop below 0
+      if (balance < 0) balance = 0;
+      dailyPoints.add(CashflowPoint(date: date, balance: balance));
+    }
+
+    // safeToSpend: balance-aware formula — available balance divided by
+    // remaining days in the month, rather than the old misleading
+    // `avgDailyExpense * 0.9` which ignored actual balance.
+    final daysRemainingInMonth = _daysRemainingInMonth(now);
+    final currentBalance = dailyPoints.isNotEmpty
+        ? dailyPoints.first.balance
+        : balance;
+    final safeToSpend = daysRemainingInMonth > 0
+        ? currentBalance / daysRemainingInMonth
+        : currentBalance;
+
+    final starting = dailyPoints.isNotEmpty
+        ? dailyPoints.first.balance - netDaily
+        : balance;
+    final ending = dailyPoints.isNotEmpty ? dailyPoints.last.balance : balance;
       final dateKey = '${date.year}-${date.month}-${date.day}';
 
       final billsDueToday = billDeductionsByDate[dateKey] ?? 0.0;

@@ -762,7 +762,10 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
     );
   }
 
-  Widget _buildLastSyncedIndicator(SmsTransactionProvider provider, bool isDark) {
+  Widget _buildLastSyncedIndicator(
+    SmsTransactionProvider provider,
+    bool isDark,
+  ) {
     final timestamp = provider.lastSyncTimestamp;
     String label;
     if (timestamp == null) {
@@ -795,7 +798,9 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+              color: isDark
+                  ? AppTheme.textTertiary
+                  : AppTheme.textSecondaryLight,
             ),
           ),
         ],

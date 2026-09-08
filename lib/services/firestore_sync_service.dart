@@ -58,6 +58,10 @@ class FirestoreSyncService {
   /// Whether the current user is authenticated.
   /// Callers should check this before attempting Firestore operations.
   bool get isAuthenticated {
+    if (_auth.isLocalGuest || _auth.currentUser?.isAnonymous == true)
+      return false;
+    final uid = _auth.currentUserId;
+    return uid != null && uid.isNotEmpty && uid != 'guest_user';
     try {
       if (_auth.isLocalGuest || _auth.currentUser?.isAnonymous == true) return false;
       final uid = _auth.currentUserId;
@@ -161,13 +165,10 @@ class FirestoreSyncService {
       query = query.limit(limit);
     }
 
-    return query
-        .snapshots()
-        .map(_docsToTransactions)
-        .handleError((Object e) {
-          AppLogger.debug('[Firestore] transactionsStream error: $e');
-          return <TransactionRecord>[];
-        });
+    return query.snapshots().map(_docsToTransactions).handleError((Object e) {
+      AppLogger.debug('[Firestore] transactionsStream error: $e');
+      return <TransactionRecord>[];
+    });
   }
 
   /// One-time fetch of ALL transactions for the current user using cursor-based pagination.

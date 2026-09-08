@@ -9,7 +9,7 @@ class SmsTransactionRepository {
   final DatabaseHelper _dbHelper;
 
   SmsTransactionRepository({DatabaseHelper? dbHelper})
-      : _dbHelper = dbHelper ?? DatabaseHelper();
+    : _dbHelper = dbHelper ?? DatabaseHelper();
 
   // ─── Watermark & Metadata Management ──────────────────────────────
 

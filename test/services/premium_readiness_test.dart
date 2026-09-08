@@ -39,23 +39,29 @@ void main() {
   });
 
   group('Premium Readiness Gating Tests', () {
-    test('LinkedAccountProvider prevents mock data connection in production configuration', () async {
-      final provider = LinkedAccountProvider();
-      
-      // Enforce production mode
-      provider.isTesting = false;
+    test(
+      'LinkedAccountProvider prevents mock data connection in production configuration',
+      () async {
+        final provider = LinkedAccountProvider();
 
-      // 1. Loading when empty should NOT pull mock aggregator feeds
-      await provider.load();
-      expect(provider.accounts, isEmpty);
+        // Enforce production mode
+        provider.isTesting = false;
 
-      // 2. Tapping connect mock account must raise UnsupportedError
-      expect(
-        () => provider.connectMockAccount(),
-        throwsA(isA<UnsupportedError>()));
-    });
+        // 1. Loading when empty should NOT pull mock aggregator feeds
+        await provider.load();
+        expect(provider.accounts, isEmpty);
 
-    testWidgets('FeatureCard Coming Soon state is non-interactive', (tester) async {
+        // 2. Tapping connect mock account must raise UnsupportedError
+        expect(
+          () => provider.connectMockAccount(),
+          throwsA(isA<UnsupportedError>()),
+        );
+      },
+    );
+
+    testWidgets('FeatureCard Coming Soon state is non-interactive', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(

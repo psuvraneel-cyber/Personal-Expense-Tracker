@@ -108,7 +108,9 @@ class ReconciliationService {
   Future<int> reconcile({bool force = false}) async {
     if (kIsWeb || !(debugOverrideIsSupported ?? platform.isAndroid)) return 0;
     if (AccountDeletionService.isDeletionInProgress) {
-      AppLogger.debug('[Reconciliation] Account deletion in progress — skipping');
+      AppLogger.debug(
+        '[Reconciliation] Account deletion in progress — skipping',
+      );
       return 0;
     }
     if (_isRunning) {

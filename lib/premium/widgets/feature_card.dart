@@ -72,13 +72,15 @@ class _FeatureCardState extends State<FeatureCard>
         border: Border.all(
           color: widget.accentColor.withAlpha(isDark ? 40 : 30),
         ),
-        boxShadow: widget.onTap != null ? [
-          BoxShadow(
-            color: widget.accentColor.withAlpha(isDark ? 18 : 12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ] : null,
+        boxShadow: widget.onTap != null
+            ? [
+                BoxShadow(
+                  color: widget.accentColor.withAlpha(isDark ? 18 : 12),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,15 +93,13 @@ class _FeatureCardState extends State<FeatureCard>
                   color: widget.accentColor.withAlpha(isDark ? 40 : 28),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  widget.icon,
-                  size: 20,
-                  color: widget.accentColor,
-                ),
+                child: Icon(widget.icon, size: 20, color: widget.accentColor),
               ),
               const Spacer(),
               Icon(
-                widget.onTap != null ? Icons.chevron_right_rounded : Icons.lock_outline_rounded,
+                widget.onTap != null
+                    ? Icons.chevron_right_rounded
+                    : Icons.lock_outline_rounded,
                 size: 18,
                 color: AppTheme.textTertiary,
               ),
@@ -113,17 +113,11 @@ class _FeatureCardState extends State<FeatureCard>
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 3),
-          Text(
-            widget.subtitle,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text(widget.subtitle, style: Theme.of(context).textTheme.bodySmall),
           if (widget.badge != null || widget.onTap == null) ...[
             const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: widget.onTap != null
                     ? widget.accentColor.withAlpha(isDark ? 50 : 35)
@@ -135,7 +129,9 @@ class _FeatureCardState extends State<FeatureCard>
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: widget.onTap != null ? widget.accentColor : AppTheme.textTertiary,
+                  color: widget.onTap != null
+                      ? widget.accentColor
+                      : AppTheme.textTertiary,
                 ),
               ),
             ),
@@ -145,10 +141,7 @@ class _FeatureCardState extends State<FeatureCard>
     );
 
     if (widget.onTap == null) {
-      return Opacity(
-        opacity: 0.6,
-        child: card,
-      );
+      return Opacity(opacity: 0.6, child: card);
     }
 
     return GestureDetector(
@@ -158,10 +151,7 @@ class _FeatureCardState extends State<FeatureCard>
         widget.onTap!();
       },
       onTapCancel: () => _ctrl.reverse(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: card,
-      ),
+      child: ScaleTransition(scale: _scale, child: card),
     );
   }
 }
