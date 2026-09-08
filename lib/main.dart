@@ -14,7 +14,7 @@ import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:pet/data/database/database_helper.dart';
-import 'package:pet/firebase_options.dart';
+import 'package:pet/firebase_options.example.dart';
 import 'package:pet/screens/splash/splash_screen.dart';
 import 'package:pet/premium/providers/premium_provider.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';

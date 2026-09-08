@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pet/firebase_options.dart';
+import 'package:pet/firebase_options.example.dart';
 import 'package:pet/services/secure_storage_service.dart';
 
 // Conditional import: on web this resolves to a stub; on mobile/desktop it
