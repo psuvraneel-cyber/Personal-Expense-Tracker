@@ -94,10 +94,11 @@ class _GoalsScreenState extends State<GoalsScreen>
               0.0,
               (s, g) => s + g.currentAmount,
             );
-            final overall = totalTarget > 0 ? totalSaved / totalTarget : 0.0;
-            final completedCount = provider.goals
-                .where((g) => g.currentAmount >= g.targetAmount)
-                .length;
+            final overall = totalTarget > 0
+                ? (totalSaved / totalTarget).clamp(0.0, 1.0)
+                : 0.0;
+            final completedCount =
+                provider.goals.where((g) => g.isAchieved).length;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
@@ -293,11 +294,9 @@ class _GoalsScreenState extends State<GoalsScreen>
     bool isDark,
     int index,
   ) {
-    final progress = goal.targetAmount > 0
-        ? goal.currentAmount / goal.targetAmount
-        : 0.0;
+    final progress = goal.progressPercent;
     final daysLeft = goal.targetDate?.difference(DateTime.now()).inDays;
-    final isComplete = progress >= 1.0;
+    final isComplete = goal.isAchieved;
 
     // Monthly needed to finish on time
     String? monthlyNeeded;

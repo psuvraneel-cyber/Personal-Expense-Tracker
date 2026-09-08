@@ -102,18 +102,16 @@ class GoalProvider extends ChangeNotifier {
 
     if (!_firestoreSync.isAuthenticated) return;
 
-    final expectedGeneration = _firestoreSync.sessionGeneration;
-    final expectedUid = _firestoreSync.currentUserId;
+    final expectedSession = _firestoreSync.currentSession;
 
     final stream = _firestoreSync.savingGoalsStream();
     _firestoreSubscription = stream.listen(
       (remoteGoals) async {
         if (_disposed || AccountDeletionService.isDeletionInProgress) return;
         // Invalidate stale in-flight snapshot if session generation or user has changed
-        if (_firestoreSync.sessionGeneration != expectedGeneration ||
-            _firestoreSync.currentUserId != expectedUid) {
+        if (!_firestoreSync.currentSession.matches(expectedSession)) {
           AppLogger.warn(
-            '[GoalProvider] Dropping stale Firestore snapshot from superseded session',
+            '[GoalProvider] Dropping stale Firestore snapshot from superseded session: $expectedSession vs ${_firestoreSync.currentSession}',
             label: 'GoalProvider',
           );
           return;
@@ -136,28 +134,7 @@ class GoalProvider extends ChangeNotifier {
     final localMap = {for (final g in _goals) g.id: g};
     bool changed = false;
 
-    // 1. Detect remote deletions (goals present locally but deleted on remote).
-    // Exclude goals created very recently (< 10 seconds) that may not have synced yet.
-    final now = DateTime.now();
-    final goalsToDelete = <String>[];
-    for (final local in _goals) {
-      if (!remoteIds.contains(local.id)) {
-        final isVeryRecent =
-            now.difference(local.createdAt).inSeconds < 10;
-        if (!isVeryRecent) {
-          goalsToDelete.add(local.id);
-        }
-      }
-    }
-
-    for (final id in goalsToDelete) {
-      localMap.remove(id);
-      if (!kIsWeb) await _repository.delete(id);
-      AlertEvaluationCoordinator().onGoalDeleted(id);
-      changed = true;
-    }
-
-    // 2. Reconcile remote creations and updates
+    // 1. Reconcile remote creations and updates with strict LWW
     for (final remote in remoteGoals) {
       final local = localMap[remote.id];
       if (local == null) {
@@ -165,21 +142,50 @@ class GoalProvider extends ChangeNotifier {
         if (!kIsWeb) await _repository.upsert(remote);
         changed = true;
       } else {
-        // Check if remote is newer or fields differ
         final remoteUpdated = remote.updatedAt ?? remote.createdAt;
         final localUpdated = local.updatedAt ?? local.createdAt;
-        final remoteIsNewer = remoteUpdated.isAfter(localUpdated);
 
-        if (remoteIsNewer ||
-            remote.currentAmount != local.currentAmount ||
-            remote.isPaused != local.isPaused ||
-            remote.name != local.name ||
-            remote.targetAmount != local.targetAmount ||
-            remote.emoji != local.emoji ||
-            remote.targetDate != local.targetDate) {
+        if (remoteUpdated.isAfter(localUpdated)) {
+          // Remote is strictly newer: overwrite local
           localMap[remote.id] = remote;
           if (!kIsWeb) await _repository.upsert(remote);
           changed = true;
+        } else if (localUpdated.isAfter(remoteUpdated)) {
+          // Local is strictly newer: preserve local and upload to Firestore
+          if (_firestoreSync.isAuthenticated) {
+            unawaited(_firestoreSync.upsertSavingGoal(local).catchError((e) {
+              AppLogger.debug('[GoalProvider] Uploading newer local goal to remote: $e');
+            }));
+          }
+        } else {
+          // Identical timestamps: deterministic tie-breaker if fields differ
+          final localMapStr = local.toMap().toString();
+          final remoteMapStr = remote.toMap().toString();
+          if (localMapStr != remoteMapStr) {
+            if (remoteMapStr.compareTo(localMapStr) > 0) {
+              localMap[remote.id] = remote;
+              if (!kIsWeb) await _repository.upsert(remote);
+              changed = true;
+            } else {
+              if (_firestoreSync.isAuthenticated) {
+                unawaited(_firestoreSync.upsertSavingGoal(local).catchError((e) {
+                  AppLogger.debug('[GoalProvider] Uploading tied local goal to remote: $e');
+                }));
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Goals that exist locally but NOT in remote snapshot:
+    // Preserve local goals (never delete on snapshot absence) and upload offline-created goals.
+    for (final local in _goals) {
+      if (!remoteIds.contains(local.id)) {
+        if (_firestoreSync.isAuthenticated) {
+          unawaited(_firestoreSync.upsertSavingGoal(local).catchError((e) {
+            AppLogger.debug('[GoalProvider] Syncing offline-created goal to remote: $e');
+          }));
         }
       }
     }
@@ -217,18 +223,20 @@ class GoalProvider extends ChangeNotifier {
       updatedAt: now,
     );
     if (!kIsWeb) {
-      await _repository.upsert(goal);
-      await _repository.addHistory(GoalHistoryItem(
-        id: _uuid.v4(),
-        goalId: goal.id,
-        amount: 0,
-        actionType: 'created',
-        createdAt: now,
-        note: 'Goal created',
-        previousAmount: 0.0,
-        resultingAmount: 0.0,
-        source: 'manual',
-      ));
+      await _repository.mutateGoalWithHistory(
+        goal: goal,
+        history: GoalHistoryItem(
+          id: _uuid.v4(),
+          goalId: goal.id,
+          amount: 0,
+          actionType: 'created',
+          createdAt: now,
+          note: 'Goal created',
+          previousAmount: 0.0,
+          resultingAmount: 0.0,
+          source: 'manual',
+        ),
+      );
     }
     _goals = [goal, ..._goals];
     notifyListeners();
@@ -258,18 +266,20 @@ class GoalProvider extends ChangeNotifier {
 
     _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     if (!kIsWeb) {
-      await _repository.upsert(updated);
-      await _repository.addHistory(GoalHistoryItem(
-        id: _uuid.v4(),
-        goalId: id,
-        amount: amount - goal.currentAmount,
-        actionType: 'progressUpdate',
-        createdAt: now,
-        note: 'Progress update',
-        previousAmount: goal.currentAmount,
-        resultingAmount: amount,
-        source: 'manual',
-      ));
+      await _repository.mutateGoalWithHistory(
+        goal: updated,
+        history: GoalHistoryItem(
+          id: _uuid.v4(),
+          goalId: id,
+          amount: amount - goal.currentAmount,
+          actionType: 'progressUpdate',
+          createdAt: now,
+          note: 'Progress update',
+          previousAmount: goal.currentAmount,
+          resultingAmount: amount,
+          source: 'manual',
+        ),
+      );
     }
     notifyListeners();
 
@@ -342,18 +352,20 @@ class GoalProvider extends ChangeNotifier {
 
     _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     if (!kIsWeb) {
-      await _repository.upsert(updated);
-      await _repository.addHistory(GoalHistoryItem(
-        id: _uuid.v4(),
-        goalId: id,
-        amount: amount,
-        actionType: 'topUp',
-        createdAt: now,
-        note: 'Top up',
-        previousAmount: goal.currentAmount,
-        resultingAmount: updated.currentAmount,
-        source: 'manual',
-      ));
+      await _repository.mutateGoalWithHistory(
+        goal: updated,
+        history: GoalHistoryItem(
+          id: _uuid.v4(),
+          goalId: id,
+          amount: amount,
+          actionType: 'topUp',
+          createdAt: now,
+          note: 'Top up',
+          previousAmount: goal.currentAmount,
+          resultingAmount: updated.currentAmount,
+          source: 'manual',
+        ),
+      );
     }
     notifyListeners();
 
@@ -407,18 +419,20 @@ class GoalProvider extends ChangeNotifier {
 
     _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     if (!kIsWeb) {
-      await _repository.upsert(updated);
-      await _repository.addHistory(GoalHistoryItem(
-        id: _uuid.v4(),
-        goalId: id,
-        amount: -amount,
-        actionType: 'withdrawal',
-        createdAt: now,
-        note: note ?? 'Withdrawal',
-        previousAmount: goal.currentAmount,
-        resultingAmount: newAmount,
-        source: 'manual',
-      ));
+      await _repository.mutateGoalWithHistory(
+        goal: updated,
+        history: GoalHistoryItem(
+          id: _uuid.v4(),
+          goalId: id,
+          amount: -amount,
+          actionType: 'withdrawal',
+          createdAt: now,
+          note: note ?? 'Withdrawal',
+          previousAmount: goal.currentAmount,
+          resultingAmount: newAmount,
+          source: 'manual',
+        ),
+      );
     }
     notifyListeners();
 
@@ -457,6 +471,11 @@ class GoalProvider extends ChangeNotifier {
     if (newTarget <= 0) {
       throw ArgumentError('Target amount must be greater than zero');
     }
+    if (newTarget < goal.currentAmount) {
+      throw ArgumentError(
+        'Target amount cannot be reduced below currently saved amount (${goal.currentAmount})',
+      );
+    }
 
     final updated = goal.copyWith(
       name: newName,
@@ -469,18 +488,20 @@ class GoalProvider extends ChangeNotifier {
 
     _goals = List<SavingGoal>.from(_goals)..[index] = updated;
     if (!kIsWeb) {
-      await _repository.upsert(updated);
-      await _repository.addHistory(GoalHistoryItem(
-        id: _uuid.v4(),
-        goalId: id,
-        amount: 0,
-        actionType: 'goalEdited',
-        createdAt: now,
-        note: 'Goal edited: $newName',
-        previousAmount: goal.currentAmount,
-        resultingAmount: goal.currentAmount,
-        source: 'manual',
-      ));
+      await _repository.mutateGoalWithHistory(
+        goal: updated,
+        history: GoalHistoryItem(
+          id: _uuid.v4(),
+          goalId: id,
+          amount: 0,
+          actionType: 'goalEdited',
+          createdAt: now,
+          note: 'Goal edited: $newName',
+          previousAmount: goal.currentAmount,
+          resultingAmount: goal.currentAmount,
+          source: 'manual',
+        ),
+      );
     }
     notifyListeners();
 

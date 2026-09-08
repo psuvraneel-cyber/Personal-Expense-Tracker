@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,6 +23,12 @@ class TransactionProvider extends ChangeNotifier {
   final FirestoreSyncService _firestoreSync;
   final RecurringTransactionService? _recurringService;
   final Uuid _uuid = const Uuid();
+  final Map<String, DateTime> _tombstoneDeletedAt = {};
+
+  @visibleForTesting
+  void recordTombstoneDeletedAtForTesting(String id, DateTime deletedAt) {
+    _tombstoneDeletedAt[id] = deletedAt;
+  }
 
   TransactionProvider({
     TransactionRepository? repository,
@@ -219,6 +226,7 @@ class TransactionProvider extends ChangeNotifier {
     await _tombstoneSubscription?.cancel();
     _tombstoneSubscription = null;
 
+    final expectedSession = _firestoreSync.currentSession;
     final stream = _firestoreSync.transactionsStream();
 
     // On web, we await the first event before returning so loadTransactions()
@@ -227,6 +235,10 @@ class TransactionProvider extends ChangeNotifier {
       final completer = Completer<void>();
       _firestoreSubscription = stream.listen(
         (remoteList) {
+          if (!_firestoreSync.currentSession.matches(expectedSession)) {
+            AppLogger.debug('Discarding stale transaction snapshot (session mismatch)', label: 'Sync');
+            return;
+          }
           _transactions = remoteList;
           _invalidateAggregates();
           _applyFiltersAndSort();
@@ -237,6 +249,7 @@ class TransactionProvider extends ChangeNotifier {
           if (!completer.isCompleted) completer.complete();
         },
         onError: (Object e) {
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
           AppLogger.error('Firestore stream error', error: e, label: 'Firestore');
           _syncStatus = SyncStatus.error;
           _syncError = e.toString();
@@ -256,14 +269,30 @@ class TransactionProvider extends ChangeNotifier {
       // and incrementally sync SQLite so it stays consistent as a cache.
       _firestoreSubscription = stream.listen(
         (remoteList) async {
+          if (!_firestoreSync.currentSession.matches(expectedSession)) {
+            AppLogger.debug('Discarding stale transaction snapshot (session mismatch)', label: 'Sync');
+            return;
+          }
+
           // Incrementally sync SQLite using safe LWW merge-upsert (no deletions).
           final localAll = await _repository.getAllTransactions().catchError(
             (_) => <TransactionRecord>[],
           );
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
           final localMap = {for (final t in localAll) t.id: t};
 
           final txnsToUpsert = <TransactionRecord>[];
           for (final r in remoteList) {
+            // Tombstone check: if a tombstone exists for this ID and its deletion timestamp
+            // is not older than the remote transaction's update timestamp, discard the resurrection!
+            final tombDeletedAt = _tombstoneDeletedAt[r.id];
+            if (tombDeletedAt != null) {
+              final rUpdated = r.updatedAt ?? r.date;
+              if (!rUpdated.isAfter(tombDeletedAt)) {
+                continue; // Tombstone wins; do not resurrect deleted row
+              }
+            }
+
             final l = localMap[r.id];
             if (l == null) {
               txnsToUpsert.add(r);
@@ -288,6 +317,8 @@ class TransactionProvider extends ChangeNotifier {
             });
           }
 
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
+
           // Defensive logging for skipped deletes of local records not in bounded snapshot
           final remoteIds = remoteList.map((t) => t.id).toSet();
           final localIds = localAll.map((t) => t.id).toSet();
@@ -306,6 +337,8 @@ class TransactionProvider extends ChangeNotifier {
           _transactions = await _repository.getAllTransactions().catchError(
             (_) => <TransactionRecord>[],
           );
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
+
           _invalidateAggregates();
           _applyFiltersAndSort();
 
@@ -315,6 +348,7 @@ class TransactionProvider extends ChangeNotifier {
           notifyListeners();
         },
         onError: (Object e) {
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
           AppLogger.error('Firestore stream error', error: e, label: 'Firestore');
           _syncStatus = SyncStatus.error;
           _syncError = e.toString();
@@ -326,12 +360,17 @@ class TransactionProvider extends ChangeNotifier {
       AppLogger.info('Subscribed to tombstonesStream for active user', label: 'Sync');
       _tombstoneSubscription = _firestoreSync.tombstonesStream().listen(
         (tombstones) async {
+          if (!_firestoreSync.currentSession.matches(expectedSession)) {
+            AppLogger.debug('Discarding stale tombstone snapshot (session mismatch)', label: 'Sync');
+            return;
+          }
           AppLogger.debug('Tombstones event received (${tombstones.length} items)', label: 'Sync');
           if (tombstones.isEmpty) return;
 
           final localAll = await _repository.getAllTransactions().catchError(
             (_) => <TransactionRecord>[],
           );
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
           final localMap = {for (final t in localAll) t.id: t};
 
           bool changed = false;
@@ -339,9 +378,20 @@ class TransactionProvider extends ChangeNotifier {
             final tId = tomb['id'] as String?;
             if (tId == null) continue;
 
+            DateTime? deletedAt;
+            final rawDeletedAt = tomb['deletedAt'];
+            if (rawDeletedAt is Timestamp) {
+              deletedAt = rawDeletedAt.toDate();
+            } else if (rawDeletedAt is String) {
+              deletedAt = DateTime.tryParse(rawDeletedAt);
+            } else if (rawDeletedAt is int) {
+              deletedAt = DateTime.fromMillisecondsSinceEpoch(rawDeletedAt);
+            }
+            deletedAt ??= DateTime.now();
+            _tombstoneDeletedAt[tId] = deletedAt;
+
             final localTxn = localMap[tId];
             if (localTxn != null) {
-              // Delete wins! Remove local row
               AppLogger.info('Tombstone received for transaction. Deleting local row (Delete-Wins policy).', label: 'Sync');
               await _repository.deleteTransaction(tId).catchError(
                 (e) => AppLogger.error('Failed to delete local row for tombstone', error: e, label: 'Sync'),
@@ -350,16 +400,20 @@ class TransactionProvider extends ChangeNotifier {
             }
           }
 
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
+
           if (changed) {
             _transactions = await _repository.getAllTransactions().catchError(
               (_) => <TransactionRecord>[],
             );
+            if (!_firestoreSync.currentSession.matches(expectedSession)) return;
             _invalidateAggregates();
             _applyFiltersAndSort();
             notifyListeners();
           }
         },
         onError: (Object e) {
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
           AppLogger.error('Firestore tombstone stream error', error: e, label: 'Firestore');
         },
       );
@@ -858,13 +912,7 @@ class TransactionProvider extends ChangeNotifier {
     _syncStatus = SyncStatus.idle;
     _lastSyncAt = null;
     _syncError = null;
-    SharedPreferences.getInstance()
-        .then((prefs) {
-          prefs.remove('lastSyncAt');
-        })
-        .catchError((Object e) {
-          debugPrint('[Sync] Failed to remove lastSyncTime: $e');
-        });
+    _tombstoneDeletedAt.clear();
     SharedPreferences.getInstance().then((prefs) {
       prefs.remove('lastSyncAt');
     }).catchError((Object e) {
@@ -906,25 +954,34 @@ class TransactionProvider extends ChangeNotifier {
     _syncQueueNeedsProcessing = false;
     _setSyncStatus(SyncStatus.syncing);
 
+    final expectedSession = _firestoreSync.currentSession;
+
     try {
-      final currentUserId = _firestoreSync.currentUserId;
+      final currentUserId = _firestoreSync.currentUserIdOrNull;
+      if (currentUserId == null) return;
 
       while (true) {
+        if (!_firestoreSync.currentSession.matches(expectedSession)) {
+          AppLogger.debug('Aborting sync queue pass due to session switch', label: 'SyncQueue');
+          return;
+        }
+
         final pendingActions = await _repository.getPendingSyncActions(
           currentUserId,
         );
+        if (!_firestoreSync.currentSession.matches(expectedSession)) return;
+
         if (pendingActions.isEmpty) {
           _setSyncStatus(SyncStatus.synced);
           break;
         }
 
-        debugPrint(
-          '[SyncQueue] Found ${pendingActions.length} pending actions to process',
-        );
         AppLogger.info('Found ${pendingActions.length} pending actions to process', label: 'SyncQueue');
         bool processedAny = false;
 
         for (final action in pendingActions) {
+          if (!_firestoreSync.currentSession.matches(expectedSession)) return;
+
           final actionId = action['id'] as String;
           final tId = action['transactionId'] as String;
           final act = action['action'] as String;
@@ -939,9 +996,6 @@ class TransactionProvider extends ChangeNotifier {
                 (1 << retryCount.clamp(0, 10)) *
                 5000; // 5s, 10s, 20s, 40s... capped at ~5120s (~85m)
             if (now - lastAttemptAt < backoffMs) {
-              debugPrint(
-                '[SyncQueue] Skipping action $actionId due to backoff window',
-              );
               AppLogger.debug('Skipping action due to backoff window', label: 'SyncQueue');
               continue;
             }
@@ -958,18 +1012,33 @@ class TransactionProvider extends ChangeNotifier {
               }
               final map = jsonDecode(payloadStr) as Map<String, dynamic>;
               final txn = TransactionRecord.fromMap(map);
+
+              // Tombstone vs Update ordering: if an active tombstone has deletedAt >= txnUpdated,
+              // discard the stale queued update to prevent resurrecting a deleted transaction.
+              final tombDeletedAt = _tombstoneDeletedAt[tId];
+              final txnUpdated = txn.updatedAt ?? txn.date;
+              if (tombDeletedAt != null && !txnUpdated.isAfter(tombDeletedAt)) {
+                AppLogger.info(
+                  'Discarding sync queue update for tombstoned transaction $tId',
+                  label: 'SyncQueue',
+                );
+                await _repository.deleteSyncAction(actionId);
+                continue;
+              }
+
               await _firestoreSync.upsertTransaction(txn);
+              // Clean up any stale tombstone in Firestore and locally
+              await _firestoreSync.deleteTombstone(tId).catchError((_) {});
+              _tombstoneDeletedAt.remove(tId);
             } else if (act == 'delete') {
               await _firestoreSync.deleteTransaction(tId);
               // Write explicit deletion tombstone
               await _firestoreSync.createTombstone(tId);
+              _tombstoneDeletedAt[tId] = DateTime.now();
             }
 
             // Success: delete action from queue
             await _repository.deleteSyncAction(actionId);
-            debugPrint(
-              '[SyncQueue] Action $actionId ($act) synced successfully',
-            );
             AppLogger.info('Action ($act) synced successfully', label: 'SyncQueue');
           } catch (e) {
             AppLogger.error('Action ($act) sync failed', error: e, label: 'SyncQueue');
@@ -981,7 +1050,7 @@ class TransactionProvider extends ChangeNotifier {
           }
         }
 
-        // If no actions could be processed (e.g. all skipped due to backoff or first failed), exit loop
+        // If no actions could be processed in this pass (all in backoff or error), stop loop
         if (!processedAny) {
           break;
         }

@@ -14,6 +14,8 @@ import 'package:pet/premium/models/recurring_payment.dart';
 import 'package:pet/premium/models/recurring_payment_history.dart';
 import 'package:pet/premium/models/saving_goal.dart';
 import 'package:pet/premium/models/weekly_limit.dart';
+import 'package:pet/premium/services/cashflow_forecast_service.dart';
+import 'package:pet/models/account_session.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 
 /// Firestore sync service for transactions, categories, and budgets.
@@ -73,10 +75,28 @@ class FirestoreSyncService {
     }
   }
 
+  /// Current immutable account session token.
+  AccountSession get currentSession => AccountSession(
+    uid: activeSessionUid,
+    generation: _sessionGeneration,
+  );
+
+  /// Safe accessor for current user ID, returning null instead of throwing StateError if logged out.
+  String? get currentUserIdOrNull {
+    try {
+      final uid = _auth.currentUserId;
+      if (uid == null || uid.isEmpty || uid == 'guest_user') return null;
+      return uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Invalidate all ongoing listeners and asynchronous operations from a prior user session.
   void onSessionChanged(String? newUid) {
     _sessionGeneration++;
     _activeSessionUid = newUid;
+    CashflowForecastService.clearCache();
     AppLogger.info(
       'FirestoreSync session generation bumped to $_sessionGeneration for uid: $newUid',
       label: 'FirestoreSync',

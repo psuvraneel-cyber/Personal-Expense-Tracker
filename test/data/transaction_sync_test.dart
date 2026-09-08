@@ -9,6 +9,7 @@ import 'package:pet/data/models/transaction.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/recurring_rule.dart';
 import 'package:pet/data/repositories/recurring_transaction_repository.dart';
+import 'package:pet/models/account_session.dart';
 import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/services/firestore_sync_service.dart';
@@ -159,12 +160,28 @@ class FakeFirestoreSyncService implements FirestoreSyncService {
   String currentUid = 'test_user_id';
   bool hasUser = true;
   bool shouldFailUpsert = false;
+  int generation = 1;
 
   @override
   bool get isAuthenticated => hasUser;
 
   @override
-  String get currentUserId => currentUid;
+  String? get currentUserIdOrNull => hasUser ? currentUid : null;
+
+  @override
+  String get currentUserId {
+    if (!hasUser) throw StateError('Not authenticated');
+    return currentUid;
+  }
+
+  @override
+  int get sessionGeneration => generation;
+
+  @override
+  AccountSession get currentSession => AccountSession(
+        uid: currentUserIdOrNull,
+        generation: sessionGeneration,
+      );
 
   @override
   Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) {

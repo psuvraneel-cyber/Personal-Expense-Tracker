@@ -4,8 +4,25 @@ import 'package:flutter/services.dart';
 import 'package:pet/premium/models/spend_pause.dart';
 import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:pet/premium/services/spend_pause_service.dart';
+import 'package:pet/services/firestore_sync_service.dart';
 
 class SpendPauseProvider extends ChangeNotifier {
+  final FirestoreSyncService? _firestoreSync;
+
+  SpendPauseProvider({FirestoreSyncService? firestoreSync})
+      : _firestoreSync = firestoreSync;
+
+  FirestoreSyncService? get _sync {
+    if (_firestoreSync != null) return _firestoreSync;
+    try {
+      return FirestoreSyncService();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? get _currentUserId => _sync?.currentUserIdOrNull;
+
   SpendPause _pause = SpendPause(enabled: false);
   Timer? _timer;
   bool _disposed = false;
@@ -47,8 +64,9 @@ class SpendPauseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> load() async {
-    _pause = await SpendPauseService.getState();
+  Future<void> load({String? userId}) async {
+    final effectiveUid = userId ?? _currentUserId;
+    _pause = await SpendPauseService.getState(userId: effectiveUid);
     _startTimerIfNeeded();
     notifyListeners();
   }
@@ -67,7 +85,7 @@ class SpendPauseProvider extends ChangeNotifier {
       blockedCategoryIds: categoryIds,
     );
 
-    await SpendPauseService.setState(_pause);
+    await SpendPauseService.setState(_pause, userId: _currentUserId);
     _startTimerIfNeeded();
 
     try {
@@ -82,7 +100,7 @@ class SpendPauseProvider extends ChangeNotifier {
     _sessionOverrideCount = 0;
     _categoryOverrides.clear();
     _pause = SpendPause(enabled: false);
-    await SpendPauseService.setState(_pause);
+    await SpendPauseService.setState(_pause, userId: _currentUserId);
 
     try {
       await HapticFeedback.lightImpact();
@@ -105,7 +123,7 @@ class SpendPauseProvider extends ChangeNotifier {
         until: _pause.until,
         blockedCategoryIds: filtered,
       );
-      SpendPauseService.setState(_pause);
+      SpendPauseService.setState(_pause, userId: _currentUserId);
       if (!_pause.isActive) _stopTimer();
       notifyListeners();
     }
@@ -130,15 +148,15 @@ class SpendPauseProvider extends ChangeNotifier {
     _timer = null;
   }
 
-  /// Account logout wipe: cancels timers, clears in-memory state,
-  /// and wipes persisted SharedPreferences keys completely.
+  /// Account logout wipe: cancels timers, clears transient in-memory state and persisted state.
+  /// Does not leak active pause state to subsequent user accounts.
   Future<void> clearData() async {
     _stopTimer();
     _sessionOverrideCount = 0;
     _categoryOverrides.clear();
     _pause = SpendPause(enabled: false);
-    await SpendPauseService.clear();
     notifyListeners();
+    await SpendPauseService.clear(userId: _currentUserId);
   }
 
   @override

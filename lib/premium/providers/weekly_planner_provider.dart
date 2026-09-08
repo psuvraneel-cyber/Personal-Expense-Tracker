@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/core/utils/calendar_utils.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/premium/models/weekly_limit.dart';
 import 'package:pet/premium/repositories/weekly_planner_repository.dart';
 import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
+import 'package:pet/services/firestore_sync_service.dart';
 
 /// A single day's aggregated spend for the weekly planner strip.
 class DaySpend {
@@ -59,10 +61,25 @@ class WeeklyPlannerEntry {
 
 class WeeklyPlannerProvider extends ChangeNotifier {
   final WeeklyPlannerRepository _repository;
+  final FirestoreSyncService? _firestoreSync;
   static const Uuid _uuid = Uuid();
 
-  WeeklyPlannerProvider({WeeklyPlannerRepository? repository})
-      : _repository = repository ?? WeeklyPlannerRepository();
+  WeeklyPlannerProvider({
+    WeeklyPlannerRepository? repository,
+    FirestoreSyncService? firestoreSync,
+  })  : _repository = repository ?? WeeklyPlannerRepository(),
+        _firestoreSync = firestoreSync;
+
+  FirestoreSyncService? get _sync {
+    if (_firestoreSync != null) return _firestoreSync;
+    try {
+      return FirestoreSyncService();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  StreamSubscription<List<WeeklyLimit>>? _firestoreSubscription;
 
   List<WeeklyPlannerEntry> _entries = [];
   List<DaySpend> _weekDays = [];
@@ -83,6 +100,31 @@ class WeeklyPlannerProvider extends ChangeNotifier {
       (_totalWeekLimit - _totalWeekSpent).clamp(0.0, double.infinity);
 
   Future<void> load() async {
+    await _reloadLocal();
+    _subscribeToFirestore();
+  }
+
+  void _subscribeToFirestore() {
+    final sync = _sync;
+    if (sync == null || !sync.isAuthenticated) return;
+    _firestoreSubscription?.cancel();
+    final expectedSession = sync.currentSession;
+
+    _firestoreSubscription = sync.weeklyLimitsStream().listen(
+      (remoteLimits) async {
+        if (!sync.currentSession.matches(expectedSession)) return;
+        for (final r in remoteLimits) {
+          await _repository.upsert(r);
+        }
+        await _reloadLocal();
+      },
+      onError: (Object e) {
+        AppLogger.warn('WeeklyPlanner firestore stream error: $e', label: 'WeeklyPlanner');
+      },
+    );
+  }
+
+  Future<void> _reloadLocal() async {
     await _repository.migrateFromSharedPreferencesIfNeeded();
     final limits = await _repository.getAll();
     final now = DateTime.now();
@@ -155,7 +197,14 @@ class WeeklyPlannerProvider extends ChangeNotifier {
 
     await _repository.upsert(limit);
 
-    await load();
+    final sync = _sync;
+    if (sync != null && sync.isAuthenticated) {
+      unawaited(sync.upsertWeeklyLimit(limit).catchError((e) {
+        AppLogger.warn('Failed to sync weekly limit to Firestore: $e', label: 'WeeklyPlanner');
+      }));
+    }
+
+    await _reloadLocal();
 
     unawaited(
       AlertEvaluationCoordinator().onWeeklyPlannerChanged(_entries),
@@ -164,7 +213,15 @@ class WeeklyPlannerProvider extends ChangeNotifier {
 
   Future<void> removeLimit(String categoryId, {String? ruleId}) async {
     await _repository.delete(categoryId, ruleId: ruleId);
-    await load();
+
+    final sync = _sync;
+    if (sync != null && sync.isAuthenticated) {
+      unawaited(sync.deleteWeeklyLimit(categoryId).catchError((e) {
+        AppLogger.warn('Failed to delete weekly limit from Firestore: $e', label: 'WeeklyPlanner');
+      }));
+    }
+
+    await _reloadLocal();
 
     unawaited(
       AlertEvaluationCoordinator().onWeeklyPlannerChanged(_entries),
@@ -256,6 +313,8 @@ class WeeklyPlannerProvider extends ChangeNotifier {
   }
 
   Future<void> clearData() async {
+    _firestoreSubscription?.cancel();
+    _firestoreSubscription = null;
     _entries = [];
     _weekDays = [];
     _totalWeekSpent = 0;
@@ -265,5 +324,12 @@ class WeeklyPlannerProvider extends ChangeNotifier {
     _cachedTransactions = null;
     notifyListeners();
     await _repository.deleteAll();
+  }
+
+  @override
+  void dispose() {
+    _firestoreSubscription?.cancel();
+    _firestoreSubscription = null;
+    super.dispose();
   }
 }

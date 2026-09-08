@@ -157,25 +157,55 @@ void main() {
     });
   });
 
-  group('GoalProvider Deletion Reconciliation (Phase A4 & B3)', () {
-    test('ghost goals removed when absent from remote snapshot', () async {
+  group('GoalProvider Offline Survival & LWW Reconciliation', () {
+    test('offline local goals are preserved when absent from remote snapshot', () async {
       // Seed a local goal from 1 hour ago
-      final oldGoal = SavingGoal(
-        id: 'remote-deleted-goal',
-        name: 'Old Remote Goal',
+      final offlineGoal = SavingGoal(
+        id: 'offline-created-goal',
+        name: 'Offline Goal',
         targetAmount: 5000,
         currentAmount: 2000,
         createdAt: DateTime.now().subtract(const Duration(hours: 1)),
       );
-      await repository.upsert(oldGoal);
+      await repository.upsert(offlineGoal);
       await provider.load();
       expect(provider.goals.length, 1);
 
-      // When remote snapshot listener delivers empty list, ghost goal must be removed
+      // When remote snapshot delivers empty list, local goal must NOT be deleted
       await provider.reconcileRemoteGoals([]);
 
-      expect(provider.goals.isEmpty, isTrue);
-      expect(await repository.getById('remote-deleted-goal'), isNull);
+      expect(provider.goals.length, 1);
+      expect(provider.goals.first.id, 'offline-created-goal');
+      expect(await repository.getById('offline-created-goal'), isNotNull);
+    });
+
+    test('LWW preserves newer local modifications over older remote snapshots', () async {
+      final now = DateTime.now();
+      final localGoal = SavingGoal(
+        id: 'lww-goal',
+        name: 'Local Newer Name',
+        targetAmount: 10000,
+        currentAmount: 5000,
+        createdAt: now.subtract(const Duration(days: 5)),
+        updatedAt: now,
+      );
+      await repository.upsert(localGoal);
+      await provider.load();
+
+      final olderRemoteGoal = SavingGoal(
+        id: 'lww-goal',
+        name: 'Old Remote Name',
+        targetAmount: 10000,
+        currentAmount: 1000,
+        createdAt: now.subtract(const Duration(days: 5)),
+        updatedAt: now.subtract(const Duration(hours: 2)),
+      );
+
+      await provider.reconcileRemoteGoals([olderRemoteGoal]);
+
+      final reconciled = provider.goals.firstWhere((g) => g.id == 'lww-goal');
+      expect(reconciled.name, 'Local Newer Name');
+      expect(reconciled.currentAmount, 5000.0);
     });
   });
 

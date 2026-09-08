@@ -37,6 +37,7 @@ class CashflowForecastService {
   /// Calculates the canonical cashflow forecast for the given dataset.
   static CashflowForecast forecast(
     List<TransactionRecord> transactions, {
+    String? userId,
     List<RecurringPayment>? confirmedBills,
     int days = defaultHorizonDays,
     DateTime? referenceDate,
@@ -81,7 +82,7 @@ class CashflowForecastService {
         ? 'ref_${referenceDate.millisecondsSinceEpoch}'
         : 'live_${now.year}-${now.month}-${now.day}';
 
-    final cacheKey = '${txnsHash}_${billsHash}_${days}_${lookbackDays}_'
+    final cacheKey = '${userId ?? "anon"}_${txnsHash}_${billsHash}_${days}_${lookbackDays}_'
         '${dateKey}_'
         '${openingBalanceOverride ?? "none"}_'
         '${goalReserves}_'

@@ -11,6 +11,7 @@ import 'package:pet/premium/models/saving_goal.dart';
 import 'package:pet/premium/providers/alert_provider.dart';
 import 'package:pet/premium/repositories/alert_repository.dart';
 import 'package:pet/premium/repositories/recurring_payment_repository.dart';
+import 'package:pet/premium/repositories/saving_goal_repository.dart';
 import 'package:pet/premium/models/cashflow_forecast.dart';
 import 'package:pet/premium/services/cashflow_forecast_service.dart';
 import 'package:pet/core/utils/calendar_utils.dart';
@@ -32,16 +33,19 @@ class AlertEvaluationCoordinator {
     BudgetRepository? budgetRepository,
     RecurringPaymentRepository? recurringRepository,
     TransactionRepository? transactionRepository,
+    SavingGoalRepository? savingGoalRepository,
   }) {
     if (repository != null ||
         budgetRepository != null ||
         recurringRepository != null ||
-        transactionRepository != null) {
+        transactionRepository != null ||
+        savingGoalRepository != null) {
       _instance = AlertEvaluationCoordinator._internal(
         repository: repository,
         budgetRepository: budgetRepository,
         recurringRepository: recurringRepository,
         transactionRepository: transactionRepository,
+        savingGoalRepository: savingGoalRepository,
       );
     }
     return _instance;
@@ -51,6 +55,7 @@ class AlertEvaluationCoordinator {
   final BudgetRepository _budgetRepository;
   final RecurringPaymentRepository _recurringRepository;
   final TransactionRepository _transactionRepository;
+  final SavingGoalRepository _savingGoalRepository;
   AlertProvider? _alertProvider;
   Future<void> _dispatchQueue = Future.value();
 
@@ -59,6 +64,7 @@ class AlertEvaluationCoordinator {
     BudgetRepository? budgetRepository,
     RecurringPaymentRepository? recurringRepository,
     TransactionRepository? transactionRepository,
+    SavingGoalRepository? savingGoalRepository,
   })  : _repository = repository ?? AlertRepository(),
         _budgetRepository = budgetRepository ??
             (repository?.database != null
@@ -69,7 +75,11 @@ class AlertEvaluationCoordinator {
                 ? RecurringPaymentRepository() // db helper shares database
                 : RecurringPaymentRepository()),
         _transactionRepository =
-            transactionRepository ?? TransactionRepository();
+            transactionRepository ?? TransactionRepository(),
+        _savingGoalRepository = savingGoalRepository ??
+            (repository?.database != null
+                ? SavingGoalRepository(database: repository!.database)
+                : SavingGoalRepository());
 
   /// Attach the UI AlertProvider so live in-memory state is updated after evaluation.
   void attachProvider(AlertProvider provider) {
@@ -153,12 +163,22 @@ class AlertEvaluationCoordinator {
         confirmedBills = await _recurringRepository.getConfirmed();
       } catch (_) {}
 
+      double goalReserves = 0.0;
+      try {
+        final activeGoals = await _savingGoalRepository.getActiveGoals();
+        goalReserves = activeGoals.fold<double>(
+          0.0,
+          (sum, g) => sum + g.currentAmount.clamp(0.0, g.targetAmount),
+        );
+      } catch (_) {}
+
       AppAlert? cashflowAlert;
       try {
         cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
           transactions: transactions,
           confirmedBills: confirmedBills,
           now: referenceTime,
+          goalReserves: goalReserves,
         );
       } catch (e, st) {
         AppLogger.error('Cashflow evaluation error in AlertCoordinator',
@@ -213,6 +233,7 @@ class AlertEvaluationCoordinator {
         transactions: transactions,
         confirmedBills: confirmedBills,
         now: referenceTime,
+        goalReserves: goalReserves,
       );
 
       // If transactions were deleted, resolve alerts tied to deleted transactions
@@ -402,11 +423,21 @@ class AlertEvaluationCoordinator {
           .toList();
 
       if (transactions.isNotEmpty) {
+        double goalReserves = 0.0;
+        try {
+          final activeGoals = await _savingGoalRepository.getActiveGoals();
+          goalReserves = activeGoals.fold<double>(
+            0.0,
+            (sum, g) => sum + g.currentAmount.clamp(0.0, g.targetAmount),
+          );
+        } catch (_) {}
+
         try {
           cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
             transactions: transactions,
             confirmedBills: confirmed,
             now: referenceTime,
+            goalReserves: goalReserves,
           );
         } catch (e, st) {
           AppLogger.error(
@@ -422,6 +453,7 @@ class AlertEvaluationCoordinator {
           transactions: transactions,
           confirmedBills: confirmed,
           now: referenceTime,
+          goalReserves: goalReserves,
         );
       }
 
@@ -446,6 +478,7 @@ class AlertEvaluationCoordinator {
     required List<TransactionRecord> transactions,
     List<RecurringPayment>? confirmedBills,
     required DateTime now,
+    double goalReserves = 0.0,
   }) async {
     try {
       final period = '${now.year}-${now.month.toString().padLeft(2, '0')}';
@@ -454,6 +487,7 @@ class AlertEvaluationCoordinator {
         confirmedBills: confirmedBills,
         days: 30,
         referenceDate: now,
+        goalReserves: goalReserves,
       );
 
       final alertWindowPoints = forecast.dailyPoints.take(14).toList();
@@ -527,6 +561,50 @@ class AlertEvaluationCoordinator {
     try {
       if (goals.isEmpty) return;
       final referenceTime = now ?? DateTime.now();
+
+      // Regression cleanup: if a goal regressed below a milestone (e.g. from withdrawals),
+      // dismiss the stale milestone alert so it does not persist incorrectly.
+      for (final goal in goals) {
+        final progress = goal.targetAmount > 0
+            ? (goal.currentAmount / goal.targetAmount)
+            : 0.0;
+        if (progress < 1.0) {
+          await _repository.dismissWhere(
+            'alertKey = ?',
+            ['goal_achieved:${goal.id}'],
+          );
+          _alertProvider?.removeAlertsWhere(
+            (a) => a.alertKey == 'goal_achieved:${goal.id}',
+          );
+        }
+        if (progress < 0.75) {
+          await _repository.dismissWhere(
+            'alertKey = ?',
+            ['goal_milestone:${goal.id}:75'],
+          );
+          _alertProvider?.removeAlertsWhere(
+            (a) => a.alertKey == 'goal_milestone:${goal.id}:75',
+          );
+        }
+        if (progress < 0.50) {
+          await _repository.dismissWhere(
+            'alertKey = ?',
+            ['goal_milestone:${goal.id}:50'],
+          );
+          _alertProvider?.removeAlertsWhere(
+            (a) => a.alertKey == 'goal_milestone:${goal.id}:50',
+          );
+        }
+        if (progress < 0.25) {
+          await _repository.dismissWhere(
+            'alertKey = ?',
+            ['goal_milestone:${goal.id}:25'],
+          );
+          _alertProvider?.removeAlertsWhere(
+            (a) => a.alertKey == 'goal_milestone:${goal.id}:25',
+          );
+        }
+      }
 
       final goalAlerts = AlertEvaluator.evaluateGoals(
         goals: goals,

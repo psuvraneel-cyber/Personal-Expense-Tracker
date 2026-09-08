@@ -286,31 +286,62 @@ class DatabaseHelper {
     await _seedDefaultCategories(db);
   }
 
+  /// Safely adds a column to an existing table if it does not already exist.
+  Future<void> _addColumnIfNotExists(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final cols = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = cols.any((c) => c['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+    }
+  }
+
   /// Handle database version upgrades.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
+    if (oldVersion < 2 && newVersion >= 2) {
       await _createSmsTransactionsTable(db);
     }
-    if (oldVersion < 3) {
+    if (oldVersion < 3 && newVersion >= 3) {
       // Add new columns for enhanced UPI parsing
-      await db.execute(
-        'ALTER TABLE sms_transactions ADD COLUMN transactionSubType TEXT DEFAULT \'payment\'',
+      await _addColumnIfNotExists(
+        db,
+        'sms_transactions',
+        'transactionSubType',
+        'TEXT DEFAULT \'payment\'',
       );
-      await db.execute(
-        'ALTER TABLE sms_transactions ADD COLUMN referenceId TEXT',
+      await _addColumnIfNotExists(
+        db,
+        'sms_transactions',
+        'referenceId',
+        'TEXT',
       );
-      await db.execute('ALTER TABLE sms_transactions ADD COLUMN upiId TEXT');
-      await db.execute(
-        'ALTER TABLE sms_transactions ADD COLUMN confidence REAL DEFAULT 0.5',
+      await _addColumnIfNotExists(
+        db,
+        'sms_transactions',
+        'upiId',
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        'sms_transactions',
+        'confidence',
+        'REAL DEFAULT 0.5',
       );
     }
-    if (oldVersion < 4) {
+    if (oldVersion < 4 && newVersion >= 4) {
       await _createClassificationTables(db);
     }
-    if (oldVersion < 5) {
+    if (oldVersion < 5 && newVersion >= 5) {
       // Add source column for tracking SMS vs notification origin
-      await db.execute(
-        'ALTER TABLE sms_transactions ADD COLUMN source TEXT DEFAULT \'sms\'',
+      await _addColumnIfNotExists(
+        db,
+        'sms_transactions',
+        'source',
+        'TEXT DEFAULT \'sms\'',
       );
       // Create user feedback table for persisting parser corrections
       await _createUserFeedbackTable(db);
@@ -320,34 +351,44 @@ class DatabaseHelper {
         ON sms_transactions (referenceId)
       ''');
     }
-    if (oldVersion < 6) {
-      await db.execute('ALTER TABLE transactions ADD COLUMN merchantName TEXT');
-      await db.execute('ALTER TABLE transactions ADD COLUMN taxCategory TEXT');
-      await db.execute(
-        'ALTER TABLE transactions ADD COLUMN source TEXT DEFAULT \'manual\'',
+    if (oldVersion < 6 && newVersion >= 6) {
+      await _addColumnIfNotExists(
+        db,
+        'transactions',
+        'merchantName',
+        'TEXT',
       );
-      await db.execute('ALTER TABLE transactions ADD COLUMN accountId TEXT');
+      await _addColumnIfNotExists(
+        db,
+        'transactions',
+        'taxCategory',
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        'transactions',
+        'source',
+        'TEXT DEFAULT \'manual\'',
+      );
+      await _addColumnIfNotExists(
+        db,
+        'transactions',
+        'accountId',
+        'TEXT',
+      );
 
       await _createPremiumTables(db);
     }
-    if (oldVersion < 7) {
-      // Add emoji column to saving_goals (added when emoji picker was introduced)
-      final goalCols = await db.rawQuery('PRAGMA table_info(saving_goals)');
-      final hasEmoji = goalCols.any((c) => c['name'] == 'emoji');
-      if (!hasEmoji) {
-        await db.execute('ALTER TABLE saving_goals ADD COLUMN emoji TEXT');
-      }
+    if (oldVersion < 7 && newVersion >= 7) {
+      await _addColumnIfNotExists(db, 'saving_goals', 'emoji', 'TEXT');
     }
-    if (oldVersion < 8) {
-      final smsCols = await db.rawQuery('PRAGMA table_info(sms_transactions)');
-      final hasApprox = smsCols.any(
-        (c) => c['name'] == 'timestamp_is_approximate',
+    if (oldVersion < 8 && newVersion >= 8) {
+      await _addColumnIfNotExists(
+        db,
+        'sms_transactions',
+        'timestamp_is_approximate',
+        'INTEGER DEFAULT 0',
       );
-      if (!hasApprox) {
-        await db.execute(
-          'ALTER TABLE sms_transactions ADD COLUMN timestamp_is_approximate INTEGER DEFAULT 0',
-        );
-      }
       // Flag legacy transactions with exact midnight timestamps as approximate
       await db.execute('''
         UPDATE sms_transactions 
@@ -355,14 +396,10 @@ class DatabaseHelper {
         WHERE timestamp LIKE '%T00:00:00.000%' OR timestamp LIKE '%T00:00:00%'
       ''');
     }
-    if (oldVersion < 9) {
-      final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
-      final hasUpdatedAt = txnCols.any((c) => c['name'] == 'updatedAt');
-      if (!hasUpdatedAt) {
-        await db.execute('ALTER TABLE transactions ADD COLUMN updatedAt TEXT');
-      }
+    if (oldVersion < 9 && newVersion >= 9) {
+      await _addColumnIfNotExists(db, 'transactions', 'updatedAt', 'TEXT');
     }
-    if (oldVersion < 10) {
+    if (oldVersion < 10 && newVersion >= 10) {
       // Performance indexes for common query patterns
       await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date)',
@@ -374,7 +411,7 @@ class DatabaseHelper {
         'CREATE INDEX IF NOT EXISTS idx_txn_type ON transactions(type)',
       );
     }
-    if (oldVersion < 11) {
+    if (oldVersion < 11 && newVersion >= 11) {
       // Create transaction sync queue table
       await _createSyncQueueTable(db);
 
@@ -385,10 +422,10 @@ class DatabaseHelper {
         WHERE updatedAt IS NULL OR updatedAt = ''
       ''');
     }
-    if (oldVersion < 12) {
+    if (oldVersion < 12 && newVersion >= 12) {
       await _migrateUnknownFormatLogsV12(db);
     }
-    if (oldVersion < 13) {
+    if (oldVersion < 13 && newVersion >= 13) {
       await _createSmsProcessingStateTable(db);
       await db.execute('''
         INSERT OR IGNORE INTO sms_processing_state (id, smsHash, status, processedAt, reason)
@@ -396,25 +433,25 @@ class DatabaseHelper {
         FROM sms_transactions
       ''');
     }
-    if (oldVersion < 14) {
+    if (oldVersion < 14 && newVersion >= 14) {
       await _createSystemWatermarksTable(db);
     }
-    if (oldVersion < 15) {
+    if (oldVersion < 15 && newVersion >= 15) {
       await _migrateToV15(db);
     }
-    if (oldVersion < 16) {
+    if (oldVersion < 16 && newVersion >= 16) {
       await _migrateToV16(db);
     }
-    if (oldVersion < 17) {
+    if (oldVersion < 17 && newVersion >= 17) {
       await _migrateToV17(db);
     }
-    if (oldVersion < 18) {
+    if (oldVersion < 18 && newVersion >= 18) {
       await _migrateToV18(db);
     }
-    if (oldVersion < 19) {
+    if (oldVersion < 19 && newVersion >= 19) {
       await _migrateToV19(db);
     }
-    if (oldVersion < 20) {
+    if (oldVersion < 20 && newVersion >= 20) {
       await _migrateToV20(db);
     }
   }
@@ -1324,9 +1361,12 @@ class DatabaseHelper {
     ''');
 
     // Index on referenceId for cross-source dedup
-    await db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_sms_reference_id ON sms_transactions (referenceId)
-    ''');
+    final cols = await db.rawQuery('PRAGMA table_info(sms_transactions)');
+    if (cols.any((c) => c['name'] == 'referenceId')) {
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sms_reference_id ON sms_transactions (referenceId)
+      ''');
+    }
   }
 
   /// Create classification rules and unknown format logs tables.

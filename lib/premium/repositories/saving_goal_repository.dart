@@ -19,6 +19,16 @@ class SavingGoalRepository {
     return maps.map((m) => SavingGoal.fromMap(m)).toList();
   }
 
+  Future<List<SavingGoal>> getActiveGoals() async {
+    final db = await _db;
+    final maps = await db.query(
+      'saving_goals',
+      where: 'isPaused = 0',
+      orderBy: 'createdAt DESC',
+    );
+    return maps.map((m) => SavingGoal.fromMap(m)).toList();
+  }
+
   Future<SavingGoal?> getById(String id) async {
     final db = await _db;
     final maps = await db.query(
@@ -76,6 +86,32 @@ class SavingGoalRepository {
       item.toMap(),
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
+  }
+
+  /// Atomically updates a goal and appends an audit history entry within a single SQLite transaction.
+  Future<void> mutateGoalWithHistory({
+    required SavingGoal goal,
+    required GoalHistoryItem history,
+  }) async {
+    if (goal.currentAmount < 0) {
+      throw ArgumentError('SavingGoal currentAmount cannot be negative');
+    }
+    if (goal.targetAmount <= 0) {
+      throw ArgumentError('SavingGoal targetAmount must be positive');
+    }
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.insert(
+        'saving_goals',
+        goal.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await txn.insert(
+        'goal_history',
+        history.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    });
   }
 
   /// Retrieve all history entries for a given [goalId], newest first.

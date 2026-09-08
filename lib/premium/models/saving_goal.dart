@@ -25,21 +25,46 @@ class SavingGoal {
 
   /// The progress of the goal, clamped between 0.0 and 1.0 (100%).
   double get progressPercent {
-    if (targetAmount <= 0) return 0.0;
-    return (currentAmount / targetAmount).clamp(0.0, 1.0);
+    if (targetAmount <= 0 || targetAmount.isNaN || targetAmount.isInfinite) {
+      return 0.0;
+    }
+    if (currentAmount.isNaN || currentAmount.isInfinite) return 0.0;
+    final val = currentAmount / targetAmount;
+    return val.isNaN || val.isInfinite ? 0.0 : val.clamp(0.0, 1.0);
   }
 
   /// Whether the goal target has been reached.
-  bool get isAchieved => targetAmount > 0 && currentAmount >= targetAmount;
+  bool get isAchieved =>
+      targetAmount > 0 &&
+      !targetAmount.isNaN &&
+      !targetAmount.isInfinite &&
+      !currentAmount.isNaN &&
+      !currentAmount.isInfinite &&
+      currentAmount >= targetAmount;
 
   /// Remaining amount needed to reach target (0.0 if already achieved).
-  double get remainingAmount =>
-      (targetAmount - currentAmount).clamp(0.0, double.infinity);
+  double get remainingAmount {
+    if (targetAmount <= 0 || targetAmount.isNaN || targetAmount.isInfinite) {
+      return 0.0;
+    }
+    if (currentAmount.isNaN || currentAmount.isInfinite) return targetAmount;
+    return (targetAmount - currentAmount).clamp(0.0, double.infinity);
+  }
 
   /// Protected reserve amount: paused goals reserve 0; active goals reserve
   /// current saved amount clamped to targetAmount to prevent over-saving distortion.
-  double get activeReserveAmount =>
-      isPaused ? 0.0 : currentAmount.clamp(0.0, targetAmount);
+  double get activeReserveAmount {
+    if (isPaused ||
+        currentAmount.isNaN ||
+        currentAmount.isInfinite ||
+        currentAmount <= 0) {
+      return 0.0;
+    }
+    if (targetAmount.isNaN || targetAmount.isInfinite || targetAmount <= 0) {
+      return 0.0;
+    }
+    return currentAmount.clamp(0.0, targetAmount);
+  }
 
   Map<String, dynamic> toMap() {
     return {

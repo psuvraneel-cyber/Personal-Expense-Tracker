@@ -113,10 +113,18 @@ class RecurringProvider extends ChangeNotifier {
 
     if (!_firestoreSync.isAuthenticated) return;
 
+    final expectedSession = _firestoreSync.currentSession;
     final stream = _firestoreSync.recurringPaymentsStream();
     _firestoreSubscription = stream.listen(
       (remotePayments) async {
         if (_disposed || AccountDeletionService.isDeletionInProgress) return;
+        if (!_firestoreSync.currentSession.matches(expectedSession)) {
+          AppLogger.warn(
+            'Dropping stale recurring snapshot from superseded session',
+            label: 'RecurringProvider',
+          );
+          return;
+        }
         if (remotePayments.isEmpty && _recurring.isNotEmpty) return;
 
         final localMap = {for (final r in _recurring) r.id: r};
@@ -138,6 +146,8 @@ class RecurringProvider extends ChangeNotifier {
           }
         }
 
+        if (!_firestoreSync.currentSession.matches(expectedSession)) return;
+
         if (changed && !_disposed) {
           _recurring = localMap.values.toList();
           await BillReminderScheduler.scheduleReminders(confirmedBills);
@@ -145,6 +155,7 @@ class RecurringProvider extends ChangeNotifier {
         }
       },
       onError: (Object e) {
+        if (!_firestoreSync.currentSession.matches(expectedSession)) return;
         AppLogger.debug('[RecurringProvider] Firestore stream error: $e');
       },
     );

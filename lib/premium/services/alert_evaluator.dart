@@ -412,16 +412,20 @@ class AlertEvaluator {
     DateTime? now,
     Uuid? uuid,
     double safetyBuffer = CashflowForecastService.defaultSafetyBuffer,
+    double goalReserves = 0.0,
+    String? userId,
   }) {
     final referenceTime = now ?? DateTime.now();
     final idGenerator = uuid ?? _uuid;
 
     final forecast = CashflowForecastService.forecast(
       transactions,
+      userId: userId,
       confirmedBills: confirmedBills,
       days: 30,
       referenceDate: referenceTime,
       safetyBuffer: safetyBuffer,
+      goalReserves: goalReserves,
     );
 
     // Evaluate across the 14-day imminent horizon as well as the 30-day projection
@@ -434,7 +438,8 @@ class AlertEvaluator {
     final lowestBal = lowestPoint?.balance ?? 0.0;
     final hasImminentDeficit = lowestPoint != null && lowestPoint.balance < 0;
     final hasEndingDeficit = forecast.projectedEndingBalance <= 0;
-    final hasBufferBreach = lowestBal < safetyBuffer;
+    final effectiveBuffer = safetyBuffer + goalReserves;
+    final hasBufferBreach = lowestBal < effectiveBuffer;
 
     if (!forecast.hasInsufficientData &&
         (hasImminentDeficit || hasEndingDeficit || hasBufferBreach)) {
@@ -466,8 +471,11 @@ class AlertEvaluator {
         stage = AppAlertStage.warning;
         severity = AlertSeverity.warning;
         title = '📉 Safety Buffer Warning';
+        final reserveMsg = goalReserves > 0
+            ? ' (including ₹${goalReserves.toStringAsFixed(0)} goal reserves)'
+            : '';
         message =
-            'Your projected cashflow dips to ₹${lowestBal.toStringAsFixed(0)}, breaching your ₹${safetyBuffer.toStringAsFixed(0)} safety buffer.';
+            'Your projected cashflow dips to ₹${lowestBal.toStringAsFixed(0)}, breaching your ₹${safetyBuffer.toStringAsFixed(0)} safety buffer$reserveMsg.';
       }
 
       // Risk-aware deduplication key enabling stage escalation within the same month (Defect 2 Fix)

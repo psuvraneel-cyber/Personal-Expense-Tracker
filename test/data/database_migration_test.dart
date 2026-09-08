@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart' as p;
+import 'package:pet/data/database/database_helper.dart';
 
 void main() {
   setUpAll(() {
@@ -406,5 +407,74 @@ void main() {
         }
       }
     });
+
+    test(
+      'Early migrations (v1 -> v6) are idempotent and do not fail when re-executed',
+      () async {
+        final tempDir = Directory.systemTemp.createTempSync();
+        final dbPath = p.join(tempDir.path, 'idempotent_migration_test.db');
+        Database? db;
+
+        try {
+          db = await openDatabase(
+            dbPath,
+            version: 1,
+            onCreate: (db, version) async {
+              await db.execute('''
+                CREATE TABLE transactions (
+                  id TEXT PRIMARY KEY,
+                  amount REAL NOT NULL,
+                  type TEXT NOT NULL,
+                  categoryId TEXT NOT NULL,
+                  date TEXT NOT NULL
+                )
+              ''');
+              await db.execute('''
+                CREATE TABLE sms_transactions (
+                  id TEXT PRIMARY KEY,
+                  amount REAL NOT NULL,
+                  merchantName TEXT NOT NULL,
+                  bankName TEXT NOT NULL DEFAULT 'Unknown Bank',
+                  transactionType TEXT NOT NULL,
+                  timestamp TEXT NOT NULL,
+                  rawSmsBody TEXT NOT NULL,
+                  smsSender TEXT NOT NULL,
+                  smsHash TEXT NOT NULL UNIQUE
+                )
+              ''');
+            },
+          );
+
+          // Import DatabaseHelper and run onUpgrade from 1 to 6
+          final helper = DatabaseHelper();
+          await helper.onUpgradeForTesting(db, 1, 6);
+
+          // Verify columns exist
+          final txnCols1 = await db.rawQuery('PRAGMA table_info(transactions)');
+          expect(txnCols1.any((c) => c['name'] == 'merchantName'), isTrue);
+          expect(txnCols1.any((c) => c['name'] == 'taxCategory'), isTrue);
+          expect(txnCols1.any((c) => c['name'] == 'source'), isTrue);
+          expect(txnCols1.any((c) => c['name'] == 'accountId'), isTrue);
+
+          // Run onUpgrade from 1 to 6 AGAIN on the exact same database (simulating re-run / partial failure recovery)
+          await expectLater(
+            helper.onUpgradeForTesting(db, 1, 6),
+            completes,
+            reason: 'Re-running migrations must be idempotent without throwing duplicate column error',
+          );
+
+        } finally {
+          try {
+            await db?.close();
+          } catch (_) {}
+          try {
+            if (tempDir.existsSync()) {
+              tempDir.deleteSync(recursive: true);
+            }
+          } catch (_) {}
+        }
+      },
+    );
   });
 }
+

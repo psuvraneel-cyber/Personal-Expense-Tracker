@@ -85,8 +85,16 @@ class CategoryProvider extends ChangeNotifier {
     try {
       final sync = _syncService;
       if (sync == null) return;
+      final expectedSession = sync.currentSession;
       _firestoreSubscription = sync.categoriesStream().listen(
         (remoteCustomCats) {
+          if (!sync.currentSession.matches(expectedSession)) {
+            AppLogger.warn(
+              'Ignoring categories snapshot from stale session: $expectedSession vs ${sync.currentSession}',
+              label: 'CategoryProvider',
+            );
+            return;
+          }
           // Keep default categories, replace/add custom ones from Firestore.
           final defaultIds = defaultCategories.map((c) => c.id).toSet();
           final merged = List<Category>.from(defaultCategories);
