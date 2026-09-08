@@ -204,7 +204,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                     RepaintBoundary(
                       child: AnimatedBuilder(
                         animation: _animCtrl,
-                        builder: (_, _) {
+                        builder: (context, child) {
                           return CustomPaint(
                             size: const Size(72, 72),
                             painter: _ArcPainter(
@@ -241,7 +241,7 @@ class _GoalsScreenState extends State<GoalsScreen>
             borderRadius: BorderRadius.circular(8),
             child: AnimatedBuilder(
               animation: _animCtrl,
-              builder: (_, _) => LinearProgressIndicator(
+              builder: (context, child) => LinearProgressIndicator(
                 value: (progress * _animCtrl.value).clamp(0, 1),
                 minHeight: 8,
                 backgroundColor: Colors.white.withAlpha(30),
@@ -572,7 +572,7 @@ class _GoalsScreenState extends State<GoalsScreen>
             // Animated progress bar
             AnimatedBuilder(
               animation: _animCtrl,
-              builder: (_, _) => ClipRRect(
+              builder: (context, child) => ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: (progress * _animCtrl.value).clamp(0, 1),
@@ -877,7 +877,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _goalEmojis.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  separatorBuilder: (context, index) => const SizedBox(width: 8),
                   itemBuilder: (_, i) {
                     final selected = _goalEmojis[i] == selectedEmoji;
                     return GestureDetector(
@@ -1081,7 +1081,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _goalEmojis.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  separatorBuilder: (context, index) => const SizedBox(width: 8),
                   itemBuilder: (_, i) {
                     final selected = _goalEmojis[i] == selectedEmoji;
                     return GestureDetector(

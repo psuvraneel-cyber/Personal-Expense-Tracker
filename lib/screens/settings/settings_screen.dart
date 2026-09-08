@@ -716,7 +716,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            ?trailing,
+            if (trailing != null) trailing,
           ],
         ),
       ),

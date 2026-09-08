@@ -69,7 +69,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
         actions: [
           // Pending Review badge
           Consumer<SmsTransactionProvider>(
-            builder: (_, provider, _) {
+            builder: (context, provider, child) {
               final count = provider.uncertainTransactions.length;
               return IconButton(
                 icon: Badge(
@@ -91,7 +91,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
             },
           ),
           Consumer<SmsTransactionProvider>(
-            builder: (_, provider, _) {
+            builder: (context, provider, child) {
               return IconButton(
                 icon: provider.isScanning
                     ? const SizedBox(

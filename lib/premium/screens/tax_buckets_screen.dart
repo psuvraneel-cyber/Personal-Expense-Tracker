@@ -417,7 +417,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
               const SizedBox(width: 16),
               AnimatedBuilder(
                 animation: _animCtrl,
-                builder: (_, _) => SizedBox(
+                builder: (context, child) => SizedBox(
                   width: 80,
                   height: 80,
                   child: CustomPaint(
@@ -442,7 +442,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
           const SizedBox(height: 16),
           AnimatedBuilder(
             animation: _animCtrl,
-            builder: (_, _) => Column(
+            builder: (context, child) => Column(
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -605,7 +605,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
           const SizedBox(height: 14),
           AnimatedBuilder(
             animation: _animCtrl,
-            builder: (_, _) => ClipRRect(
+            builder: (context, child) => ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: LinearProgressIndicator(
                 value: progress * _animCtrl.value,

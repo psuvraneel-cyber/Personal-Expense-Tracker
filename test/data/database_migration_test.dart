@@ -341,8 +341,6 @@ void main() {
         }
       },
     );
-      }
-    });
 
     test('Migration from version 13 to 14 creates system_watermarks table', () async {
       final tempDir = Directory.systemTemp.createTempSync();

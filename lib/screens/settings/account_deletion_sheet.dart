@@ -159,14 +159,16 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
     try {
       final success = await FirebaseAuthService().reauthenticateGoogle();
       if (!success) {
-        if (mounted)
+        if (mounted) {
           setState(() => _errorMessage = 'Sign-in failed or was cancelled.');
+        }
         return;
       }
       if (mounted) setState(() => _step = 2);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => _errorMessage = 'Sign-in failed. Please try again.');
+      }
     }
   }
 

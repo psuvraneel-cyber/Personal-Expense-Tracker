@@ -452,40 +452,6 @@ class NotificationService {
   /// Cancels a specific pending or active notification by [id].
   static Future<void> cancelNotification(int id) async {
     try {
-      const details = NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: _channelDesc,
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: true,
-          enableVibration: true,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-        macOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      );
-
-      await _plugin.zonedSchedule(
-        id,
-        title,
-        body,
-        tz.TZDateTime.from(scheduledDate, tz.local),
-        details,
-        androidScheduleMode: await _resolveScheduleMode(),
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    } catch (e) {
-      AppLogger.debug('[NotificationService] schedule failed (id=$id): $e');
       _pending.removeWhere((item) => item.id == id);
       _pendingScheduled.removeWhere((item) => item.id == id);
       if (!_isInitialized) return;
@@ -554,6 +520,9 @@ class NotificationService {
         );
         return AndroidScheduleMode.inexact;
       }
+    }
+    return AndroidScheduleMode.exactAllowWhileIdle;
+  }
   /// Posts or updates the Android group summary notification for a batch of alerts.
   static Future<void> postAlertsSummary({
     required List<({String title, String body, NotificationCategory category})>
@@ -829,7 +798,7 @@ class NotificationService {
         tz.TZDateTime.from(scheduledDate, tz.local),
         details,
         payload: payload,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: await _resolveScheduleMode(),
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );

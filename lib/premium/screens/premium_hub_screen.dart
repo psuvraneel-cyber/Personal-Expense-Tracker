@@ -153,75 +153,9 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
                         ? null
                         : '${recurringProvider.recurring.length} tracked';
 
-                    final features = [
-                      (
-                        Icons.flag_rounded,
-                        'Savings Goals',
-                        'Set targets & top up',
-                        AppTheme.accentPurple,
-                        goalBadge,
-                        () => _push(context, const GoalsScreen()),
-                      ),
-                      (
-                        Icons.repeat_rounded,
-                        'Bills & Subscriptions',
-                        'Upcoming payments',
-                        AppTheme.accentTeal,
-                        billBadge,
-                        () => _push(context, const RecurringBillsScreen()),
-                      ),
-                      (
-                        Icons.insights_rounded,
-                        'Cash Flow',
-                        'Safe-to-spend & runway',
-                        const Color(0xFF8B5CF6),
-                        null,
-                        () => _push(context, const CashflowScreen()),
-                      ),
-                      (
-                        Icons.calendar_view_week_rounded,
-                        'Weekly Planner',
-                        'Daily spend tracker',
-                        AppTheme.accentTeal,
-                        null,
-                        () => _push(context, const WeeklyPlannerScreen()),
-                      ),
-                      (
-                        Icons.pause_circle_rounded,
-                        'Focus Mode',
-                        'Pause impulse spending',
-                        const Color(0xFFf59e0b),
-                        null,
-                        () => _push(context, const SpendPauseScreen()),
-                      ),
-                      (
-                        Icons.receipt_long_rounded,
-                        'Tax Buckets',
-                        '80C, 80D, HRA & more',
-                        const Color(0xFF10b981),
-                        null,
-                        () => _push(context, const TaxBucketsScreen()),
-                      ),
-                      (
-                        Icons.auto_awesome_rounded,
-                        'AI Copilot',
-                        'Ask your finances anything',
-                        const Color(0xFFec4899),
-                        null,
-                        () => _push(context, const AiCopilotScreen()),
-                      ),
-                      (
-                        Icons.notifications_active_rounded,
-                        'Alerts Centre',
-                        'Budget & anomaly alerts',
-                        AppTheme.expenseRed,
-                        null,
-                        () => _push(context, const AlertsScreen()),
-                      ),
-                    ];
-          final unreadAlerts = context.watch<AlertProvider>().unreadCount;
+                    final unreadAlerts = context.watch<AlertProvider>().unreadCount;
 
-          final features = [
+                    final features = [
             (
               Icons.flag_rounded,
               'Savings Goals',

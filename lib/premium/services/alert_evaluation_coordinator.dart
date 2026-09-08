@@ -169,7 +169,7 @@ class AlertEvaluationCoordinator {
         ...anomalyAlerts,
         ...largeTxnAlerts,
         ...duplicateAlerts,
-        ?cashflowAlert,
+        if (cashflowAlert != null) cashflowAlert,
       ];
 
       if (resolvedBudgets != null && resolvedBudgets.isNotEmpty) {
@@ -427,7 +427,7 @@ class AlertEvaluationCoordinator {
 
       await processAndDispatch([
         ...billAlerts,
-        ?cashflowAlert,
+        if (cashflowAlert != null) cashflowAlert,
       ]);
     } catch (e, stack) {
       AppLogger.error(

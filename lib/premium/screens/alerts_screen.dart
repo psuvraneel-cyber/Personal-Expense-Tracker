@@ -77,7 +77,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
         backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
         actions: [
           Consumer<AlertProvider>(
-            builder: (_, provider, _) {
+            builder: (context, provider, child) {
               if (provider.unreadCount == 0 && provider.alerts.isEmpty) {
                 return const SizedBox.shrink();
               }

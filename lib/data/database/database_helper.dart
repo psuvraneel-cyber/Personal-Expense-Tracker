@@ -41,6 +41,19 @@ class DatabaseHelper {
   Future<Database> get database async {
     if (_database != null) return _database!;
 
+    if (_dbCompleter != null) {
+      return _dbCompleter!.future;
+    }
+
+    final completer = Completer<Database>();
+    _dbCompleter = completer;
+    try {
+      _database = await _initDatabase();
+      completer.complete(_database);
+      return _database!;
+    } catch (e) {
+      _dbCompleter = null;
+      rethrow;
     }
   }
 

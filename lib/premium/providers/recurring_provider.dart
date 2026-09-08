@@ -487,7 +487,7 @@ class RecurringProvider extends ChangeNotifier {
     notifyListeners();
 
     final detected = RecurringDetectionService.detect(sms);
-
+    await _repository.syncDetectedPayments(detected);
 
     _recurring = await _repository.getAll();
     await _notifyUpcomingBills(confirmedBills);
@@ -501,35 +501,7 @@ class RecurringProvider extends ChangeNotifier {
     await BillReminderScheduler.scheduleReminders(recurring);
   }
 
-  Future<void> _scheduleUpcomingReminders(
-    List<RecurringPayment> recurring,
-  ) async {
-    final now = DateTime.now();
-    for (final item in recurring) {
-      // Schedule a notification 3 days before the due date at 10 AM.
-      final scheduleDate = DateTime(
-        item.nextDueAt.year,
-        item.nextDueAt.month,
-        item.nextDueAt.day - 3,
-        10,
-        0,
-        0,
-      );
-
-      if (scheduleDate.isAfter(now)) {
-        await NotificationService.scheduleNotification(
-          id: NotificationService.collisionSafeId(
-            'sched_${item.id}_${item.nextDueAt.toIso8601String()}',
-          ),
-          title: 'Upcoming bill reminder',
-          body: '${item.merchantName} is due in 3 days.',
-          scheduledDate: scheduleDate,
-        );
-      }
-    }
-  }
-
-  void clearData() {
+  Future<void> clearData() async {
     _recurring = [];
     _isLoading = false;
     _isInitialized = false;

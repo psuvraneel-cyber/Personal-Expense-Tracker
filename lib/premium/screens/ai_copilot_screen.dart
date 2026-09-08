@@ -320,7 +320,7 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _suggestions.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 return GestureDetector(
                   onTap: () {

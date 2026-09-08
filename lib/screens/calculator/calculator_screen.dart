@@ -702,9 +702,9 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
     Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, _, _) =>
+        pageBuilder: (context, anim, secAnim) =>
             AddEditTransactionScreen(prefillAmount: val, prefillType: type),
-        transitionsBuilder: (_, animation, _, child) {
+        transitionsBuilder: (context, animation, secAnim, child) {
           return SlideTransition(
             position: Tween(begin: const Offset(0, 1), end: Offset.zero)
                 .animate(
@@ -813,7 +813,7 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
                     vertical: 4,
                   ),
                   itemCount: _history.length,
-                  separatorBuilder: (_, _) => Divider(
+                  separatorBuilder: (context, index) => Divider(
                     color: isDark
                         ? Colors.white.withAlpha(8)
                         : Colors.black.withAlpha(6),

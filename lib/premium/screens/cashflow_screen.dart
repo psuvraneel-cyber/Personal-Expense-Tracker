@@ -96,17 +96,6 @@ class _CashflowScreenState extends State<CashflowScreen> {
       ),
       body: PremiumGate(
         title: 'Cash Flow Forecast',
-        subtitle: 'See your next 30 days and safe-to-spend.',
-        child: Consumer<TransactionProvider>(
-          builder: (context, provider, _) {
-            CashflowForecast forecast;
-            String incomeRisk;
-
-            try {
-              forecast = CashflowForecastService.forecast(
-                provider.allTransactions,
-              );
-              incomeRisk = _computeIncomeRisk(provider.allTransactions);
         subtitle: 'See your future balance, safe-to-spend allowance & runway.',
         child: Consumer2<TransactionProvider, RecurringProvider>(
           builder: (context, provider, recurringProvider, _) {
@@ -140,41 +129,6 @@ class _CashflowScreenState extends State<CashflowScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
               children: [
-                _buildSafeToSpendHero(forecast.safeToSpend, isDark),
-                if (forecast.hasInsufficientData) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.warningYellow.withAlpha(isDark ? 18 : 12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppTheme.warningYellow.withAlpha(
-                          isDark ? 40 : 25,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Text('⚠️ ', style: TextStyle(fontSize: 14)),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Less than 7 days of data — projections may be unreliable. '
-                            'Keep using the app to improve accuracy.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDark
-                                  ? AppTheme.textTertiary
-                                  : AppTheme.textSecondaryLight,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
                 // 1. Data quality & confidence banner
                 _buildConfidenceBanner(baseForecast, isDark),
                 const SizedBox(height: 12),
@@ -476,26 +430,6 @@ class _CashflowScreenState extends State<CashflowScreen> {
     );
   }
 
-  Widget _buildStatsRow(
-    CashflowForecast forecast,
-    String incomeRisk,
-    bool isDark,
-  ) {
-    final items = [
-      (
-        'Starting balance',
-        _fmt.format(forecast.startingBalance),
-        AppTheme.incomeGreen,
-      ),
-      (
-        'End of month',
-        _fmt.format(forecast.projectedEndingBalance),
-        forecast.projectedEndingBalance < 0
-            ? AppTheme.expenseRed
-            : AppTheme.accentTeal,
-      ),
-      ('Income risk', incomeRisk, AppTheme.warningYellow),
-    ];
   // ---------------------------------------------------------------------------
   // 4. Runway & Health Cards Row
   // ---------------------------------------------------------------------------

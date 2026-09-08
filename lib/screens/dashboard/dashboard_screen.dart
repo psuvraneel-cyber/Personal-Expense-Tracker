@@ -265,9 +265,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                             onTap: () => Navigator.push(
                               context,
                               PageRouteBuilder(
-                                pageBuilder: (_, a, _) =>
+                                pageBuilder: (context, anim, secAnim) =>
                                     const CalculatorScreen(),
-                                transitionsBuilder: (_, a, _, child) =>
+                                transitionsBuilder: (context, anim, secAnim, child) =>
                                     SlideTransition(
                                       position:
                                           Tween(
@@ -275,7 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                             end: Offset.zero,
                                           ).animate(
                                             CurvedAnimation(
-                                              parent: a,
+                                              parent: anim,
                                               curve: Curves.easeOutCubic,
                                             ),
                                           ),
@@ -598,7 +598,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       tween: Tween(begin: 0, end: percent * 100),
                       duration: const Duration(milliseconds: 1000),
                       curve: Curves.easeOutCubic,
-                      builder: (_, value, _) => Text(
+                      builder: (context, value, child) => Text(
                         '${value.toInt()}%',
                         style: AppTypography.displaySmall(color: ringColor),
                       ),

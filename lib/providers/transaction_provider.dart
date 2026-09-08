@@ -26,8 +26,6 @@ class TransactionProvider extends ChangeNotifier {
   TransactionProvider({
     TransactionRepository? repository,
     FirestoreSyncService? firestoreSync,
-  }) : _repository = repository ?? TransactionRepository(),
-       _firestoreSync = firestoreSync ?? FirestoreSyncService() {
     RecurringTransactionService? recurringService,
   })  : _repository = repository ?? TransactionRepository(),
         _firestoreSync = firestoreSync ?? FirestoreSyncService(),
@@ -281,11 +279,6 @@ class TransactionProvider extends ChangeNotifier {
           }
 
           if (txnsToUpsert.isNotEmpty) {
-            await _repository.insertTransactionsBatch(txnsToUpsert).catchError((
-              Object e,
-            ) {
-              debugPrint(
-                '[TransactionProvider] batch upsert remote rows failed: $e',
             await _repository.insertTransactionsBatch(txnsToUpsert).catchError((Object e) {
               AppLogger.error(
                 'batch upsert remote rows failed',
@@ -330,14 +323,6 @@ class TransactionProvider extends ChangeNotifier {
       );
 
       // Subscribe to remote deletion tombstones for cross-device sync
-      debugPrint(
-        '[Sync] Subscribed to tombstonesStream for ${_firestoreSync.currentUserId}',
-      );
-      _tombstoneSubscription = _firestoreSync.tombstonesStream().listen(
-        (tombstones) async {
-          debugPrint(
-            '[Sync] Tombstones event received for ${_firestoreSync.currentUserId}: $tombstones',
-          );
       AppLogger.info('Subscribed to tombstonesStream for active user', label: 'Sync');
       _tombstoneSubscription = _firestoreSync.tombstonesStream().listen(
         (tombstones) async {
@@ -357,19 +342,10 @@ class TransactionProvider extends ChangeNotifier {
             final localTxn = localMap[tId];
             if (localTxn != null) {
               // Delete wins! Remove local row
-              debugPrint(
-                '[Sync] Tombstone received for $tId. Deleting local row (Delete-Wins policy).',
               AppLogger.info('Tombstone received for transaction. Deleting local row (Delete-Wins policy).', label: 'Sync');
               await _repository.deleteTransaction(tId).catchError(
                 (e) => AppLogger.error('Failed to delete local row for tombstone', error: e, label: 'Sync'),
               );
-              await _repository
-                  .deleteTransaction(tId)
-                  .catchError(
-                    (e) => debugPrint(
-                      'Failed to delete local row for tombstone: $e',
-                    ),
-                  );
               changed = true;
             }
           }
@@ -440,20 +416,6 @@ class TransactionProvider extends ChangeNotifier {
 
     // Sync to Firestore
     if (!kIsWeb) {
-      final currentUserId = _firestoreSync.isAuthenticated
-          ? _firestoreSync.currentUserId
-          : 'guest_user';
-      await _repository
-          .enqueueSyncAction(
-            const Uuid().v4(),
-            transaction.id,
-            'create',
-            jsonEncode(transaction.toMap()),
-            currentUserId,
-          )
-          .catchError(
-            (Object e) => debugPrint('Sync queue enqueue failed: $e'),
-          );
       final currentUserId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : 'guest_user';
       await _repository.enqueueSyncAction(
         const Uuid().v4(),
@@ -506,20 +468,6 @@ class TransactionProvider extends ChangeNotifier {
 
     // Sync to Firestore
     if (!kIsWeb) {
-      final currentUserId = _firestoreSync.isAuthenticated
-          ? _firestoreSync.currentUserId
-          : 'guest_user';
-      await _repository
-          .enqueueSyncAction(
-            const Uuid().v4(),
-            updatedTxn.id,
-            'update',
-            jsonEncode(updatedTxn.toMap()),
-            currentUserId,
-          )
-          .catchError(
-            (Object e) => debugPrint('Sync queue enqueue failed: $e'),
-          );
       final currentUserId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : 'guest_user';
       await _repository.enqueueSyncAction(
         const Uuid().v4(),
@@ -576,26 +524,12 @@ class TransactionProvider extends ChangeNotifier {
       );
 
       if (hasPendingCreate) {
-        debugPrint(
-          '[SyncQueue] Compacting: removing pending create/update for deleted transaction $id',
-        );
         AppLogger.debug('Compacting: removing pending create/update for deleted transaction', label: 'SyncQueue');
         final actionsToRemove = pending.where((x) => x['transactionId'] == id);
         for (final act in actionsToRemove) {
           await _repository.deleteSyncAction(act['id'] as String);
         }
       } else {
-        await _repository
-            .enqueueSyncAction(
-              const Uuid().v4(),
-              id,
-              'delete',
-              null,
-              currentUserId,
-            )
-            .catchError(
-              (Object e) => debugPrint('Sync queue enqueue failed: $e'),
-            );
         await _repository.enqueueSyncAction(
           const Uuid().v4(),
           id,
