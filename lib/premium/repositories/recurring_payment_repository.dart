@@ -74,6 +74,9 @@ class RecurringPaymentRepository {
     });
   }
 
+  /// Alias for [clearAll] for API consistency across repositories.
+  Future<void> deleteAll() => clearAll();
+
   // ── Payment History Operations ──────────────────────────────────────────────
 
   Future<List<RecurringPaymentHistory>> getHistory(String recurringPaymentId) async {

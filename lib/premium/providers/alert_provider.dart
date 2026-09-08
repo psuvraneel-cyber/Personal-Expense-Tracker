@@ -1,9 +1,12 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/premium/models/app_alert.dart';
 import 'package:pet/premium/repositories/alert_repository.dart';
 import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:pet/premium/services/alert_evaluator.dart';
+import 'package:pet/services/firestore_sync_service.dart';
 
 /// Maximum number of individual notifications to show per batch before collapsing to a summary.
 const int kMaxIndividualAlertNotifications = 2;
@@ -14,6 +17,7 @@ const Duration kAlertDebounceWindow = Duration(seconds: 2);
 class AlertProvider extends ChangeNotifier {
   final AlertRepository _repository;
   final AlertEvaluationCoordinator _coordinator;
+  final FirestoreSyncService _firestoreSync;
 
   List<AppAlert> _alerts = [];
   int _unreadCount = 0;
@@ -34,8 +38,10 @@ class AlertProvider extends ChangeNotifier {
   AlertProvider({
     AlertRepository? repository,
     AlertEvaluationCoordinator? coordinator,
+    FirestoreSyncService? firestoreSync,
   })  : _repository = repository ?? AlertRepository(),
-        _coordinator = coordinator ?? AlertEvaluationCoordinator() {
+        _coordinator = coordinator ?? AlertEvaluationCoordinator(),
+        _firestoreSync = firestoreSync ?? FirestoreSyncService() {
     _coordinator.attachProvider(this);
   }
 
@@ -199,9 +205,15 @@ class AlertProvider extends ChangeNotifier {
       if (!_alerts[index].isRead) {
         _unreadCount = (_unreadCount - 1).clamp(0, 999999);
       }
-      _alerts = List<AppAlert>.from(_alerts)
-        ..[index] = _alerts[index].copyWith(isRead: true);
+      final updated = _alerts[index].copyWith(isRead: true);
+      _alerts = List<AppAlert>.from(_alerts)..[index] = updated;
       notifyListeners();
+
+      if (_firestoreSync.isAuthenticated) {
+        unawaited(_firestoreSync.upsertAlert(updated).catchError((e) {
+          AppLogger.debug('[AlertProvider] Firestore markAsRead error: $e');
+        }));
+      }
     }
   }
 
@@ -227,6 +239,13 @@ class AlertProvider extends ChangeNotifier {
     notifyListeners();
 
     await _repository.dismiss(id);
+
+    if (_firestoreSync.isAuthenticated) {
+      final updated = alert.copyWith(isDismissed: true);
+      unawaited(_firestoreSync.upsertAlert(updated).catchError((e) {
+        AppLogger.debug('[AlertProvider] Firestore dismiss error: $e');
+      }));
+    }
   }
 
   /// Undo soft-dismissal.
@@ -265,7 +284,7 @@ class AlertProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearData() {
+  Future<void> clearData() async {
     _alerts = [];
     _unreadCount = 0;
     _activeCount = 0;
@@ -274,6 +293,12 @@ class AlertProvider extends ChangeNotifier {
     _lastTransactionsForAnomalies = null;
     _lastSpentForBudgets = null;
     notifyListeners();
+
+    if (!kIsWeb) {
+      await _repository.deleteAll().catchError((e) {
+        AppLogger.error('Alerts clear failed', error: e, label: 'AlertProvider');
+      });
+    }
   }
 
   @override

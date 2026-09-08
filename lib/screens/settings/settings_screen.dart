@@ -33,6 +33,7 @@ import 'package:pet/premium/providers/tax_provider.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/providers/dashboard_config_provider.dart';
 import 'package:pet/providers/recurring_transaction_provider.dart';
+import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/premium/services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -1244,20 +1245,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Clear all provider state BEFORE signing out so no stale data
       // remains in memory or SQLite when a different account signs in.
-      await transactionProvider.clearData();
-      await categoryProvider.clearData();
-      await budgetProvider.clearData();
-      await premiumProvider.clearData();
-      recurringProvider.clearData();
-      goalProvider.clearData();
+      await Future.wait([
+        transactionProvider.clearData(),
+        categoryProvider.clearData(),
+        budgetProvider.clearData(),
+        premiumProvider.clearData(),
+        recurringProvider.clearData(),
+        goalProvider.clearData(),
+        alertProvider.clearData(),
+        recurringTxnProvider.clearData(),
+      ]);
       familyProvider.clearData();
       taxProvider.clearData();
-      alertProvider.clearData();
       linkedAccountProvider.clearData();
       weeklyPlannerProvider.clearData();
       dashboardConfigProvider.clearData();
-      recurringTxnProvider.clearData();
       smsProvider.clearData();
+
+      if (!kIsWeb) {
+        await DatabaseHelper().wipeAllUserData().catchError((e) {
+          AppLogger.error('Database wipeAllUserData failed during logout', error: e);
+        });
+      }
 
       await NotificationService.cancelAllNotifications();
 

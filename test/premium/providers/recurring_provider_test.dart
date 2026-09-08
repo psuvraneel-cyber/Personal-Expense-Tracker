@@ -294,7 +294,7 @@ void main() {
 
       expect(provider.recurring.isNotEmpty, isTrue);
 
-      provider.clearData();
+      await provider.clearData();
 
       expect(provider.recurring, isEmpty);
       expect(provider.confirmedBills, isEmpty);

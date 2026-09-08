@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/premium/models/cashflow_forecast.dart';
+import 'package:pet/premium/providers/goal_provider.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';
 import 'package:pet/premium/services/cashflow_forecast_service.dart';
 import 'package:pet/premium/widgets/premium_gate.dart';
@@ -98,12 +99,19 @@ class _CashflowScreenState extends State<CashflowScreen> {
         subtitle: 'See your future balance, safe-to-spend allowance & runway.',
         child: Consumer2<TransactionProvider, RecurringProvider>(
           builder: (context, provider, recurringProvider, _) {
+            double goalReserves = 0.0;
+            try {
+              goalReserves = Provider.of<GoalProvider>(context).totalActiveGoalReserves;
+            } catch (_) {
+              goalReserves = 0.0;
+            }
             final CashflowForecast baseForecast;
             try {
               baseForecast = CashflowForecastService.forecast(
                 provider.allTransactions,
                 confirmedBills: recurringProvider.confirmedBills,
                 days: _selectedHorizon,
+                goalReserves: goalReserves,
               );
             } catch (e) {
               return _buildError(isDark, e.toString());
@@ -836,6 +844,7 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     scenarioPoints: _simulatedForecast?.dailyPoints,
                     scrubbedIndex: _scrubbedIndex,
                     isDark: isDark,
+                    safetyBuffer: baseForecast.safetyBuffer,
                   ),
                 ),
               );
@@ -1310,12 +1319,14 @@ class _SplineChartPainter extends CustomPainter {
   final List<CashflowPoint>? scenarioPoints;
   final int? scrubbedIndex;
   final bool isDark;
+  final double safetyBuffer;
 
   _SplineChartPainter({
     required this.basePoints,
     this.scenarioPoints,
     this.scrubbedIndex,
     required this.isDark,
+    this.safetyBuffer = CashflowForecastService.defaultSafetyBuffer,
   });
 
   @override
@@ -1328,14 +1339,15 @@ class _SplineChartPainter extends CustomPainter {
 
     if (scenarioPoints != null && scenarioPoints!.isNotEmpty) {
       for (final p in scenarioPoints!) {
-        minVal = min(minVal, p.balance);
-        maxVal = max(maxVal, p.balance);
+        final bal = p.scenarioBalance ?? p.balance;
+        minVal = min(minVal, bal);
+        maxVal = max(maxVal, bal);
       }
     }
 
-    // Include ₹0 and safety buffer (₹5,000) in scale bounds
+    // Include ₹0 and configured safety buffer in scale bounds
     minVal = min(minVal, 0.0);
-    maxVal = max(maxVal, 6000.0);
+    maxVal = max(maxVal, max(6000.0, safetyBuffer * 1.2));
 
     final span = (maxVal - minVal).abs();
     final padding = span * 0.15;
@@ -1349,7 +1361,7 @@ class _SplineChartPainter extends CustomPainter {
     }
 
     final double zeroY = getY(0.0).clamp(0.0, size.height);
-    final double bufferY = getY(CashflowForecastService.defaultSafetyBuffer).clamp(0.0, size.height);
+    final double bufferY = getY(safetyBuffer).clamp(0.0, size.height);
 
     // 1. Draw Zero Line
     final zeroLinePaint = Paint()
@@ -1426,7 +1438,7 @@ class _SplineChartPainter extends CustomPainter {
       final List<Offset> simCoords = [];
       for (int i = 0; i < scenarioPoints!.length; i++) {
         final x = i * stepX;
-        final y = getY(scenarioPoints![i].balance);
+        final y = getY(scenarioPoints![i].scenarioBalance ?? scenarioPoints![i].balance);
         simCoords.add(Offset(x, y));
       }
 
@@ -1493,6 +1505,7 @@ class _SplineChartPainter extends CustomPainter {
     return old.scrubbedIndex != scrubbedIndex ||
         old.basePoints != basePoints ||
         old.scenarioPoints != scenarioPoints ||
+        old.safetyBuffer != safetyBuffer ||
         old.isDark != isDark;
   }
 }

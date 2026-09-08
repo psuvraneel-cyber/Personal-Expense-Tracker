@@ -1300,6 +1300,44 @@ class DatabaseHelper {
     ''');
   }
 
+  /// Atomically wipe all user financial data across all tables during sign-out or account deletion.
+  /// Preserves system/metadata seed definitions like default categories and seed rules.
+  Future<void> wipeAllUserData() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      const tablesToClear = [
+        'user_feedback',
+        'unknown_format_logs',
+        'sms_transactions',
+        'sms_processing_state',
+        'tax_categories',
+        'linked_accounts',
+        'family_members',
+        'alerts',
+        'recurring_payment_history',
+        'recurring_payments',
+        'recurring_occurrences',
+        'recurring_rules',
+        'saving_goals',
+        'transactions',
+        'budgets',
+        'transaction_sync_queue',
+        'financial_observations',
+      ];
+
+      for (final table in tablesToClear) {
+        try {
+          await txn.delete(table);
+        } catch (_) {}
+      }
+
+      // Clear custom categories, preserve system defaults
+      try {
+        await txn.delete('categories', where: 'isCustom = 1');
+      } catch (_) {}
+    });
+  }
+
   Future<void> close() async {
     final db = await database;
     db.close();

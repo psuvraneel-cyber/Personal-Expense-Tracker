@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
@@ -6,18 +8,29 @@ import 'package:pet/premium/models/recurring_payment_history.dart';
 import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/services/bill_reminder_scheduler.dart';
 import 'package:pet/premium/services/recurring_detection_service.dart';
+import 'package:pet/services/account_deletion_service.dart';
+import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/recurrence_calculator.dart';
 import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:uuid/uuid.dart';
 
 class RecurringProvider extends ChangeNotifier {
-  final RecurringPaymentRepository _repository = RecurringPaymentRepository();
+  final RecurringPaymentRepository _repository;
+  final FirestoreSyncService _firestoreSync;
   final Uuid _uuid = const Uuid();
+
+  RecurringProvider({
+    RecurringPaymentRepository? repository,
+    FirestoreSyncService? firestoreSync,
+  })  : _repository = repository ?? RecurringPaymentRepository(),
+        _firestoreSync = firestoreSync ?? FirestoreSyncService();
 
   List<RecurringPayment> _recurring = [];
   bool _isLoading = false;
   bool _isInitialized = false;
+  bool _disposed = false;
   List<SmsTransaction>? _lastSmsForRecurring;
+  StreamSubscription<List<RecurringPayment>>? _firestoreSubscription;
 
   List<RecurringPayment> get recurring => _recurring;
   bool get isLoading => _isLoading;
@@ -69,17 +82,72 @@ class RecurringProvider extends ChangeNotifier {
       weekAheadBills.fold(0.0, (sum, b) => sum + b.amount);
 
   Future<void> load() async {
+    if (_disposed) return;
     _isLoading = true;
     notifyListeners();
 
     try {
-      _recurring = await _repository.getAll();
-      await BillReminderScheduler.scheduleReminders(confirmedBills);
+      if (!kIsWeb) {
+        _recurring = await _repository.getAll();
+        await BillReminderScheduler.scheduleReminders(confirmedBills);
+      }
       _isInitialized = true;
-    } finally {
-      _isLoading = false;
+      if (_disposed) return;
       notifyListeners();
+
+      await _subscribeToFirestore();
+    } catch (e, st) {
+      AppLogger.error('Failed to load recurring bills', error: e, stack: st, label: 'RecurringProvider');
+    } finally {
+      if (!_disposed) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
+  }
+
+  Future<void> _subscribeToFirestore() async {
+    if (AccountDeletionService.isDeletionInProgress || _disposed) return;
+    await _firestoreSubscription?.cancel();
+    _firestoreSubscription = null;
+
+    if (!_firestoreSync.isAuthenticated) return;
+
+    final stream = _firestoreSync.recurringPaymentsStream();
+    _firestoreSubscription = stream.listen(
+      (remotePayments) async {
+        if (_disposed || AccountDeletionService.isDeletionInProgress) return;
+        if (remotePayments.isEmpty && _recurring.isNotEmpty) return;
+
+        final localMap = {for (final r in _recurring) r.id: r};
+        bool changed = false;
+
+        for (final remote in remotePayments) {
+          final local = localMap[remote.id];
+          if (local == null) {
+            localMap[remote.id] = remote;
+            if (!kIsWeb) await _repository.upsert(remote);
+            changed = true;
+          } else if (remote.updatedAt.isAfter(local.updatedAt) ||
+                     remote.status != local.status ||
+                     remote.amount != local.amount ||
+                     remote.nextDueAt != local.nextDueAt) {
+            localMap[remote.id] = remote;
+            if (!kIsWeb) await _repository.upsert(remote);
+            changed = true;
+          }
+        }
+
+        if (changed && !_disposed) {
+          _recurring = localMap.values.toList();
+          await BillReminderScheduler.scheduleReminders(confirmedBills);
+          notifyListeners();
+        }
+      },
+      onError: (Object e) {
+        AppLogger.debug('[RecurringProvider] Firestore stream error: $e');
+      },
+    );
   }
 
   /// Add a manually entered recurring commitment.
@@ -111,10 +179,18 @@ class RecurringProvider extends ChangeNotifier {
     );
 
     await _repository.undismissCandidate(merchantName);
-    await _repository.upsert(payment);
+    if (!kIsWeb) {
+      await _repository.upsert(payment);
+    }
     _recurring = [payment, ..._recurring];
     await BillReminderScheduler.scheduleReminders([payment]);
     notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertRecurringPayment(payment).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore upsert error: $e');
+      }));
+    }
   }
 
   /// Confirms an inferred recurring detection candidate into an active commitment.
@@ -148,10 +224,18 @@ class RecurringProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
-    await _repository.upsert(updated);
+    if (!kIsWeb) {
+      await _repository.upsert(updated);
+    }
     _recurring = List<RecurringPayment>.from(_recurring)..[index] = updated;
     await BillReminderScheduler.scheduleReminders([updated]);
     notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertRecurringPayment(updated).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore upsert error: $e');
+      }));
+    }
   }
 
   /// Dismisses an unconfirmed recurring detection candidate.
@@ -209,16 +293,27 @@ class RecurringProvider extends ChangeNotifier {
     );
 
     // 5. Commit history and bill schedule update atomically in SQLite
-    await _repository.recordPaymentAndAdvance(
-      history: historyEntry,
-      updatedPayment: updated,
-    );
+    if (!kIsWeb) {
+      await _repository.recordPaymentAndAdvance(
+        history: historyEntry,
+        updatedPayment: updated,
+      );
+    }
     _recurring = List<RecurringPayment>.from(_recurring)..[index] = updated;
 
     // 6. Schedule reminder for the next cycle
     await BillReminderScheduler.scheduleReminders([updated]);
     AlertEvaluationCoordinator().onBillResolved(bill.id);
     notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertRecurringPayment(updated).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore markAsPaid sync error: $e');
+      }));
+      unawaited(_firestoreSync.upsertRecurringPaymentHistory(historyEntry).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore markAsPaid history sync error: $e');
+      }));
+    }
   }
 
   /// Edits an existing recurring commitment.
@@ -249,10 +344,18 @@ class RecurringProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
-    await _repository.upsert(updated);
+    if (!kIsWeb) {
+      await _repository.upsert(updated);
+    }
     _recurring = List<RecurringPayment>.from(_recurring)..[index] = updated;
     await BillReminderScheduler.scheduleReminders([updated]);
     notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertRecurringPayment(updated).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore editBill error: $e');
+      }));
+    }
   }
 
   /// Push the next due date by one billing cycle (snooze).
@@ -274,10 +377,18 @@ class RecurringProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
-    await _repository.upsert(updated);
+    if (!kIsWeb) {
+      await _repository.upsert(updated);
+    }
     _recurring = List<RecurringPayment>.from(_recurring)..[index] = updated;
     await BillReminderScheduler.scheduleReminders([updated]);
     notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertRecurringPayment(updated).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore snoozeBill error: $e');
+      }));
+    }
   }
 
   /// Cancels a recurring commitment, retaining history while stopping future reminders.
@@ -293,10 +404,18 @@ class RecurringProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
-    await _repository.upsert(updated);
+    if (!kIsWeb) {
+      await _repository.upsert(updated);
+    }
     _recurring = List<RecurringPayment>.from(_recurring)..[index] = updated;
     AlertEvaluationCoordinator().onBillResolved(bill.id);
     notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertRecurringPayment(updated).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore cancelBill error: $e');
+      }));
+    }
   }
 
   /// Reopens a previously cancelled recurring commitment.
@@ -321,10 +440,18 @@ class RecurringProvider extends ChangeNotifier {
       updatedAt: now,
     );
 
-    await _repository.upsert(updated);
+    if (!kIsWeb) {
+      await _repository.upsert(updated);
+    }
     _recurring = List<RecurringPayment>.from(_recurring)..[index] = updated;
     await BillReminderScheduler.scheduleReminders([updated]);
     notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.upsertRecurringPayment(updated).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore reopenBill error: $e');
+      }));
+    }
   }
 
   /// Permanently removes a recurring commitment and its history.
@@ -333,10 +460,18 @@ class RecurringProvider extends ChangeNotifier {
     if (index != -1) {
       await BillReminderScheduler.cancelReminder(_recurring[index]);
     }
-    await _repository.delete(id);
+    if (!kIsWeb) {
+      await _repository.delete(id);
+    }
     _recurring = _recurring.where((r) => r.id != id).toList();
     AlertEvaluationCoordinator().onBillResolved(id);
     notifyListeners();
+
+    if (_firestoreSync.isAuthenticated) {
+      unawaited(_firestoreSync.deleteRecurringPayment(id).catchError((e) {
+        AppLogger.debug('[RecurringProvider] Firestore deleteBill error: $e');
+      }));
+    }
   }
 
   /// Fetches payment history records for a bill.
@@ -366,11 +501,28 @@ class RecurringProvider extends ChangeNotifier {
     await BillReminderScheduler.scheduleReminders(recurring);
   }
 
-  void clearData() {
+  Future<void> clearData() async {
     _recurring = [];
     _isLoading = false;
     _isInitialized = false;
     _lastSmsForRecurring = null;
     notifyListeners();
+
+    final sub = _firestoreSubscription;
+    _firestoreSubscription = null;
+    await sub?.cancel();
+
+    if (!kIsWeb) {
+      await _repository.clearAll().catchError((e) {
+        AppLogger.error('Recurring clear failed', error: e, label: 'RecurringProvider');
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _firestoreSubscription?.cancel();
+    super.dispose();
   }
 }

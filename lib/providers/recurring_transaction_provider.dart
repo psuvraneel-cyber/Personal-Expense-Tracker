@@ -226,12 +226,22 @@ class RecurringTransactionProvider extends ChangeNotifier {
   }
 
   /// Clears local provider data on user logout.
-  void clearData() {
-    _firestoreSubscription?.cancel();
+  Future<void> clearData() async {
+    await _firestoreSubscription?.cancel();
     _firestoreSubscription = null;
     _rules = [];
     _isLoading = false;
     notifyListeners();
+
+    if (!kIsWeb) {
+      await _repository.deleteAllRecurringData().catchError((e) {
+        AppLogger.error(
+          'Recurring data clear failed',
+          error: e,
+          label: 'RecurringTxnProvider',
+        );
+      });
+    }
   }
 
   @override

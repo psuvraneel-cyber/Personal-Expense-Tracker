@@ -1,7 +1,7 @@
 import 'package:pet/core/utils/app_logger.dart';
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kReleaseMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -251,7 +251,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
     );
   }
 
-  void _onAuthStateChanged(User? user) {
+  Future<void> _onAuthStateChanged(User? user) async {
     if (AccountDeletionService.isDeletionInProgress) {
       AppLogger.debug('[MAIN] Account deletion in progress — ignoring auth change');
       return;
@@ -269,22 +269,46 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
     if (currentUserId == null && _lastUid != null) {
       AppLogger.debug('[MAIN] Real sign-out detected — clearing data');
-      ctx.read<TransactionProvider>().clearData();
-      ctx.read<CategoryProvider>().clearData();
-      ctx.read<BudgetProvider>().clearData();
-      ctx.read<SmsTransactionProvider>().clearData();
-      ctx.read<PremiumProvider>().clearData();
-      ctx.read<RecurringProvider>().clearData();
-      ctx.read<GoalProvider>().clearData();
-      ctx.read<AlertProvider>().clearData();
-      ctx.read<LinkedAccountProvider>().clearData();
-      ctx.read<FamilyProvider>().clearData();
-      ctx.read<TaxProvider>().clearData();
-      ctx.read<WeeklyPlannerProvider>().clearData();
-      ctx.read<DashboardConfigProvider>().clearData();
-      ctx.read<RecurringTransactionProvider>().clearData();
-      NotificationService.cancelAllNotifications();
       _lastUid = null;
+      final txProv = ctx.read<TransactionProvider>();
+      final catProv = ctx.read<CategoryProvider>();
+      final budProv = ctx.read<BudgetProvider>();
+      final premProv = ctx.read<PremiumProvider>();
+      final recProv = ctx.read<RecurringProvider>();
+      final goalProv = ctx.read<GoalProvider>();
+      final alertProv = ctx.read<AlertProvider>();
+      final recTxProv = ctx.read<RecurringTransactionProvider>();
+      final smsProv = ctx.read<SmsTransactionProvider>();
+      final linkedProv = ctx.read<LinkedAccountProvider>();
+      final familyProv = ctx.read<FamilyProvider>();
+      final taxProv = ctx.read<TaxProvider>();
+      final weeklyProv = ctx.read<WeeklyPlannerProvider>();
+      final dashProv = ctx.read<DashboardConfigProvider>();
+
+      await Future.wait([
+        txProv.clearData(),
+        catProv.clearData(),
+        budProv.clearData(),
+        premProv.clearData(),
+        recProv.clearData(),
+        goalProv.clearData(),
+        alertProv.clearData(),
+        recTxProv.clearData(),
+      ]);
+      smsProv.clearData();
+      linkedProv.clearData();
+      familyProv.clearData();
+      taxProv.clearData();
+      weeklyProv.clearData();
+      dashProv.clearData();
+
+      if (!kIsWeb) {
+        await DatabaseHelper().wipeAllUserData().catchError((e) {
+          AppLogger.error('Database wipeAllUserData failed in auth state change', error: e);
+        });
+      }
+
+      await NotificationService.cancelAllNotifications();
     } else if (currentUserId != null && currentUserId != _lastUid) {
       AppLogger.debug(
         '[MAIN] New user signed in ($currentUserId) — reloading data',
@@ -294,6 +318,9 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<TransactionProvider>().loadTransactions();
       ctx.read<BudgetProvider>().loadBudgets();
       ctx.read<RecurringTransactionProvider>().loadRules();
+      ctx.read<RecurringProvider>().load();
+      ctx.read<GoalProvider>().load();
+      ctx.read<AlertProvider>().load();
       ctx.read<PremiumProvider>().logInUser(currentUserId);
     } else {
       AppLogger.debug('[MAIN] No action taken (same user or null→null)');
