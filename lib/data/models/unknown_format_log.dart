@@ -84,7 +84,8 @@ class UnknownFormatLog {
     final createdAtMillis = map['created_at'] as int?;
     final DateTime parsedTime;
     if (timestampStr != null && timestampStr.isNotEmpty) {
-      parsedTime = DateTime.tryParse(timestampStr) ??
+      parsedTime =
+          DateTime.tryParse(timestampStr) ??
           (createdAtMillis != null
               ? DateTime.fromMillisecondsSinceEpoch(createdAtMillis)
               : DateTime.now());

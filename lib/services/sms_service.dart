@@ -336,7 +336,10 @@ class SmsService {
       final startIdx = m.start;
       final precedingText = redacted.substring(0, startIdx).toLowerCase();
       // Skip if preceded by reference ID keywords
-      if (RegExp(r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$', caseSensitive: false).hasMatch(precedingText)) {
+      if (RegExp(
+        r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$',
+        caseSensitive: false,
+      ).hasMatch(precedingText)) {
         return m.group(0)!;
       }
       final last4 = m.group(2)!;
@@ -352,10 +355,16 @@ class SmsService {
       final startIdx = m.start;
       final precedingText = redacted.substring(0, startIdx).toLowerCase();
       // Do not redact if preceded by currency or reference ID keywords
-      if (RegExp(r'(?:rs\.?|inr\.?|₹)\s*$', caseSensitive: false).hasMatch(precedingText)) {
+      if (RegExp(
+        r'(?:rs\.?|inr\.?|₹)\s*$',
+        caseSensitive: false,
+      ).hasMatch(precedingText)) {
         return m.group(0)!;
       }
-      if (RegExp(r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$', caseSensitive: false).hasMatch(precedingText)) {
+      if (RegExp(
+        r'(?:ref|rrn|utr|txnid|txn|upi|reference)\s*(?:no|num|id)?\.?\s*:?\s*$',
+        caseSensitive: false,
+      ).hasMatch(precedingText)) {
         return m.group(0)!;
       }
       final last4 = m.group(2)!;
@@ -519,4 +528,73 @@ class SmsService {
 
     return 'Uncategorized';
   }
+}
+
+// ─── Isolate Workers ────────────────────────────────────────────────────────
+
+/// Data payload for the isolate.
+class _IsolateData {
+  final List<NativeSmsMessage> messages;
+  const _IsolateData(this.messages);
+}
+
+/// Top-level isolate function for parsing a batch of SMS messages.
+Future<List<SmsTransaction>> _parseMessagesIsolate(_IsolateData data) async {
+  final parsed = <SmsTransaction>[];
+  final seenHashes = <String>{};
+  final uuid = const Uuid();
+
+  for (final msg in data.messages) {
+    final body = msg.body;
+    final sender = msg.address;
+    final timestamp = msg.dateTime;
+
+    if (body.isEmpty) continue;
+
+    final classified = await ClassificationRuleEngine.classify(
+      body,
+      sender,
+      timestamp,
+      logUnknown: false, // Don't hit sqflite inside the isolate
+    );
+
+    if (classified == null) continue;
+
+    final hash = SmsTransaction.generateHash(body, timestamp);
+
+    // In-batch dedup
+    if (seenHashes.contains(hash)) {
+      continue;
+    }
+    seenHashes.add(hash);
+
+    final category =
+        classified.category ??
+        SmsService.inferCategoryFromClassified(classified);
+    final normalizedMerchant = MerchantNormalizer.normalize(
+      classified.merchantName,
+    );
+
+    parsed.add(
+      SmsTransaction(
+        id: uuid.v4(),
+        amount: classified.amount,
+        merchantName: normalizedMerchant,
+        bankName: classified.bankName,
+        transactionType: classified.transactionType,
+        transactionSubType: classified.transactionSubType,
+        timestamp: classified.parsedDate,
+        rawSmsBody: SmsService.redactSensitiveData(body),
+        smsSender: sender,
+        smsHash: hash,
+        category: category,
+        referenceId: classified.referenceId,
+        upiId: classified.upiId,
+        confidence: classified.confidence,
+        source: 'sms',
+      ),
+    );
+  }
+
+  return parsed;
 }

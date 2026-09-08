@@ -12,9 +12,7 @@ class SecureStorageService {
   static final SecureStorageService instance = SecureStorageService._();
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-    ),
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 
   static const String _kDbEncryptionKey = 'db_encryption_key';
@@ -71,7 +69,9 @@ class SecureStorageService {
   Future<String> getDatabaseEncryptionKey() async {
     var key = await read(_kDbEncryptionKey);
     if (key == null || key.isEmpty) {
-      AppLogger.info('[SecureStorage] No existing database key found. Generating new secure key.');
+      AppLogger.info(
+        '[SecureStorage] No existing database key found. Generating new secure key.',
+      );
       key = _generateSecureRandomKey();
       await write(_kDbEncryptionKey, key);
     }

@@ -79,9 +79,11 @@ class _SplashScreenState extends State<SplashScreen>
     _particles = List.generate(20, (_) => _Particle.random(rng));
 
     // ── Auth Gate ──
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) async {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((
+      user,
+    ) async {
       final isLoggedIn = FirebaseAuthService().isLoggedIn;
-      
+
       AppLogger.debug(
         '[AUTH] authStateChanges fired → user=${user?.uid ?? "null"} '
         'isLoggedIn=$isLoggedIn '
@@ -262,7 +264,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    
+
     try {
       await PremiumEntitlementService.logOut();
     } catch (_) {}

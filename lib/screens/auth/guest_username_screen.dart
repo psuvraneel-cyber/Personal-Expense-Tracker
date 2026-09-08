@@ -28,21 +28,23 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
 
   Future<void> _handleGuestSignIn() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final success = await AuthService.signInAsGuest(_usernameController.text.trim());
+      final success = await AuthService.signInAsGuest(
+        _usernameController.text.trim(),
+      );
       if (success) {
         if (!mounted) return;
         // Reload local providers
         context.read<CategoryProvider>().loadCategories();
         context.read<TransactionProvider>().loadTransactions();
         context.read<BudgetProvider>().loadBudgets();
-        
+
         Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
       } else {
         setState(() {
@@ -70,7 +72,10 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDark ? Colors.white : Colors.black,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -78,12 +83,16 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: isDark 
+        decoration: isDark
             ? const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF1A0F3C), Color(0xFF0D0B1E), Color(0xFF080614)],
+                  colors: [
+                    Color(0xFF1A0F3C),
+                    Color(0xFF0D0B1E),
+                    Color(0xFF080614),
+                  ],
                   stops: [0.0, 0.6, 1.0],
                 ),
               )
@@ -97,7 +106,7 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   const SizedBox(height: 48),
-                  
+
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -132,21 +141,33 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
 
                   TextFormField(
                     controller: _usernameController,
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
                     decoration: InputDecoration(
                       hintText: 'e.g. Satoshi',
-                      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.white54 : Colors.black54,
+                      ),
                       filled: true,
-                      fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05),
+                      fillColor: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black.withValues(alpha: 0.05),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: AppTheme.accentPurple, width: 2),
+                        borderSide: const BorderSide(
+                          color: AppTheme.accentPurple,
+                          width: 2,
+                        ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 20,
+                      ),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -168,7 +189,10 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
                     const SizedBox(height: 16),
                     Text(
                       _errorMessage!,
-                      style: const TextStyle(color: AppTheme.expenseRed, fontSize: 13),
+                      style: const TextStyle(
+                        color: AppTheme.expenseRed,
+                        fontSize: 13,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -206,7 +230,9 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
                                 height: 24,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             : Text(

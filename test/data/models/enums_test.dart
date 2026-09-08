@@ -29,8 +29,11 @@ void main() {
       for (final method in PaymentMethod.values) {
         final json = method.toJson();
         final decoded = PaymentMethod.fromJson(json);
-        expect(decoded, method,
-            reason: '${method.name} should survive roundtrip');
+        expect(
+          decoded,
+          method,
+          reason: '${method.name} should survive roundtrip',
+        );
       }
     });
 
@@ -89,7 +92,9 @@ void main() {
 
     test('fromJson unknown defaults to monthly', () {
       expect(
-          RecurringFrequency.fromJson('biweekly'), RecurringFrequency.monthly);
+        RecurringFrequency.fromJson('biweekly'),
+        RecurringFrequency.monthly,
+      );
     });
 
     test('displayName returns capitalized label', () {
