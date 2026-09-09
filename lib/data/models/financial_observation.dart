@@ -11,8 +11,9 @@ enum FinancialObservationSource {
 
   static FinancialObservationSource fromJson(String? value) {
     if (value == 'notification') return FinancialObservationSource.notification;
-    if (value == 'reconciliation')
+    if (value == 'reconciliation') {
       return FinancialObservationSource.reconciliation;
+    }
     return FinancialObservationSource.sms;
   }
 }

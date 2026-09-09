@@ -43,8 +43,9 @@ class MockMultiSessionSyncService implements FirestoreSyncService {
 
   @override
   String get currentUserId {
-    if (_uid == null)
+    if (_uid == null) {
       throw StateError('FirestoreSyncService: user not authenticated');
+    }
     return _uid!;
   }
 

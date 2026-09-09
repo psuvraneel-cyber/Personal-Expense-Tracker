@@ -107,8 +107,9 @@ class FirestoreSyncService {
   /// Callers should check this before attempting Firestore operations.
   bool get isAuthenticated {
     try {
-      if (_auth.isLocalGuest || _auth.currentUser?.isAnonymous == true)
+      if (_auth.isLocalGuest || _auth.currentUser?.isAnonymous == true) {
         return false;
+      }
       final uid = _auth.currentUserId;
       return uid != null && uid.isNotEmpty && uid != 'guest_user';
     } catch (_) {

@@ -107,10 +107,12 @@ enum RecurringFrequency {
   static RecurringFrequency? fromJson(String? value) {
     if (value == null) return null;
     final normalized = value.toLowerCase().trim();
-    if (normalized == 'every 3 months' || normalized == '3months')
+    if (normalized == 'every 3 months' || normalized == '3months') {
       return RecurringFrequency.quarterly;
-    if (normalized == 'every 6 months' || normalized == '6months')
+    }
+    if (normalized == 'every 6 months' || normalized == '6months') {
       return RecurringFrequency.semiannual;
+    }
     return RecurringFrequency.values.firstWhere(
       (e) => e.name == normalized,
       orElse: () => RecurringFrequency.monthly,

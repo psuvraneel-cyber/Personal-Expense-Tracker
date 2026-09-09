@@ -150,8 +150,9 @@ class CashflowForecastService {
         .where((t) => t.type == TransactionType.expense)
         .where((t) {
       if (t.isRecurring) return false;
-      if (t.recurringRuleId != null && t.recurringRuleId!.isNotEmpty)
+      if (t.recurringRuleId != null && t.recurringRuleId!.isNotEmpty) {
         return false;
+      }
       if (t.merchantName != null &&
           billMerchantNames.contains(t.merchantName!.trim().toLowerCase())) {
         return false;

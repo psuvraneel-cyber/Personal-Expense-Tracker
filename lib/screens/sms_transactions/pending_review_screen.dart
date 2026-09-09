@@ -30,8 +30,9 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
   }
 
   void _checkInitialObservation() {
-    if (_checkedInitial || widget.initialObservationId == null || !mounted)
+    if (_checkedInitial || widget.initialObservationId == null || !mounted) {
       return;
+    }
     final provider = context.read<SmsTransactionProvider>();
     if (provider.isLoading) return;
 
@@ -256,8 +257,9 @@ Future<void> _showEditDialog(
                         selected: selectedType == 'credit',
                         selectedColor: AppTheme.incomeGreen.withAlpha(50),
                         onSelected: (val) {
-                          if (val)
+                          if (val) {
                             setDialogState(() => selectedType = 'credit');
+                          }
                         },
                       ),
                     ],

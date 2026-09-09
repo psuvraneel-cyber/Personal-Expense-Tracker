@@ -81,14 +81,18 @@ Color _billColor(String name) {
   if (n.contains('netflix')) return const Color(0xFFE50914);
   if (n.contains('spotify')) return const Color(0xFF1DB954);
   if (n.contains('prime')) return const Color(0xFF00A8E1);
-  if (n.contains('hotstar') || n.contains('disney'))
+  if (n.contains('hotstar') || n.contains('disney')) {
     return const Color(0xFF1C6EDC);
-  if (n.contains('gym') || n.contains('fitness') || n.contains('cult'))
+  }
+  if (n.contains('gym') || n.contains('fitness') || n.contains('cult')) {
     return const Color(0xFFF59E0B);
-  if (n.contains('electricity') || n.contains('power'))
+  }
+  if (n.contains('electricity') || n.contains('power')) {
     return const Color(0xFFF59E0B);
-  if (n.contains('insurance') || n.contains('lic'))
+  }
+  if (n.contains('insurance') || n.contains('lic')) {
     return const Color(0xFF10B981);
+  }
   if (n.contains('rent')) return const Color(0xFF8B5CF6);
   return AppTheme.accentTeal;
 }
