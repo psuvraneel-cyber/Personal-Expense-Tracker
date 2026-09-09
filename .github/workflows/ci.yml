@@ -47,6 +47,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: false
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -72,6 +74,17 @@ jobs:
           GROQ_API_KEY=${{ secrets.GROQ_API_KEY || 'placeholder_groq_key' }}
           GROQ_MODEL=llama-3.3-70b-versatile
           EOF
+
+      - name: Setup Signing Keystore for CI
+        run: |
+          keytool -genkey -v -keystore android/app/ci.keystore -alias cikey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=CI, OU=CI, O=CI, L=City, S=State, C=US"
+          cat <<EOF > android/key.properties
+          storeFile=ci.keystore
+          storePassword=android
+          keyAlias=cikey
+          keyPassword=android
+          EOF
+          cp android/key.properties android/app/key.properties
 
       - name: Build release APK
         run: |
