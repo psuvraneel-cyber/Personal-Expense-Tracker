@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/data/models/category.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/premium/widgets/premium_gate.dart';
@@ -240,7 +241,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
     );
   }
 
-  Widget _buildCategoryBlock(List<dynamic> categories, bool isDark) {
+  Widget _buildCategoryBlock(List<Category> categories, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -283,8 +284,7 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  IconData(c.iconCodePoint,
-                      fontFamily: c.iconFontFamily ?? 'MaterialIcons'),
+                  c.icon,
                   color: AppTheme.accentPurple,
                   size: 20,
                 ),
