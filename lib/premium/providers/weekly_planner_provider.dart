@@ -119,7 +119,8 @@ class WeeklyPlannerProvider extends ChangeNotifier {
         await _reloadLocal();
       },
       onError: (Object e) {
-        AppLogger.warn('WeeklyPlanner firestore stream error: $e', label: 'WeeklyPlanner');
+        AppLogger.warn('WeeklyPlanner firestore stream error: $e',
+            label: 'WeeklyPlanner');
       },
     );
   }
@@ -144,7 +145,8 @@ class WeeklyPlannerProvider extends ChangeNotifier {
         }
       } else {
         if (!effectiveLimitsByCategory.containsKey(l.categoryId) ||
-            effectiveLimitsByCategory[l.categoryId]!.recurrencePolicy != WeeklyRecurrencePolicy.oneOff) {
+            effectiveLimitsByCategory[l.categoryId]!.recurrencePolicy !=
+                WeeklyRecurrencePolicy.oneOff) {
           effectiveLimitsByCategory[l.categoryId] = l;
         }
       }
@@ -180,9 +182,12 @@ class WeeklyPlannerProvider extends ChangeNotifier {
     }
 
     final now = DateTime.now();
-    final effectivePeriodStart = recurrencePolicy == WeeklyRecurrencePolicy.oneOff
-        ? (periodStart != null ? CalendarUtils.getWeekStart(periodStart) : CalendarUtils.getWeekStart(now))
-        : null;
+    final effectivePeriodStart =
+        recurrencePolicy == WeeklyRecurrencePolicy.oneOff
+            ? (periodStart != null
+                ? CalendarUtils.getWeekStart(periodStart)
+                : CalendarUtils.getWeekStart(now))
+            : null;
 
     final limit = WeeklyLimit(
       id: _uuid.v4(),
@@ -200,7 +205,8 @@ class WeeklyPlannerProvider extends ChangeNotifier {
     final sync = _sync;
     if (sync != null && sync.isAuthenticated) {
       unawaited(sync.upsertWeeklyLimit(limit).catchError((e) {
-        AppLogger.warn('Failed to sync weekly limit to Firestore: $e', label: 'WeeklyPlanner');
+        AppLogger.warn('Failed to sync weekly limit to Firestore: $e',
+            label: 'WeeklyPlanner');
       }));
     }
 
@@ -217,7 +223,8 @@ class WeeklyPlannerProvider extends ChangeNotifier {
     final sync = _sync;
     if (sync != null && sync.isAuthenticated) {
       unawaited(sync.deleteWeeklyLimit(categoryId).catchError((e) {
-        AppLogger.warn('Failed to delete weekly limit from Firestore: $e', label: 'WeeklyPlanner');
+        AppLogger.warn('Failed to delete weekly limit from Firestore: $e',
+            label: 'WeeklyPlanner');
       }));
     }
 

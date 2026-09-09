@@ -67,7 +67,8 @@ class RecurrenceCalculator {
                 : 1;
         final currentTotalMonths =
             currentOccurrence.year * 12 + (currentOccurrence.month - 1);
-        final targetTotalMonths = currentTotalMonths + (interval * monthMultiplier);
+        final targetTotalMonths =
+            currentTotalMonths + (interval * monthMultiplier);
         final targetYear = targetTotalMonths ~/ 12;
         final targetMonth = (targetTotalMonths % 12) + 1;
         final maxDays = daysInMonth(targetYear, targetMonth);

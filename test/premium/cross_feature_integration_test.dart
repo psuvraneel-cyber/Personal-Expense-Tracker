@@ -68,7 +68,9 @@ void main() {
   });
 
   group('Cross-Feature Synergy: Goals x Focus Mode (Phase D)', () {
-    test('Focus Mode calculates estimated avoided discretionary spending without false claims', () async {
+    test(
+        'Focus Mode calculates estimated avoided discretionary spending without false claims',
+        () async {
       // Setup active goal
       await goalProvider.addGoal(
         name: 'Goa Trip',
@@ -97,11 +99,13 @@ void main() {
       // Accelerating goal contribution projection
       final currentGoal = goalProvider.goals.firstWhere((g) => g.id == goal.id);
       final remainingNeeded = currentGoal.remainingAmount; // 10,000
-      final projectedRemainingAfterAvoided = (remainingNeeded - estimatedAvoidedSpend).clamp(0.0, double.infinity);
+      final projectedRemainingAfterAvoided =
+          (remainingNeeded - estimatedAvoidedSpend).clamp(0.0, double.infinity);
       expect(projectedRemainingAfterAvoided, 8500.0);
 
       // Offer goal top-up user allocation (requires explicit user action, NOT auto-transfer)
-      final topUpResult = await goalProvider.topUpGoal(goal.id, estimatedAvoidedSpend);
+      final topUpResult =
+          await goalProvider.topUpGoal(goal.id, estimatedAvoidedSpend);
       expect(topUpResult.status, TopUpStatus.success);
 
       final updatedGoal = goalProvider.goals.firstWhere((g) => g.id == goal.id);
@@ -110,7 +114,9 @@ void main() {
   });
 
   group('Cross-Feature Synergy: Weekly Planner x Goals (Phase F)', () {
-    test('distinguishes budget surplus from actual cash surplus and offers goal allocation', () async {
+    test(
+        'distinguishes budget surplus from actual cash surplus and offers goal allocation',
+        () async {
       await weeklyProvider.setLimit(
         categoryId: 'cat-dining',
         categoryName: 'Dining',
@@ -140,22 +146,26 @@ void main() {
         name: 'New Monitor',
         targetAmount: 8000,
       );
-      final monitorGoal = goalProvider.goals.firstWhere((g) => g.name == 'New Monitor');
+      final monitorGoal =
+          goalProvider.goals.firstWhere((g) => g.name == 'New Monitor');
 
       // User chooses to contribute half of the planned weekly surplus (₹400)
       final result = await goalProvider.topUpGoal(monitorGoal.id, 400);
       expect(result.status, TopUpStatus.success);
 
-      final updatedMonitor = goalProvider.goals.firstWhere((g) => g.id == monitorGoal.id);
+      final updatedMonitor =
+          goalProvider.goals.firstWhere((g) => g.id == monitorGoal.id);
       expect(updatedMonitor.currentAmount, 400.0);
       expect(goalProvider.totalActiveGoalReserves, 400.0);
     });
   });
 
   group('Multi-Account Isolation & Zero Leakage (Phase 21 & 29)', () {
-    test('User A state is completely wiped and cannot leak to User B on logout', () async {
+    test('User A state is completely wiped and cannot leak to User B on logout',
+        () async {
       // 1. User A sets up financial state
-      await goalProvider.addGoal(name: 'User A Secret Fund', targetAmount: 50000);
+      await goalProvider.addGoal(
+          name: 'User A Secret Fund', targetAmount: 50000);
       await weeklyProvider.setLimit(
         categoryId: 'cat-user-a',
         categoryName: 'User A Category',
@@ -201,7 +211,9 @@ void main() {
   });
 
   group('Logout Race Condition & Stale Snapshot Rejection (Phase 2.1)', () {
-    test('session generation token increments on logout and rejects in-flight snapshots', () async {
+    test(
+        'session generation token increments on logout and rejects in-flight snapshots',
+        () async {
       final syncService = FirestoreSyncService();
 
       // User A signs in
@@ -232,7 +244,9 @@ void main() {
   });
 
   group('Focus Mode Behavioral Aggregation Alerts (Phase 7.4)', () {
-    test('overrides >= 3 triggers actionable alert without spamming on every override', () async {
+    test(
+        'overrides >= 3 triggers actionable alert without spamming on every override',
+        () async {
       await spendPauseProvider.activate(
         until: DateTime.now().add(const Duration(hours: 4)),
         categoryIds: ['cat-shopping'],
@@ -254,7 +268,8 @@ void main() {
 
       final alertsAfterTwo = await alertRepo.getAll();
       expect(
-        alertsAfterTwo.any((a) => a.alertKey?.startsWith('focus_override:cat-shopping') ?? false),
+        alertsAfterTwo.any((a) =>
+            a.alertKey?.startsWith('focus_override:cat-shopping') ?? false),
         isFalse,
       );
 
@@ -281,14 +296,18 @@ void main() {
 
       final alertsAfterFour = await alertRepo.getAll();
       final focusAlerts = alertsAfterFour
-          .where((a) => a.alertKey?.startsWith('focus_override:cat-shopping') ?? false)
+          .where((a) =>
+              a.alertKey?.startsWith('focus_override:cat-shopping') ?? false)
           .toList();
       expect(focusAlerts.length, 1);
     });
   });
 
-  group('AI Copilot & Cashflow Forecast Numerical Consistency (Phase 12.1)', () {
-    test('AI context derives identical safeToSpend and goalReserves as GoalProvider', () {
+  group('AI Copilot & Cashflow Forecast Numerical Consistency (Phase 12.1)',
+      () {
+    test(
+        'AI context derives identical safeToSpend and goalReserves as GoalProvider',
+        () {
       final now = DateTime(2026, 3, 9, 12, 0);
       final txns = [
         TransactionRecord(
@@ -327,7 +346,8 @@ void main() {
       );
 
       // Safe-to-spend headroom must strictly decrease when goal reserves are locked
-      expect(forecastWithGoals.safeToSpend, lessThan(forecastWithoutGoals.safeToSpend));
+      expect(forecastWithGoals.safeToSpend,
+          lessThan(forecastWithoutGoals.safeToSpend));
       expect(
         forecastWithoutGoals.safeToSpend - forecastWithGoals.safeToSpend,
         closeTo(15000.0 / 30.0, 0.01),

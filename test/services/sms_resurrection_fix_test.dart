@@ -153,10 +153,12 @@ void main() {
 
       // Simulate refresh / inbox scan attempting to re-insert the same SMS
       final reinsertAttempt = await repository.insertSmsTransaction(txn);
-      expect(reinsertAttempt, isFalse, reason: 'Re-insertion must be blocked by deleted processing state');
+      expect(reinsertAttempt, isFalse,
+          reason: 'Re-insertion must be blocked by deleted processing state');
 
       final allAfterRefresh = await repository.getAllSmsTransactions();
-      expect(allAfterRefresh, isEmpty, reason: 'Transaction must remain deleted after refresh');
+      expect(allAfterRefresh, isEmpty,
+          reason: 'Transaction must remain deleted after refresh');
     });
 
     test('2. Delete transaction -> Restart app -> Still deleted', () async {
@@ -172,13 +174,15 @@ void main() {
 
       // Attempting to batch insert candidate from inbox scan after restart
       final insertedCount = await restartedRepository.insertBatch([txn]);
-      expect(insertedCount, equals(0), reason: 'Cold start scan must not recreate deleted transaction');
+      expect(insertedCount, equals(0),
+          reason: 'Cold start scan must not recreate deleted transaction');
 
       final txns = await restartedRepository.getAllSmsTransactions();
       expect(txns, isEmpty);
     });
 
-    test('3. Delete transaction -> Background SMS scan -> Still deleted', () async {
+    test('3. Delete transaction -> Background SMS scan -> Still deleted',
+        () async {
       final txn = createSampleTransaction();
       await repository.insertSmsTransaction(txn);
       await repository.deleteSmsTransaction(txn.id);
@@ -199,7 +203,8 @@ void main() {
         return !processedHashes.contains(hash);
       }).toList();
 
-      expect(unparsed, isEmpty, reason: 'Background scanner pre-filter must drop deleted SMS hash');
+      expect(unparsed, isEmpty,
+          reason: 'Background scanner pre-filter must drop deleted SMS hash');
     });
 
     test('4. Not a transaction -> Refresh -> Never returns', () async {
@@ -231,7 +236,8 @@ void main() {
 
       // Simulate manual refresh scan
       final reinsertCount = await repository.insertBatch([uncertainTxn]);
-      expect(reinsertCount, equals(0), reason: 'Ignored transaction must never be re-inserted on refresh');
+      expect(reinsertCount, equals(0),
+          reason: 'Ignored transaction must never be re-inserted on refresh');
 
       await provider.loadTransactions();
       expect(provider.transactions, isEmpty);
@@ -262,7 +268,8 @@ void main() {
       expect(reinsert, isFalse);
     });
 
-    test('6. Duplicate SMS scan -> Already processed hash -> Skipped O(1)', () async {
+    test('6. Duplicate SMS scan -> Already processed hash -> Skipped O(1)',
+        () async {
       final txn = createSampleTransaction();
 
       final firstInsert = await repository.insertSmsTransaction(txn);

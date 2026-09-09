@@ -61,9 +61,8 @@ class TransactionTile extends StatelessWidget {
           color: isDark ? AppTheme.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withAlpha(6)
-                : Colors.black.withAlpha(6),
+            color:
+                isDark ? Colors.white.withAlpha(6) : Colors.black.withAlpha(6),
           ),
           boxShadow: [
             BoxShadow(

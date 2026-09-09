@@ -41,7 +41,9 @@ void main() {
       expect(deserialized.notes, 'Premium 4K plan');
     });
 
-    test('calculates correct annual and monthly equivalent amounts across frequencies', () {
+    test(
+        'calculates correct annual and monthly equivalent amounts across frequencies',
+        () {
       final baseDate = DateTime(2026, 1, 1);
 
       // Monthly ₹500 -> Annual = ₹6,000, Monthly = ₹500
@@ -110,7 +112,8 @@ void main() {
       expect(weekly.monthlyEquivalentAmount, closeTo(4333.33, 0.1));
     });
 
-    test('handles price change detection accurately without false positives', () {
+    test('handles price change detection accurately without false positives',
+        () {
       final now = DateTime.now();
 
       final noChange = RecurringPayment(

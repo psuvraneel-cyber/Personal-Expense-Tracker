@@ -14,11 +14,13 @@ import 'package:pet/screens/transactions/recurring_transactions_screen.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/recurring_transaction_service.dart';
 
-class FakeRecurringTransactionRepository extends RecurringTransactionRepository {
+class FakeRecurringTransactionRepository
+    extends RecurringTransactionRepository {
   final List<RecurringRule> rules = [];
 
   @override
-  Future<List<RecurringRule>> getAllRules({String? userId}) async => List.from(rules);
+  Future<List<RecurringRule>> getAllRules({String? userId}) async =>
+      List.from(rules);
 
   @override
   Future<void> insertRule(RecurringRule rule) async {
@@ -52,7 +54,8 @@ class FakeFirestoreSyncServiceForWidgetTest implements FirestoreSyncService {
   Stream<List<Category>> categoriesStream() => const Stream.empty();
 
   @override
-  Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) => const Stream.empty();
+  Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) =>
+      const Stream.empty();
 
   @override
   Stream<List<Map<String, dynamic>>> tombstonesStream() => const Stream.empty();

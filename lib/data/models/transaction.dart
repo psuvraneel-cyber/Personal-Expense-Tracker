@@ -157,9 +157,8 @@ class TransactionRecord {
       'accountId': accountId,
       'updatedAt': FieldValue.serverTimestamp(),
       'recurringRuleId': recurringRuleId,
-      'occurrenceDate': occurrenceDate != null
-          ? Timestamp.fromDate(occurrenceDate!)
-          : null,
+      'occurrenceDate':
+          occurrenceDate != null ? Timestamp.fromDate(occurrenceDate!) : null,
       'sourceObservationId': sourceObservationId,
       'sourceFingerprint': sourceFingerprint,
     };

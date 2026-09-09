@@ -702,8 +702,7 @@ void main() {
 
       expect(result, isNotNull);
       // Should either extract UPI ID or use it as merchant name
-      final hasUpiOrMerchant =
-          result!.upiId == 'unknownshop@ybl' ||
+      final hasUpiOrMerchant = result!.upiId == 'unknownshop@ybl' ||
           result.merchantName.contains('unknownshop');
       expect(hasUpiOrMerchant, isTrue);
     });

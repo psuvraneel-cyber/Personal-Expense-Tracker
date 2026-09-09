@@ -28,7 +28,8 @@ class RecurringTransactionProvider extends ChangeNotifier {
   StreamSubscription<List<RecurringRule>>? _firestoreSubscription;
 
   List<RecurringRule> get allRules => _rules;
-  List<RecurringRule> get activeRules => _rules.where((r) => r.isActive).toList();
+  List<RecurringRule> get activeRules =>
+      _rules.where((r) => r.isActive).toList();
   bool get isLoading => _isLoading;
 
   bool _disposed = false;
@@ -47,7 +48,8 @@ class RecurringTransactionProvider extends ChangeNotifier {
       }
       await _subscribeToFirestore();
     } catch (e) {
-      AppLogger.error('Failed to load recurring rules', error: e, label: 'RecurringProvider');
+      AppLogger.error('Failed to load recurring rules',
+          error: e, label: 'RecurringProvider');
     } finally {
       if (!_disposed) {
         _isLoading = false;
@@ -82,11 +84,13 @@ class RecurringTransactionProvider extends ChangeNotifier {
             notifyListeners();
           }
         } catch (e) {
-          AppLogger.error('Failed to sync remote rules into SQLite', error: e, label: 'RecurringProvider');
+          AppLogger.error('Failed to sync remote rules into SQLite',
+              error: e, label: 'RecurringProvider');
         }
       },
       onError: (Object e) {
-        AppLogger.error('Recurring rules Firestore stream error', error: e, label: 'RecurringProvider');
+        AppLogger.error('Recurring rules Firestore stream error',
+            error: e, label: 'RecurringProvider');
       },
     );
   }
@@ -102,13 +106,15 @@ class RecurringTransactionProvider extends ChangeNotifier {
       }
       return generated;
     } catch (e) {
-      AppLogger.error('Error during checkAndGenerateDue', error: e, label: 'RecurringProvider');
+      AppLogger.error('Error during checkAndGenerateDue',
+          error: e, label: 'RecurringProvider');
       return [];
     }
   }
 
   /// Creates a new recurring rule and optionally its first transaction occurrence.
-  Future<({RecurringRule rule, TransactionRecord? firstTransaction})> createRule({
+  Future<({RecurringRule rule, TransactionRecord? firstTransaction})>
+      createRule({
     required double amount,
     required TransactionType type,
     required String categoryId,
@@ -124,7 +130,8 @@ class RecurringTransactionProvider extends ChangeNotifier {
     String? accountId,
     bool generateFirstOccurrenceImmediately = true,
   }) async {
-    final userId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
+    final userId =
+        _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
     final result = await _service.createRule(
       amount: amount,
       type: type,
@@ -145,7 +152,8 @@ class RecurringTransactionProvider extends ChangeNotifier {
 
     if (_firestoreSync.isAuthenticated) {
       _firestoreSync.upsertRecurringRule(result.rule).catchError((Object e) {
-        AppLogger.error('Failed to sync new recurring rule to Firestore', error: e, label: 'RecurringProvider');
+        AppLogger.error('Failed to sync new recurring rule to Firestore',
+            error: e, label: 'RecurringProvider');
       });
     }
 
@@ -160,7 +168,8 @@ class RecurringTransactionProvider extends ChangeNotifier {
     final updated = await _repository.getRuleById(ruleId);
     if (updated != null && _firestoreSync.isAuthenticated) {
       _firestoreSync.upsertRecurringRule(updated).catchError((Object e) {
-        AppLogger.error('Failed to sync stopped rule to Firestore', error: e, label: 'RecurringProvider');
+        AppLogger.error('Failed to sync stopped rule to Firestore',
+            error: e, label: 'RecurringProvider');
       });
     }
     _rules = await _repository.getAllRules();
@@ -172,7 +181,8 @@ class RecurringTransactionProvider extends ChangeNotifier {
     await _service.updateRule(rule);
     if (_firestoreSync.isAuthenticated) {
       _firestoreSync.upsertRecurringRule(rule).catchError((Object e) {
-        AppLogger.error('Failed to sync updated rule to Firestore', error: e, label: 'RecurringProvider');
+        AppLogger.error('Failed to sync updated rule to Firestore',
+            error: e, label: 'RecurringProvider');
       });
     }
     _rules = await _repository.getAllRules();
@@ -181,11 +191,13 @@ class RecurringTransactionProvider extends ChangeNotifier {
 
   /// Deletes a rule and all associated transactions.
   Future<void> deleteRuleAndAllOccurrences(String ruleId) async {
-    final userId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
+    final userId =
+        _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
     await _service.deleteRuleAndAllOccurrences(ruleId, userId: userId);
     if (_firestoreSync.isAuthenticated) {
       _firestoreSync.deleteRecurringRule(ruleId).catchError((Object e) {
-        AppLogger.error('Failed to delete rule from Firestore', error: e, label: 'RecurringProvider');
+        AppLogger.error('Failed to delete rule from Firestore',
+            error: e, label: 'RecurringProvider');
       });
     }
     _rules = await _repository.getAllRules();
@@ -201,7 +213,8 @@ class RecurringTransactionProvider extends ChangeNotifier {
     final updated = await _repository.getRuleById(ruleId);
     if (updated != null && _firestoreSync.isAuthenticated) {
       _firestoreSync.upsertRecurringRule(updated).catchError((Object e) {
-        AppLogger.error('Failed to sync rule after skip to Firestore', error: e, label: 'RecurringProvider');
+        AppLogger.error('Failed to sync rule after skip to Firestore',
+            error: e, label: 'RecurringProvider');
       });
     }
     _rules = await _repository.getAllRules();
@@ -214,7 +227,8 @@ class RecurringTransactionProvider extends ChangeNotifier {
     required String ruleId,
     required DateTime scheduledDate,
   }) async {
-    final userId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
+    final userId =
+        _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
     await _service.deleteOccurrenceTransaction(
       transactionId: transactionId,
       ruleId: ruleId,

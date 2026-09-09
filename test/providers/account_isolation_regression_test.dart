@@ -43,7 +43,8 @@ class MockMultiSessionSyncService implements FirestoreSyncService {
 
   @override
   String get currentUserId {
-    if (_uid == null) throw StateError('FirestoreSyncService: user not authenticated');
+    if (_uid == null)
+      throw StateError('FirestoreSyncService: user not authenticated');
     return _uid!;
   }
 
@@ -51,13 +52,16 @@ class MockMultiSessionSyncService implements FirestoreSyncService {
   int get sessionGeneration => _generation;
 
   @override
-  AccountSession get currentSession => AccountSession(uid: _uid, generation: _generation);
+  AccountSession get currentSession =>
+      AccountSession(uid: _uid, generation: _generation);
 
   @override
-  Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) => txController.stream;
+  Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) =>
+      txController.stream;
 
   @override
-  Stream<List<Map<String, dynamic>>> tombstonesStream() => tombController.stream;
+  Stream<List<Map<String, dynamic>>> tombstonesStream() =>
+      tombController.stream;
 
   @override
   Stream<List<Category>> categoriesStream() => catController.stream;
@@ -122,7 +126,9 @@ void main() {
   });
 
   group('Account Isolation Across Providers', () {
-    test('TransactionProvider discards delayed snapshots from superseded session', () async {
+    test(
+        'TransactionProvider discards delayed snapshots from superseded session',
+        () async {
       fakeSync.setSession('user_a', 1);
       final repo = TransactionRepository();
       final provider = TransactionProvider(
@@ -155,7 +161,9 @@ void main() {
       provider.dispose();
     });
 
-    test('CategoryProvider discards delayed custom category snapshot on session switch', () async {
+    test(
+        'CategoryProvider discards delayed custom category snapshot on session switch',
+        () async {
       fakeSync.setSession('user_a', 1);
       final repo = CategoryRepository();
       final provider = CategoryProvider(
@@ -182,12 +190,15 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       // Provider MUST NOT contain User A's custom category
-      expect(provider.categories.any((c) => c.id == 'cat_custom_user_a'), isFalse);
+      expect(
+          provider.categories.any((c) => c.id == 'cat_custom_user_a'), isFalse);
 
       provider.dispose();
     });
 
-    test('GoalProvider drops stale snapshot without throwing StateError on logout', () async {
+    test(
+        'GoalProvider drops stale snapshot without throwing StateError on logout',
+        () async {
       fakeSync.setSession('user_a', 1);
       final repo = SavingGoalRepository();
       final provider = GoalProvider(

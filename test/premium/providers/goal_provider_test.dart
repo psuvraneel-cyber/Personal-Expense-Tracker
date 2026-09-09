@@ -73,7 +73,9 @@ void main() {
       expect(topUpEntry.amount, 20000.0);
     });
 
-    test('overshoot top-up without allowOverfunding returns exceedsTarget status and does not inflate goal', () async {
+    test(
+        'overshoot top-up without allowOverfunding returns exceedsTarget status and does not inflate goal',
+        () async {
       await provider.addGoal(
         name: 'Goa Trip',
         targetAmount: 10000,
@@ -94,7 +96,9 @@ void main() {
       expect(updated.currentAmount, 8000.0);
     });
 
-    test('overshoot top-up with intentional allowOverfunding succeeds but reserves remain capped at target', () async {
+    test(
+        'overshoot top-up with intentional allowOverfunding succeeds but reserves remain capped at target',
+        () async {
       await provider.addGoal(
         name: 'Goa Trip',
         targetAmount: 10000,
@@ -120,8 +124,10 @@ void main() {
       await provider.addGoal(name: 'Watch', targetAmount: 5000);
       final goal = provider.goals.first;
 
-      expect((await provider.topUpGoal(goal.id, 0)).status, TopUpStatus.invalidAmount);
-      expect((await provider.topUpGoal(goal.id, -100)).status, TopUpStatus.invalidAmount);
+      expect((await provider.topUpGoal(goal.id, 0)).status,
+          TopUpStatus.invalidAmount);
+      expect((await provider.topUpGoal(goal.id, -100)).status,
+          TopUpStatus.invalidAmount);
     });
 
     test('top-up on paused goal returns goalPaused', () async {
@@ -135,7 +141,9 @@ void main() {
   });
 
   group('GoalProvider Reserve Calculations (Phase A3)', () {
-    test('totalActiveGoalReserves excludes paused goals and clamps overfunded goals', () async {
+    test(
+        'totalActiveGoalReserves excludes paused goals and clamps overfunded goals',
+        () async {
       // Goal 1: Active, 5,000 of 10,000
       await provider.addGoal(name: 'Goal 1', targetAmount: 10000);
       final g1 = provider.goals.first;
@@ -158,7 +166,8 @@ void main() {
   });
 
   group('GoalProvider Offline Survival & LWW Reconciliation', () {
-    test('offline local goals are preserved when absent from remote snapshot', () async {
+    test('offline local goals are preserved when absent from remote snapshot',
+        () async {
       // Seed a local goal from 1 hour ago
       final offlineGoal = SavingGoal(
         id: 'offline-created-goal',
@@ -179,7 +188,8 @@ void main() {
       expect(await repository.getById('offline-created-goal'), isNotNull);
     });
 
-    test('LWW preserves newer local modifications over older remote snapshots', () async {
+    test('LWW preserves newer local modifications over older remote snapshots',
+        () async {
       final now = DateTime.now();
       final localGoal = SavingGoal(
         id: 'lww-goal',
@@ -210,7 +220,9 @@ void main() {
   });
 
   group('GoalProvider Goal Editing & Nullable Clearing', () {
-    test('editGoal updates properties and explicitly clears nullable targetDate and emoji', () async {
+    test(
+        'editGoal updates properties and explicitly clears nullable targetDate and emoji',
+        () async {
       final initialDate = DateTime(2026, 12, 31);
       await provider.addGoal(
         name: 'Initial Goal',
@@ -276,7 +288,9 @@ void main() {
       expect(withdrawalEntry.note, 'Semester fees');
     });
 
-    test('withdrawFromGoal with amount exceeding currentAmount throws ArgumentError', () async {
+    test(
+        'withdrawFromGoal with amount exceeding currentAmount throws ArgumentError',
+        () async {
       await provider.addGoal(name: 'Short Term', targetAmount: 5000);
       final goal = provider.goals.first;
       await provider.topUpGoal(goal.id, 1000);

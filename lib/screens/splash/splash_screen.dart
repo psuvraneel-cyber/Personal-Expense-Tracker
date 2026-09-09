@@ -158,10 +158,10 @@ class _SplashScreenState extends State<SplashScreen>
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _textController, curve: Curves.easeIn));
-    _textSlide = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-        .animate(
-          CurvedAnimation(parent: _textController, curve: Curves.easeOutCubic),
-        );
+    _textSlide =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+      CurvedAnimation(parent: _textController, curve: Curves.easeOutCubic),
+    );
     _subtitleOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _textController,
@@ -308,20 +308,20 @@ class _SplashScreenState extends State<SplashScreen>
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
               OnboardingScreen(
-                onComplete: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => HomeScreen(
-                        onThemeToggle: widget.onThemeToggle,
-                        isDarkMode: widget.isDarkMode,
-                        onThemeModeChanged: widget.onThemeModeChanged,
-                        themeMode: widget.themeMode,
-                        showDeletionImmediately: showDeletionImmediately,
-                      ),
-                    ),
-                  );
-                },
-              ),
+            onComplete: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => HomeScreen(
+                    onThemeToggle: widget.onThemeToggle,
+                    isDarkMode: widget.isDarkMode,
+                    onThemeModeChanged: widget.onThemeModeChanged,
+                    themeMode: widget.themeMode,
+                    showDeletionImmediately: showDeletionImmediately,
+                  ),
+                ),
+              );
+            },
+          ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -824,8 +824,7 @@ class _ParticlesPainter extends CustomPainter {
     for (final p in particles) {
       final dx =
           p.x * size.width + sin(progress * 2 * pi * p.speed + p.phase) * 20;
-      final dy =
-          p.y * size.height +
+      final dy = p.y * size.height +
           cos(progress * 2 * pi * p.speed * 0.7 + p.phase) * 15;
       canvas.drawCircle(
         Offset(dx, dy),
@@ -1168,7 +1167,8 @@ class _DashboardIllustrationPainter extends CustomPainter {
             const Color(0xFF8B5CF6),
             const Color(0xFF14B8A6),
             i / (barData.length - 1),
-          )!.withValues(alpha: 0.3),
+          )!
+              .withValues(alpha: 0.3),
         ],
       );
 

@@ -166,7 +166,8 @@ class SmsTransactionParser {
       // Check if this is a balance-only informational message
       final balResult = AmountExtractor.extract(normalizedBody);
       if (balResult.balanceAfter != null) {
-        allReasons.add('Balance-only observation detected (₹${balResult.balanceAfter})');
+        allReasons.add(
+            'Balance-only observation detected (₹${balResult.balanceAfter})');
         final entities = EntityExtractor.extractAll(
           normalizedBody,
           sender,
@@ -197,7 +198,8 @@ class SmsTransactionParser {
 
     if (amountResult.amount == null) {
       if (amountResult.balanceAfter != null) {
-        allReasons.add('Balance-only observation detected despite intent (₹${amountResult.balanceAfter})');
+        allReasons.add(
+            'Balance-only observation detected despite intent (₹${amountResult.balanceAfter})');
         final entities = EntityExtractor.extractAll(
           normalizedBody,
           sender,

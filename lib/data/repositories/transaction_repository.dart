@@ -261,17 +261,20 @@ class TransactionRepository {
     String userId,
   ) async {
     final db = await _dbHelper.database;
-    await db.insert('transaction_sync_queue', {
-      'id': id,
-      'transactionId': transactionId,
-      'action': action,
-      'payload': payload,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'userId': userId,
-      'retryCount': 0,
-      'lastAttemptAt': 0,
-      'lastError': null,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+        'transaction_sync_queue',
+        {
+          'id': id,
+          'transactionId': transactionId,
+          'action': action,
+          'payload': payload,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'userId': userId,
+          'retryCount': 0,
+          'lastAttemptAt': 0,
+          'lastError': null,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Map<String, dynamic>>> getPendingSyncActions(

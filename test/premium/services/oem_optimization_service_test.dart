@@ -18,7 +18,8 @@ void main() {
   });
 
   group('OemOptimizationService', () {
-    test('isManufacturerAggressive detects aggressive OEM brands correctly', () {
+    test('isManufacturerAggressive detects aggressive OEM brands correctly',
+        () {
       expect(OemOptimizationService.isManufacturerAggressive('Xiaomi'), isTrue);
       expect(OemOptimizationService.isManufacturerAggressive('Redmi'), isTrue);
       expect(OemOptimizationService.isManufacturerAggressive('POCO'), isTrue);
@@ -26,12 +27,15 @@ void main() {
       expect(OemOptimizationService.isManufacturerAggressive('Realme'), isTrue);
       expect(OemOptimizationService.isManufacturerAggressive('Vivo'), isTrue);
       expect(OemOptimizationService.isManufacturerAggressive('iQOO'), isTrue);
-      expect(OemOptimizationService.isManufacturerAggressive('Samsung'), isTrue);
+      expect(
+          OemOptimizationService.isManufacturerAggressive('Samsung'), isTrue);
       expect(OemOptimizationService.isManufacturerAggressive('Huawei'), isTrue);
       expect(OemOptimizationService.isManufacturerAggressive('Honor'), isTrue);
 
-      expect(OemOptimizationService.isManufacturerAggressive('Google'), isFalse);
-      expect(OemOptimizationService.isManufacturerAggressive('Motorola'), isFalse);
+      expect(
+          OemOptimizationService.isManufacturerAggressive('Google'), isFalse);
+      expect(
+          OemOptimizationService.isManufacturerAggressive('Motorola'), isFalse);
       expect(OemOptimizationService.isManufacturerAggressive('Nokia'), isFalse);
     });
 
@@ -41,7 +45,8 @@ void main() {
       expect(packageName, equals('com.pet.tracker.pet'));
     });
 
-    test('hasPromptBeenShown defaults to false and persists when marked shown', () async {
+    test('hasPromptBeenShown defaults to false and persists when marked shown',
+        () async {
       final service = OemOptimizationService.instance;
 
       expect(await service.hasPromptBeenShown(), isFalse);

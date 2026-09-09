@@ -24,7 +24,8 @@ import 'package:uuid/uuid.dart';
 /// into canonical [FinancialObservation]s and promotes confirmed transactions
 /// directly into the primary ledger (`transactions` table).
 class FinancialIngestionService {
-  static final FinancialIngestionService _instance = FinancialIngestionService._internal();
+  static final FinancialIngestionService _instance =
+      FinancialIngestionService._internal();
   factory FinancialIngestionService({DatabaseHelper? dbHelper}) {
     if (dbHelper != null) {
       _instance._dbHelper = dbHelper;
@@ -41,7 +42,8 @@ class FinancialIngestionService {
   final LinkedAccountRepository _accountRepository = LinkedAccountRepository();
   final IngestionDiagnostics _diagnostics = IngestionDiagnostics.instance;
   final MerchantRuleService _merchantRuleService = MerchantRuleService();
-  final RecurringPaymentRepository _recurringRepository = RecurringPaymentRepository();
+  final RecurringPaymentRepository _recurringRepository =
+      RecurringPaymentRepository();
   static const Uuid _uuid = Uuid();
 
   bool _isNotificationCallbackRegistered = false;
@@ -111,7 +113,8 @@ class FinancialIngestionService {
     );
     if (existingObs.isNotEmpty) {
       _diagnostics.recordDuplicate();
-      AppLogger.debug('[IngestionService] Observation already recorded (hash=$observationHash)');
+      AppLogger.debug(
+          '[IngestionService] Observation already recorded (hash=$observationHash)');
       return null;
     }
 
@@ -125,7 +128,8 @@ class FinancialIngestionService {
     if (stateRows.isNotEmpty) {
       final status = stateRows.first['status'] as String?;
       if (status == 'rejected' || status == 'deleted' || status == 'ignored') {
-        AppLogger.debug('[IngestionService] Message tombstoned as $status. Skipping resurrection.');
+        AppLogger.debug(
+            '[IngestionService] Message tombstoned as $status. Skipping resurrection.');
         return null;
       }
     }
@@ -184,7 +188,8 @@ class FinancialIngestionService {
       );
 
       if (classified.billAmountDue != null && classified.billAmountDue! > 0) {
-        final dueDate = classified.billDueDate ?? timestamp.add(const Duration(days: 15));
+        final dueDate =
+            classified.billDueDate ?? timestamp.add(const Duration(days: 15));
         final billItem = RecurringPayment(
           id: 'bill_$observationId',
           merchantName: classified.merchantName,
@@ -318,7 +323,8 @@ class FinancialIngestionService {
         transactionId: matchedTxnId,
       );
 
-      AppLogger.debug('[IngestionService] Duplicate event collapsed (matched txnId=$matchedTxnId)');
+      AppLogger.debug(
+          '[IngestionService] Duplicate event collapsed (matched txnId=$matchedTxnId)');
 
       await _recordObservation(
         db,
@@ -372,12 +378,14 @@ class FinancialIngestionService {
 
     // Evidence-based high-confidence determination (P2.2)
     final hasHighEvidence = (amount > 0) &&
-        (classified.transactionType == 'debit' || classified.transactionType == 'credit') &&
+        (classified.transactionType == 'debit' ||
+            classified.transactionType == 'credit') &&
         (merchant != 'Unknown') &&
         (bank != 'Unknown Bank') &&
         (confidence >= 0.40);
 
-    final isAutoAccept = (confidence >= autoAcceptConfidenceThreshold) || hasHighEvidence;
+    final isAutoAccept =
+        (confidence >= autoAcceptConfidenceThreshold) || hasHighEvidence;
 
     if (confidence < reviewConfidenceThreshold) {
       // Low confidence -> Reject
@@ -427,7 +435,8 @@ class FinancialIngestionService {
         reason: 'moderate_confidence',
       );
 
-      AppLogger.debug('[IngestionService] Holding observation in review queue (confidence=$confidence)');
+      AppLogger.debug(
+          '[IngestionService] Holding observation in review queue (confidence=$confidence)');
       await _recordObservation(
         db,
         FinancialObservation(
@@ -548,7 +557,9 @@ class FinancialIngestionService {
         referenceId: refId,
         upiId: upiId,
         confidence: confidence,
-        source: source == FinancialObservationSource.notification ? 'notification' : 'sms',
+        source: source == FinancialObservationSource.notification
+            ? 'notification'
+            : 'sms',
       );
       await txn.insert(
         'sms_transactions',
@@ -600,7 +611,9 @@ class FinancialIngestionService {
           }
           processedCount++;
         } catch (e) {
-          AppLogger.error('[IngestionService] Error ingesting single notification', error: e);
+          AppLogger.error(
+              '[IngestionService] Error ingesting single notification',
+              error: e);
           // Still increment count so a poison pill notification does not loop indefinitely
           processedCount++;
         }
@@ -616,7 +629,9 @@ class FinancialIngestionService {
 
       return promotedTransactions;
     } catch (e) {
-      AppLogger.error('[IngestionService] Error processing pending notifications', error: e);
+      AppLogger.error(
+          '[IngestionService] Error processing pending notifications',
+          error: e);
       return [];
     }
   }
@@ -647,7 +662,8 @@ class FinancialIngestionService {
           whereArgs: [key],
           limit: 1,
         );
-        final currentVal = existing.isNotEmpty ? (existing.first['value'] as int) : 0;
+        final currentVal =
+            existing.isNotEmpty ? (existing.first['value'] as int) : 0;
         if (watermarkTimestamp > currentVal) {
           await db.insert(
             'system_watermarks',
@@ -704,9 +720,12 @@ class FinancialIngestionService {
     );
 
     final finalAmount = overrideAmount ?? classified?.amount ?? 0.0;
-    final finalMerchant = overrideMerchant ?? classified?.merchantName ?? 'Unknown';
+    final finalMerchant =
+        overrideMerchant ?? classified?.merchantName ?? 'Unknown';
     final finalType = overrideType ??
-        (classified?.transactionType == 'credit' ? TransactionType.income : TransactionType.expense);
+        (classified?.transactionType == 'credit'
+            ? TransactionType.income
+            : TransactionType.expense);
     final finalCategoryId = overrideCategoryId ??
         CategoryMapper.mapToCategoryId(
           parserCategory: classified?.category,

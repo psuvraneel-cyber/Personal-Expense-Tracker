@@ -35,7 +35,8 @@ class SpendPauseProvider extends ChangeNotifier {
   Duration get remainingTime => _pause.remainingDuration;
   List<String> get blockedCategoryIds => _pause.blockedCategoryIds;
   int get sessionOverrideCount => _sessionOverrideCount;
-  Map<String, int> get categoryOverrides => Map.unmodifiable(_categoryOverrides);
+  Map<String, int> get categoryOverrides =>
+      Map.unmodifiable(_categoryOverrides);
 
   bool isCategoryBlocked(String categoryId) =>
       _pause.isCategoryBlocked(categoryId);
@@ -76,7 +77,8 @@ class SpendPauseProvider extends ChangeNotifier {
     required List<String> categoryIds,
   }) async {
     if (categoryIds.isEmpty) {
-      throw ArgumentError('Cannot activate Focus Mode with zero blocked categories');
+      throw ArgumentError(
+          'Cannot activate Focus Mode with zero blocked categories');
     }
 
     _pause = SpendPause(

@@ -190,9 +190,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: isDark
-                    ? AppTheme.textPrimary
-                    : AppTheme.textPrimaryLight,
+                color:
+                    isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
               ),
             ),
             const SizedBox(height: 10),
@@ -261,9 +260,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
             'Looking for bank transaction messages',
             style: TextStyle(
               fontSize: 14,
-              color: isDark
-                  ? AppTheme.textSecondary
-                  : AppTheme.textSecondaryLight,
+              color:
+                  isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
             ),
           ),
         ],
@@ -281,9 +279,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
             Icon(
               Icons.sms_failed_outlined,
               size: 64,
-              color: isDark
-                  ? AppTheme.textTertiary
-                  : AppTheme.textSecondaryLight,
+              color:
+                  isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
             ),
             const SizedBox(height: 20),
             Text(
@@ -291,9 +288,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: isDark
-                    ? AppTheme.textPrimary
-                    : AppTheme.textPrimaryLight,
+                color:
+                    isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
               ),
             ),
             const SizedBox(height: 8),
@@ -330,9 +326,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    backgroundColor: count > 0
-                        ? AppTheme.incomeGreen
-                        : AppTheme.expenseRed,
+                    backgroundColor:
+                        count > 0 ? AppTheme.incomeGreen : AppTheme.expenseRed,
                   ),
                 );
               },
@@ -368,9 +363,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    backgroundColor: count > 0
-                        ? AppTheme.incomeGreen
-                        : AppTheme.expenseRed,
+                    backgroundColor:
+                        count > 0 ? AppTheme.incomeGreen : AppTheme.expenseRed,
                   ),
                 );
               },
@@ -798,9 +792,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: isDark
-                  ? AppTheme.textTertiary
-                  : AppTheme.textSecondaryLight,
+              color:
+                  isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
             ),
           ),
         ],
@@ -1314,9 +1307,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
                     title: Text(
                       cat,
                       style: TextStyle(
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w400,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w400,
                         color: isSelected ? AppTheme.accentPurple : null,
                       ),
                     ),
@@ -1431,9 +1423,8 @@ class _DetailRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isDark
-                    ? AppTheme.textPrimary
-                    : AppTheme.textPrimaryLight,
+                color:
+                    isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
               ),
             ),
           ),
@@ -1468,15 +1459,15 @@ class _FilterChip extends StatelessWidget {
           color: isSelected
               ? (color ?? AppTheme.accentPurple)
               : (isDark
-                    ? Colors.white.withAlpha(8)
-                    : Colors.black.withAlpha(8)),
+                  ? Colors.white.withAlpha(8)
+                  : Colors.black.withAlpha(8)),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
                 ? (color ?? AppTheme.accentPurple)
                 : (isDark
-                      ? Colors.white.withAlpha(12)
-                      : Colors.black.withAlpha(12)),
+                    ? Colors.white.withAlpha(12)
+                    : Colors.black.withAlpha(12)),
           ),
         ),
         child: Text(

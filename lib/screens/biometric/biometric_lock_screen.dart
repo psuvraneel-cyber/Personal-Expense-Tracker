@@ -334,11 +334,10 @@ class _BiometricLockScreenState extends State<BiometricLockScreen>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color:
-                              (hasError
-                                      ? const Color(0xFFFF4757)
-                                      : const Color(0xFF8B5CF6))
-                                  .withAlpha((opacity * 255).toInt()),
+                          color: (hasError
+                                  ? const Color(0xFFFF4757)
+                                  : const Color(0xFF8B5CF6))
+                              .withAlpha((opacity * 255).toInt()),
                           width: 1.5,
                         ),
                       ),
@@ -571,9 +570,8 @@ class _ParticlePainter extends CustomPainter {
       // Pulsing alpha
       final alpha = (sin(t * 2 * pi) * 0.5 + 0.5) * 0.6;
 
-      final baseColor = p.isPurple
-          ? const Color(0xFF8B5CF6)
-          : const Color(0xFF14B8A6);
+      final baseColor =
+          p.isPurple ? const Color(0xFF8B5CF6) : const Color(0xFF14B8A6);
 
       final paint = Paint()
         ..color = baseColor.withAlpha((alpha * 255).toInt())

@@ -119,7 +119,8 @@ class MerchantRuleService {
     final cleanIdentifier = identifier.toLowerCase().trim();
 
     // Check if existing rule for this identifier
-    final existing = await matchRule(upiId: cleanIdentifier, rawMerchant: cleanIdentifier);
+    final existing =
+        await matchRule(upiId: cleanIdentifier, rawMerchant: cleanIdentifier);
     final rule = MerchantLearnedRule(
       id: existing?.id ?? _uuid.v4(),
       identifier: cleanIdentifier,

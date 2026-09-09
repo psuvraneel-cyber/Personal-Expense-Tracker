@@ -80,7 +80,8 @@ void main() {
 
     repository = AlertRepository(database: testDb);
     coordinator = AlertEvaluationCoordinator(repository: repository);
-    alertProvider = AlertProvider(repository: repository, coordinator: coordinator);
+    alertProvider =
+        AlertProvider(repository: repository, coordinator: coordinator);
     coordinator.attachProvider(alertProvider);
 
     categoryProvider = CategoryProvider();
@@ -101,7 +102,8 @@ void main() {
   Widget createWidgetUnderTest() {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<PremiumProvider>(create: (_) => FakePremiumProvider()),
+        ChangeNotifierProvider<PremiumProvider>(
+            create: (_) => FakePremiumProvider()),
         ChangeNotifierProvider<AlertProvider>.value(value: alertProvider),
         ChangeNotifierProvider<CategoryProvider>.value(value: categoryProvider),
       ],
@@ -112,23 +114,29 @@ void main() {
   }
 
   group('AlertsScreen UI & Interaction Tests', () {
-    testWidgets('renders empty state with all-clear banner when no alerts exist', (tester) async {
+    testWidgets(
+        'renders empty state with all-clear banner when no alerts exist',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.runAsync(() => alertProvider.load());
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+      await tester
+          .runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
       await tester.pump();
 
       expect(find.text('Alerts Centre'), findsOneWidget);
       expect(find.text('All caught up!'), findsOneWidget);
       expect(find.text('No Alerts'), findsOneWidget);
-      expect(find.text('No active anomalies or budget overruns detected.'), findsOneWidget);
+      expect(find.text('No active anomalies or budget overruns detected.'),
+          findsOneWidget);
     });
 
-    testWidgets('renders alert cards with badges, category details, progress bars, and action buttons', (tester) async {
+    testWidgets(
+        'renders alert cards with badges, category details, progress bars, and action buttons',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -158,7 +166,8 @@ void main() {
         stage: AppAlertStage.critical,
         severity: AlertSeverity.critical,
         title: 'Spending spike in Shopping',
-        message: 'This category is 3.0x higher than your usual monthly baseline.',
+        message:
+            'This category is 3.0x higher than your usual monthly baseline.',
         categoryId: 'cat_shopping',
         amount: 300,
         targetAmount: 100,
@@ -175,7 +184,8 @@ void main() {
       });
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+      await tester
+          .runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
       await tester.pump();
 
       // Verify header summary banner
@@ -234,21 +244,24 @@ void main() {
       });
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+      await tester
+          .runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
       await tester.pump();
 
       expect(find.text('Food budget warning'), findsOneWidget);
       expect(find.text('Spike in Shopping'), findsOneWidget);
 
       // Filter by Budgets
-      await tester.runAsync(() => alertProvider.setFilterType(AppAlertType.budget));
+      await tester
+          .runAsync(() => alertProvider.setFilterType(AppAlertType.budget));
       await tester.pump();
 
       expect(find.text('Food budget warning'), findsOneWidget);
       expect(find.text('Spike in Shopping'), findsNothing);
 
       // Filter by Anomalies
-      await tester.runAsync(() => alertProvider.setFilterType(AppAlertType.anomaly));
+      await tester
+          .runAsync(() => alertProvider.setFilterType(AppAlertType.anomaly));
       await tester.pump();
 
       expect(find.text('Food budget warning'), findsNothing);
@@ -262,7 +275,8 @@ void main() {
       expect(find.text('Spike in Shopping'), findsOneWidget);
     });
 
-    testWidgets('swiping to dismiss removes alert and allows undo', (tester) async {
+    testWidgets('swiping to dismiss removes alert and allows undo',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -284,7 +298,8 @@ void main() {
       });
 
       await tester.pumpWidget(createWidgetUnderTest());
-      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+      await tester
+          .runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
       await tester.pump();
 
       expect(find.text('Dismissible Alert'), findsOneWidget);

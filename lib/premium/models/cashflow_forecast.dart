@@ -194,6 +194,7 @@ class CashflowPoint {
 
   bool get isSalaryDeposit => incomeAmount > 0;
   bool get isRecurringBillDue => billsAmount > 0;
-  String? get eventTitle =>
-      billNames.isNotEmpty ? billNames.join(', ') : (incomeAmount > 0 ? 'Expected Income' : null);
+  String? get eventTitle => billNames.isNotEmpty
+      ? billNames.join(', ')
+      : (incomeAmount > 0 ? 'Expected Income' : null);
 }

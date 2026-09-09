@@ -407,7 +407,8 @@ void main() {
       final alert = alerts.first;
       expect(alert.type, equals(AppAlertType.duplicateTransaction));
       expect(alert.alertKey, equals('dup_txn:dup_1_dup_2'));
-      expect(alert.message, contains('Two payments of ₹500 were recorded within 8 minutes'));
+      expect(alert.message,
+          contains('Two payments of ₹500 were recorded within 8 minutes'));
     });
 
     test('ignores duplicate amounts if separated by more than 15 mins', () {

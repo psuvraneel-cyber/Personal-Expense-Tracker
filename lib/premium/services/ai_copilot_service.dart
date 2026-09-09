@@ -217,7 +217,8 @@ class AiCopilotService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  Future<String> _callApi(List<Map<String, String>> messages, {bool forceRefresh = false}) async {
+  Future<String> _callApi(List<Map<String, String>> messages,
+      {bool forceRefresh = false}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw Exception('Login required to use the AI Copilot.');
@@ -256,7 +257,8 @@ class AiCopilotService {
           }
         }
       } catch (_) {}
-      throw AuthErrorException(response.statusCode, errMsg, errorCode: errorCode);
+      throw AuthErrorException(response.statusCode, errMsg,
+          errorCode: errorCode);
     }
 
     if (response.statusCode >= 400 && response.statusCode < 500) {
@@ -303,10 +305,9 @@ class AiCopilotService {
 
     if (ctx.categorySpending.isNotEmpty) {
       // Send only top 5 categories to save tokens
-      final top5 =
-          (ctx.categorySpending.entries.toList()
-                ..sort((a, b) => b.value.compareTo(a.value)))
-              .take(5);
+      final top5 = (ctx.categorySpending.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value)))
+          .take(5);
       buf.writeln('\nTop spending categories:');
       for (final e in top5) {
         buf.writeln('  • ${e.key}: ₹${_fmt(e.value)}');
@@ -341,11 +342,13 @@ class AiCopilotService {
         buf.writeln('Safe-to-spend allowance: ₹${_fmt(ctx.safeToSpend!)}/day');
       }
       if (ctx.projectedEndingBalance != null) {
-        buf.writeln('Projected 30-day ending balance: ₹${_fmt(ctx.projectedEndingBalance!)}');
+        buf.writeln(
+            'Projected 30-day ending balance: ₹${_fmt(ctx.projectedEndingBalance!)}');
       }
       if (ctx.cashflowRunwayDays != null) {
         if (ctx.isCashflowPositive == true) {
-          buf.writeln('Runway: Cashflow positive (+₹${_fmt(ctx.monthlyNetCashflow ?? 0)}/mo surplus)');
+          buf.writeln(
+              'Runway: Cashflow positive (+₹${_fmt(ctx.monthlyNetCashflow ?? 0)}/mo surplus)');
         } else {
           buf.writeln('Runway: ~${ctx.cashflowRunwayDays} days of liquidity');
         }
@@ -354,10 +357,13 @@ class AiCopilotService {
         final dateStr = ctx.lowestProjectedDate != null
             ? ' on ${ctx.lowestProjectedDate!.day}/${ctx.lowestProjectedDate!.month}'
             : '';
-        buf.writeln('Lowest projected trough: ₹${_fmt(ctx.lowestProjectedBalance!)}$dateStr');
+        buf.writeln(
+            'Lowest projected trough: ₹${_fmt(ctx.lowestProjectedBalance!)}$dateStr');
       }
-      if (ctx.upcomingBillsNext14Days != null && ctx.upcomingBillsNext14Days! > 0) {
-        buf.writeln('Upcoming confirmed bills (next 14 days): ₹${_fmt(ctx.upcomingBillsNext14Days!)}');
+      if (ctx.upcomingBillsNext14Days != null &&
+          ctx.upcomingBillsNext14Days! > 0) {
+        buf.writeln(
+            'Upcoming confirmed bills (next 14 days): ₹${_fmt(ctx.upcomingBillsNext14Days!)}');
       }
       if (ctx.cashflowRiskLevel != null) {
         buf.writeln('Forecast risk status: ${ctx.cashflowRiskLevel}');
@@ -365,14 +371,18 @@ class AiCopilotService {
       if (ctx.forecastConfidence != null) {
         buf.writeln('Forecast confidence: ${ctx.forecastConfidence}');
       }
-      buf.writeln('Note: Forecasts are estimates based on recent activity, not guarantees or formal financial advice.');
+      buf.writeln(
+          'Note: Forecasts are estimates based on recent activity, not guarantees or formal financial advice.');
     }
 
     if (ctx.isFocusModeActive == true) {
       buf.writeln('\n--- FOCUS MODE (SPEND PAUSE) ---');
-      buf.writeln('Status: ACTIVE (${ctx.focusModeBlockedCount ?? 0} discretionary categories paused)');
-      if (ctx.focusModeBlockedCategories != null && ctx.focusModeBlockedCategories!.isNotEmpty) {
-        buf.writeln('Paused categories: ${ctx.focusModeBlockedCategories!.join(', ')}');
+      buf.writeln(
+          'Status: ACTIVE (${ctx.focusModeBlockedCount ?? 0} discretionary categories paused)');
+      if (ctx.focusModeBlockedCategories != null &&
+          ctx.focusModeBlockedCategories!.isNotEmpty) {
+        buf.writeln(
+            'Paused categories: ${ctx.focusModeBlockedCategories!.join(', ')}');
       }
     }
 
@@ -383,7 +393,8 @@ class AiCopilotService {
         final limit = (w['limit'] as num?)?.toDouble() ?? 0.0;
         final spent = (w['spent'] as num?)?.toDouble() ?? 0.0;
         final isOver = w['isOver'] as bool? ?? false;
-        buf.writeln('  • $cat: ₹${_fmt(spent)} / ₹${_fmt(limit)} (this week)${isOver ? ' [OVER LIMIT]' : ''}');
+        buf.writeln(
+            '  • $cat: ₹${_fmt(spent)} / ₹${_fmt(limit)} (this week)${isOver ? ' [OVER LIMIT]' : ''}');
       }
     }
 

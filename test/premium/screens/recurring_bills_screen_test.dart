@@ -120,9 +120,12 @@ void main() {
   Widget createWidgetUnderTest(RecurringProvider recurringProvider) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<PremiumProvider>(create: (_) => FakePremiumProvider()),
-        ChangeNotifierProvider<RecurringProvider>.value(value: recurringProvider),
-        ChangeNotifierProvider<CategoryProvider>(create: (_) => CategoryProvider()),
+        ChangeNotifierProvider<PremiumProvider>(
+            create: (_) => FakePremiumProvider()),
+        ChangeNotifierProvider<RecurringProvider>.value(
+            value: recurringProvider),
+        ChangeNotifierProvider<CategoryProvider>(
+            create: (_) => CategoryProvider()),
       ],
       child: const MaterialApp(
         home: RecurringBillsScreen(),
@@ -142,7 +145,9 @@ void main() {
       expect(find.text('Add Bill'), findsOneWidget);
     });
 
-    testWidgets('renders summary banner, detected candidate, and confirmed list', (tester) async {
+    testWidgets(
+        'renders summary banner, detected candidate, and confirmed list',
+        (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -157,7 +162,8 @@ void main() {
           'merchantName': 'Netflix',
           'amount': 249.0,
           'frequency': 'monthly',
-          'lastPaidAt': now.subtract(const Duration(days: 15)).toIso8601String(),
+          'lastPaidAt':
+              now.subtract(const Duration(days: 15)).toIso8601String(),
           'nextDueAt': now.add(const Duration(days: 15)).toIso8601String(),
           'categoryId': 'entertainment',
           'status': 'confirmed',
@@ -171,7 +177,8 @@ void main() {
           'merchantName': 'Spotify',
           'amount': 149.0,
           'frequency': 'monthly',
-          'lastPaidAt': now.subtract(const Duration(days: 30)).toIso8601String(),
+          'lastPaidAt':
+              now.subtract(const Duration(days: 30)).toIso8601String(),
           'nextDueAt': now.toIso8601String(),
           'categoryId': 'other',
           'status': 'detected',
@@ -203,7 +210,9 @@ void main() {
       expect(find.text('Cancelled (0)'), findsOneWidget);
     });
 
-    testWidgets('shows detected candidate and displays confidence & candidate badge', (tester) async {
+    testWidgets(
+        'shows detected candidate and displays confidence & candidate badge',
+        (tester) async {
       final now = DateTime.now();
       final provider = RecurringProvider();
 
@@ -213,7 +222,8 @@ void main() {
           'merchantName': 'Cult Gym',
           'amount': 1200.0,
           'frequency': 'monthly',
-          'lastPaidAt': now.subtract(const Duration(days: 30)).toIso8601String(),
+          'lastPaidAt':
+              now.subtract(const Duration(days: 30)).toIso8601String(),
           'nextDueAt': now.toIso8601String(),
           'categoryId': 'other',
           'status': 'detected',
@@ -242,7 +252,8 @@ void main() {
           'merchantName': 'Airtel Broadband',
           'amount': 999.0,
           'frequency': 'monthly',
-          'lastPaidAt': now.subtract(const Duration(days: 30)).toIso8601String(),
+          'lastPaidAt':
+              now.subtract(const Duration(days: 30)).toIso8601String(),
           'nextDueAt': now.toIso8601String(),
           'categoryId': 'utilities',
           'status': 'confirmed',

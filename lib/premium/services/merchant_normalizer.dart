@@ -13,13 +13,17 @@ class MerchantNormalizer {
     // ── Food Delivery & Dining ───────────────────────────────────────
     RegExp(r'\bswiggy\b', caseSensitive: false): 'Swiggy',
     RegExp(r'\bzomato\b', caseSensitive: false): 'Zomato',
-    RegExp(r'\beatclub\b|\bbox8\b|\bmojo pizza\b', caseSensitive: false): 'EatClub',
-    RegExp(r"\bdomino'?s(?:\s*pizza)?\b|\bjubilant\b", caseSensitive: false): "Domino's Pizza",
+    RegExp(r'\beatclub\b|\bbox8\b|\bmojo pizza\b', caseSensitive: false):
+        'EatClub',
+    RegExp(r"\bdomino'?s(?:\s*pizza)?\b|\bjubilant\b", caseSensitive: false):
+        "Domino's Pizza",
     RegExp(r"\bpizza\s*hut\b", caseSensitive: false): 'Pizza Hut',
-    RegExp(r"\bmcdonald'?s\b|\bhardcastle\b", caseSensitive: false): "McDonald's",
+    RegExp(r"\bmcdonald'?s\b|\bhardcastle\b", caseSensitive: false):
+        "McDonald's",
     RegExp(r'\bkfc\b|\bdevyani\b', caseSensitive: false): 'KFC',
     RegExp(r'\bburger\s*king\b', caseSensitive: false): 'Burger King',
-    RegExp(r'\bstarbucks\b|\btata\s*starbucks\b', caseSensitive: false): 'Starbucks',
+    RegExp(r'\bstarbucks\b|\btata\s*starbucks\b', caseSensitive: false):
+        'Starbucks',
     RegExp(r'\bchai\s*point\b', caseSensitive: false): 'Chai Point',
     RegExp(r'\bchaayos\b', caseSensitive: false): 'Chaayos',
     RegExp(r'\bsubway\b', caseSensitive: false): 'Subway',
@@ -37,7 +41,8 @@ class MerchantNormalizer {
 
     // ── Cab & Mobility ───────────────────────────────────────────────
     RegExp(r'\buber\b', caseSensitive: false): 'Uber',
-    RegExp(r'\bolacabs\b|\bola\b|\bani\s*technologies\b', caseSensitive: false): 'Ola',
+    RegExp(r'\bolacabs\b|\bola\b|\bani\s*technologies\b', caseSensitive: false):
+        'Ola',
     RegExp(r'\brapido\b|\broppen\b', caseSensitive: false): 'Rapido',
     RegExp(r'\bnamma\s*yatri\b', caseSensitive: false): 'Namma Yatri',
     RegExp(r'\bblusmart\b', caseSensitive: false): 'BluSmart',
@@ -67,7 +72,8 @@ class MerchantNormalizer {
     RegExp(r'\bcroma\b|\binfiniti\s*retail\b', caseSensitive: false): 'Croma',
 
     // ── Pharmacy & Healthcare ────────────────────────────────────────
-    RegExp(r'\bapollo\s*(?:pharmacy|hospital)?\b', caseSensitive: false): 'Apollo',
+    RegExp(r'\bapollo\s*(?:pharmacy|hospital)?\b', caseSensitive: false):
+        'Apollo',
     RegExp(r'\bnetmeds\b', caseSensitive: false): 'Netmeds',
     RegExp(r'\btata\s*1mg\b|\b1mg\b', caseSensitive: false): 'Tata 1mg',
     RegExp(r'\bpharmeasy\b', caseSensitive: false): 'PharmEasy',
@@ -79,21 +85,26 @@ class MerchantNormalizer {
     RegExp(r'\bvodafone\b|\bidea\b|\bvi\b', caseSensitive: false): 'Vi',
     RegExp(r'\bbsnl\b', caseSensitive: false): 'BSNL',
     RegExp(r'\bact\s*(?:fibernet)?\b', caseSensitive: false): 'ACT Fibernet',
-    RegExp(r'\btata\s*play\b|\btata\s*sky\b', caseSensitive: false): 'Tata Play',
+    RegExp(r'\btata\s*play\b|\btata\s*sky\b', caseSensitive: false):
+        'Tata Play',
 
     // ── Utilities & Fuel ─────────────────────────────────────────────
     RegExp(r'\bbescom\b', caseSensitive: false): 'BESCOM',
     RegExp(r'\btata\s*power\b', caseSensitive: false): 'Tata Power',
-    RegExp(r'\badani\s*(?:electricity|power)?\b', caseSensitive: false): 'Adani Electricity',
+    RegExp(r'\badani\s*(?:electricity|power)?\b', caseSensitive: false):
+        'Adani Electricity',
     RegExp(r'\bindraprastha\s*gas\b|\bigl\b', caseSensitive: false): 'IGL',
     RegExp(r'\bmahanagar\s*gas\b|\bmgl\b', caseSensitive: false): 'MGL',
-    RegExp(r'\bindane\b|\biocl\b|\bindian\s*oil\b', caseSensitive: false): 'Indian Oil',
-    RegExp(r'\bhpcl\b|\bhp\s*petrol\b|\bhp\s*gas\b', caseSensitive: false): 'HPCL',
+    RegExp(r'\bindane\b|\biocl\b|\bindian\s*oil\b', caseSensitive: false):
+        'Indian Oil',
+    RegExp(r'\bhpcl\b|\bhp\s*petrol\b|\bhp\s*gas\b', caseSensitive: false):
+        'HPCL',
     RegExp(r'\bbpcl\b|\bbharat\s*petroleum\b', caseSensitive: false): 'BPCL',
 
     // ── Entertainment & Streaming ────────────────────────────────────
     RegExp(r'\bnetflix\b', caseSensitive: false): 'Netflix',
-    RegExp(r'\bprime\s*video\b|\bamazon\s*prime\b', caseSensitive: false): 'Amazon Prime',
+    RegExp(r'\bprime\s*video\b|\bamazon\s*prime\b', caseSensitive: false):
+        'Amazon Prime',
     RegExp(r'\bhotstar\b|\bdisney\b', caseSensitive: false): 'Disney+ Hotstar',
     RegExp(r'\bspotify\b', caseSensitive: false): 'Spotify',
     RegExp(r'\byoutube\b', caseSensitive: false): 'YouTube',
@@ -131,10 +142,14 @@ class MerchantNormalizer {
     if (cleaned.isEmpty) return 'Unknown';
 
     // 1. Strip common technical prefixes
-    cleaned = cleaned.replaceAll(
-      RegExp(r'^(?:UPI[-/]?|POS\s*[-/]?|VPA\s*[-/]?|INFO:\s*|TO\s+|AT\s+|PAYMENT\s+TO\s+)', caseSensitive: false),
-      '',
-    ).trim();
+    cleaned = cleaned
+        .replaceAll(
+          RegExp(
+              r'^(?:UPI[-/]?|POS\s*[-/]?|VPA\s*[-/]?|INFO:\s*|TO\s+|AT\s+|PAYMENT\s+TO\s+)',
+              caseSensitive: false),
+          '',
+        )
+        .trim();
 
     // 2. Check canonical brand dictionary
     for (final entry in _brandRules.entries) {
@@ -150,24 +165,36 @@ class MerchantNormalizer {
       if (RegExp(r'^\d{10}$').hasMatch(handlePart)) {
         return cleaned;
       }
-      cleaned = handlePart.replaceAll('.', ' ').replaceAll('_', ' ').replaceAll('-', ' ').trim();
+      cleaned = handlePart
+          .replaceAll('.', ' ')
+          .replaceAll('_', ' ')
+          .replaceAll('-', ' ')
+          .trim();
     }
 
     // 4. Strip technical trailing suffixes
-    cleaned = cleaned.replaceAll(
-      RegExp(r'\s+(?:pv?t\.?\s*ltd\.?|limited|ltd\.?|india|services|store|retail|online)$', caseSensitive: false),
-      '',
-    ).trim();
+    cleaned = cleaned
+        .replaceAll(
+          RegExp(
+              r'\s+(?:pv?t\.?\s*ltd\.?|limited|ltd\.?|india|services|store|retail|online)$',
+              caseSensitive: false),
+          '',
+        )
+        .trim();
 
     // 5. Casing cleanup
     if (cleaned.isEmpty) return 'Unknown';
     if (cleaned.length <= 3) return cleaned.toUpperCase();
 
     // Title Case
-    return cleaned.split(' ').map((word) {
-      if (word.isEmpty) return '';
-      if (word.length == 1) return word.toUpperCase();
-      return word[0].toUpperCase() + word.substring(1).toLowerCase();
-    }).join(' ').trim();
+    return cleaned
+        .split(' ')
+        .map((word) {
+          if (word.isEmpty) return '';
+          if (word.length == 1) return word.toUpperCase();
+          return word[0].toUpperCase() + word.substring(1).toLowerCase();
+        })
+        .join(' ')
+        .trim();
   }
 }

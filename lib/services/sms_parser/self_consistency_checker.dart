@@ -158,7 +158,8 @@ class SelfConsistencyChecker {
     );
 
     // ── Check if modular detected a bill or balance-only observation ───────────
-    if (modularResult.isBill || (modularResult.balanceAfter != null && !modularResult.isTransaction)) {
+    if (modularResult.isBill ||
+        (modularResult.balanceAfter != null && !modularResult.isTransaction)) {
       reasons.add('Modular pipeline detected non-expense event (bill/balance)');
       return ConsistencyResult(
         result: modularResult,

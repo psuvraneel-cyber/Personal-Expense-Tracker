@@ -4,7 +4,9 @@ import 'package:pet/services/recurrence_calculator.dart';
 
 void main() {
   group('RecurrenceCalculator Calendar-Accurate Calculations', () {
-    test('computes quarterly (every 3 months) accurately across year boundaries and month lengths', () {
+    test(
+        'computes quarterly (every 3 months) accurately across year boundaries and month lengths',
+        () {
       // 31 Aug + 3 months -> 30 Nov (Nov has 30 days, clamped correctly)
       final aug31 = DateTime(2026, 8, 31, 10, 0);
       final nextNov = RecurrenceCalculator.computeNextOccurrence(
@@ -37,7 +39,8 @@ void main() {
       expect(nextMay.day, 31);
     });
 
-    test('computes semiannual (every 6 months) correctly across year boundary', () {
+    test('computes semiannual (every 6 months) correctly across year boundary',
+        () {
       // 15 Oct 2026 + 6 months -> 15 Apr 2027
       final oct15 = DateTime(2026, 10, 15, 9, 0);
       final next = RecurrenceCalculator.computeNextOccurrence(
@@ -50,7 +53,9 @@ void main() {
       expect(next.day, 15);
     });
 
-    test('computes yearly December -> January correctly without integer overflow', () {
+    test(
+        'computes yearly December -> January correctly without integer overflow',
+        () {
       final dec15 = DateTime(2026, 12, 15, 12, 0);
       final next = RecurrenceCalculator.computeNextOccurrence(
         anchorDate: dec15,
@@ -86,7 +91,9 @@ void main() {
       expect(year2032.day, 29);
     });
 
-    test('advanceNextDueDate correctly advances on-time, early, and late payments', () {
+    test(
+        'advanceNextDueDate correctly advances on-time, early, and late payments',
+        () {
       final due = DateTime(2026, 8, 1);
 
       // On-time payment on Aug 1 -> Next due is Sep 1

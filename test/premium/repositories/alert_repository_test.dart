@@ -40,7 +40,8 @@ void main() {
   });
 
   group('AlertRepository Tests', () {
-    test('insert and existsByKey works and enforces alertKey deduplication', () async {
+    test('insert and existsByKey works and enforces alertKey deduplication',
+        () async {
       final alert1 = AppAlert(
         id: 'alert_1',
         type: AppAlertType.budget,
@@ -52,7 +53,8 @@ void main() {
 
       await repository.insert(alert1);
 
-      expect(await repository.existsByKey('budget:cat_food:2026-07:warning'), isTrue);
+      expect(await repository.existsByKey('budget:cat_food:2026-07:warning'),
+          isTrue);
       expect(await repository.existsByKey('non_existent_key'), isFalse);
 
       // Inserting duplicate key should be ignored without throwing
@@ -74,7 +76,8 @@ void main() {
       expect(fetched?.title, equals('Budget Alert 1'));
     });
 
-    test('insertBatch ignores duplicate keys in same or prior batches', () async {
+    test('insertBatch ignores duplicate keys in same or prior batches',
+        () async {
       final batch = [
         AppAlert(
           id: 'b1',
@@ -106,7 +109,8 @@ void main() {
       expect(await repository.getActiveCount(), equals(2));
     });
 
-    test('getPage pagination and sorting (limit, offset, createdAt DESC)', () async {
+    test('getPage pagination and sorting (limit, offset, createdAt DESC)',
+        () async {
       final alerts = List.generate(
         15,
         (i) => AppAlert(
@@ -134,7 +138,8 @@ void main() {
       expect(page2.last.id, equals('alert_5'));
     });
 
-    test('getPage filtering by type, severity, unreadOnly, and period', () async {
+    test('getPage filtering by type, severity, unreadOnly, and period',
+        () async {
       await repository.insertBatch([
         AppAlert(
           id: 'f1',
@@ -176,7 +181,8 @@ void main() {
       expect(budgetAlerts.length, equals(2));
 
       // Filter by severity
-      final criticalAlerts = await repository.getPage(severity: AlertSeverity.critical);
+      final criticalAlerts =
+          await repository.getPage(severity: AlertSeverity.critical);
       expect(criticalAlerts.length, equals(1));
       expect(criticalAlerts.first.id, equals('f1'));
 
@@ -223,11 +229,15 @@ void main() {
         ),
       ]);
 
-      expect(await repository.getActiveCount(), equals(2)); // c1 and c2 (not dismissed)
-      expect(await repository.getUnreadCount(), equals(1)); // c1 only (not read, not dismissed)
+      expect(await repository.getActiveCount(),
+          equals(2)); // c1 and c2 (not dismissed)
+      expect(await repository.getUnreadCount(),
+          equals(1)); // c1 only (not read, not dismissed)
     });
 
-    test('markRead and markAllRead update database state in single SQL statement', () async {
+    test(
+        'markRead and markAllRead update database state in single SQL statement',
+        () async {
       await repository.insertBatch([
         AppAlert(
           id: 'm1',
@@ -257,7 +267,8 @@ void main() {
       expect(await repository.getUnreadCount(), equals(0));
     });
 
-    test('dismiss, undoDismiss, and dismissAllRead soft deletion operations', () async {
+    test('dismiss, undoDismiss, and dismissAllRead soft deletion operations',
+        () async {
       await repository.insertBatch([
         AppAlert(
           id: 'd1',
@@ -292,10 +303,13 @@ void main() {
       // Dismiss all read alerts (should dismiss d1)
       await repository.dismissAllRead();
       expect((await repository.getById('d1'))?.isDismissed, isTrue);
-      expect(await repository.getActiveCount(), equals(1)); // only d2 remains active
+      expect(await repository.getActiveCount(),
+          equals(1)); // only d2 remains active
     });
 
-    test('purgeOldDismissedAlerts removes dismissed alerts older than retention threshold', () async {
+    test(
+        'purgeOldDismissedAlerts removes dismissed alerts older than retention threshold',
+        () async {
       await repository.insertBatch([
         AppAlert(
           id: 'old_dismissed',

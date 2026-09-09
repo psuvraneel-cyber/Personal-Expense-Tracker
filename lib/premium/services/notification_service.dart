@@ -36,12 +36,13 @@ class NotificationService {
   /// Alert count threshold in [groupSummaryRollingWindow] that triggers a group summary notification.
   static const int groupSummaryThreshold = 2;
 
-  static final List<({
-    DateTime timestamp,
-    String title,
-    String body,
-    NotificationCategory category,
-  })> _recentAlertHistory = [];
+  static final List<
+      ({
+        DateTime timestamp,
+        String title,
+        String body,
+        NotificationCategory category,
+      })> _recentAlertHistory = [];
 
   @visibleForTesting
   static void resetForTest() {
@@ -71,7 +72,8 @@ class NotificationService {
       ValueNotifier<String?>(null);
 
   /// Callback for background/foreground interactive action buttons.
-  static Future<void> Function(String actionId, String payload)? onActionReceived;
+  static Future<void> Function(String actionId, String payload)?
+      onActionReceived;
 
   static String? _initialPayload;
   static String? get initialPayload => _initialPayload;
@@ -87,22 +89,24 @@ class NotificationService {
   // ── Pending queues ────────────────────────────────────────────────────────
   // Notifications that arrived before init completed are queued and flushed
   // once initialization finishes (instead of being silently dropped).
-  static final List<({
-    int id,
-    String title,
-    String body,
-    NotificationCategory category,
-    String? payload,
-  })> _pending = [];
+  static final List<
+      ({
+        int id,
+        String title,
+        String body,
+        NotificationCategory category,
+        String? payload,
+      })> _pending = [];
 
-  static final List<({
-    int id,
-    String title,
-    String body,
-    DateTime scheduledDate,
-    NotificationCategory category,
-    String? payload,
-  })> _pendingScheduled = [];
+  static final List<
+      ({
+        int id,
+        String title,
+        String body,
+        DateTime scheduledDate,
+        NotificationCategory category,
+        String? payload,
+      })> _pendingScheduled = [];
 
   // ── Channels & Channel Mapping ─────────────────────────────────────────────
 
@@ -124,69 +128,70 @@ class NotificationService {
   static AndroidNotificationChannel channelFor(NotificationCategory category) {
     return switch (category) {
       NotificationCategory.budget => const AndroidNotificationChannel(
-        'pet_budget_alerts',
-        'Budget Alerts',
-        description: 'Alerts when approaching or exceeding category budgets',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
+          'pet_budget_alerts',
+          'Budget Alerts',
+          description: 'Alerts when approaching or exceeding category budgets',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ),
       NotificationCategory.anomaly => const AndroidNotificationChannel(
-        'pet_anomalies',
-        'Spending Anomalies',
-        description: 'Alerts for unusual or duplicate transactions',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
+          'pet_anomalies',
+          'Spending Anomalies',
+          description: 'Alerts for unusual or duplicate transactions',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ),
       NotificationCategory.bill => const AndroidNotificationChannel(
-        'pet_bill_reminders',
-        'Bill Reminders',
-        description: 'Upcoming and overdue bill payment reminders',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
+          'pet_bill_reminders',
+          'Bill Reminders',
+          description: 'Upcoming and overdue bill payment reminders',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ),
       NotificationCategory.dailySummary => const AndroidNotificationChannel(
-        'pet_daily_summary',
-        'Daily Summary',
-        description: 'Daily summary of expenses and budget progress',
-        importance: Importance.defaultImportance,
-        playSound: true,
-        enableVibration: false,
-      ),
+          'pet_daily_summary',
+          'Daily Summary',
+          description: 'Daily summary of expenses and budget progress',
+          importance: Importance.defaultImportance,
+          playSound: true,
+          enableVibration: false,
+        ),
       NotificationCategory.weeklyReport => const AndroidNotificationChannel(
-        'pet_weekly_insights',
-        'Weekly Insights',
-        description: 'Weekly financial insights and report summaries',
-        importance: Importance.low,
-        playSound: false,
-        enableVibration: false,
-      ),
+          'pet_weekly_insights',
+          'Weekly Insights',
+          description: 'Weekly financial insights and report summaries',
+          importance: Importance.low,
+          playSound: false,
+          enableVibration: false,
+        ),
       NotificationCategory.goalProgress => const AndroidNotificationChannel(
-        'pet_goal_progress',
-        'Goal Progress',
-        description: 'Savings milestone updates and target progress',
-        importance: Importance.defaultImportance,
-        playSound: true,
-        enableVibration: false,
-      ),
+          'pet_goal_progress',
+          'Goal Progress',
+          description: 'Savings milestone updates and target progress',
+          importance: Importance.defaultImportance,
+          playSound: true,
+          enableVibration: false,
+        ),
       NotificationCategory.cashflow => const AndroidNotificationChannel(
-        'pet_cashflow_insights',
-        'Cashflow Insights',
-        description: 'Cashflow forecasting and runway alerts',
-        importance: Importance.defaultImportance,
-        playSound: true,
-        enableVibration: false,
-      ),
-      NotificationCategory.transactionDetected => const AndroidNotificationChannel(
-        'pet_transactions',
-        'Transactions Detected',
-        description: 'Alerts when a bank transaction is parsed and imported',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
+          'pet_cashflow_insights',
+          'Cashflow Insights',
+          description: 'Cashflow forecasting and runway alerts',
+          importance: Importance.defaultImportance,
+          playSound: true,
+          enableVibration: false,
+        ),
+      NotificationCategory.transactionDetected =>
+        const AndroidNotificationChannel(
+          'pet_transactions',
+          'Transactions Detected',
+          description: 'Alerts when a bank transaction is parsed and imported',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ),
     };
   }
 
@@ -230,8 +235,7 @@ class NotificationService {
       // For iOS plugin sync:
       await _plugin
           .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin
-          >()
+              IOSFlutterLocalNotificationsPlugin>()
           ?.requestPermissions(alert: true, badge: true, sound: true);
 
       permissionNotifier.value = status;
@@ -277,7 +281,8 @@ class NotificationService {
     try {
       await _plugin.initialize(
         initSettings,
-        onDidReceiveNotificationResponse: (NotificationResponse response) async {
+        onDidReceiveNotificationResponse:
+            (NotificationResponse response) async {
           final payload = response.payload;
           final actionId = response.actionId;
           if (actionId != null && actionId.isNotEmpty && payload != null) {
@@ -303,10 +308,8 @@ class NotificationService {
       }
 
       // ── Android: register per-category channels (no permission required to create channels)
-      final androidPlugin = _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       if (androidPlugin != null) {
         for (final channel in allChannels) {
           await androidPlugin.createNotificationChannel(channel);
@@ -507,10 +510,8 @@ class NotificationService {
   /// - Otherwise → inexact scheduling; the OS may delay the notification by
   ///   a few minutes but will never crash or silently drop it.
   static Future<AndroidScheduleMode> _resolveScheduleMode() async {
-    final androidPlugin = _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
       final canSchedule = await androidPlugin.canScheduleExactNotifications();
       if (canSchedule == false) {
@@ -523,6 +524,7 @@ class NotificationService {
     }
     return AndroidScheduleMode.exactAllowWhileIdle;
   }
+
   /// Posts or updates the Android group summary notification for a batch of alerts.
   static Future<void> postAlertsSummary({
     required List<({String title, String body, NotificationCategory category})>
@@ -558,7 +560,8 @@ class NotificationService {
     final title = isUncertain
         ? 'Possible Transaction: $formattedAmount at $merchant'
         : 'Detected: $formattedAmount at $merchant';
-    final body = '$bankOrChannel • ${categoryName ?? (isUncertain ? "Review required" : "Auto-imported")}';
+    final body =
+        '$bankOrChannel • ${categoryName ?? (isUncertain ? "Review required" : "Auto-imported")}';
 
     final androidDetails = AndroidNotificationDetails(
       channelFor(NotificationCategory.transactionDetected).id,
@@ -613,8 +616,10 @@ class NotificationService {
         payload: 'obs:$observationId',
       );
     } catch (e, st) {
-      AppLogger.debug('[NotificationService] show transaction notification failed: $e');
-      _recordCrashlyticsError(e, st, reason: 'show_transaction_notification_failed');
+      AppLogger.debug(
+          '[NotificationService] show transaction notification failed: $e');
+      _recordCrashlyticsError(e, st,
+          reason: 'show_transaction_notification_failed');
     }
   }
 

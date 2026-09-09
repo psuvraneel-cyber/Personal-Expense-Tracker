@@ -143,12 +143,14 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
     } catch (_) {}
 
     // Active savings goals
-    final activeGoals = goalProv?.goals.map((g) => {
-      'name': g.name,
-      'current': g.currentAmount,
-      'target': g.targetAmount,
-      'isPaused': g.isPaused,
-    }).toList();
+    final activeGoals = goalProv?.goals
+        .map((g) => {
+              'name': g.name,
+              'current': g.currentAmount,
+              'target': g.targetAmount,
+              'isPaused': g.isPaused,
+            })
+        .toList();
 
     // Weekly limits
     final weeklyLimits = plannerProv?.entries.map((e) {
@@ -163,7 +165,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
 
     // Focus Mode state
     final isFocusModeActive = spendPauseProv?.isActive ?? false;
-    final focusModeBlockedCount = spendPauseProv?.blockedCategoryIds.length ?? 0;
+    final focusModeBlockedCount =
+        spendPauseProv?.blockedCategoryIds.length ?? 0;
     final focusModeBlockedCategories = spendPauseProv?.blockedCategoryIds
         .map((id) => catById(id)?.name ?? id)
         .toList();
@@ -181,7 +184,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       cashflowRunwayDays: forecast?.runwayDays,
       isCashflowPositive: forecast?.isCashflowPositive,
       monthlyNetCashflow: forecast?.monthlyNetCashflow,
-      upcomingBillsNext14Days: upcoming14DaysTotal > 0 ? upcoming14DaysTotal : null,
+      upcomingBillsNext14Days:
+          upcoming14DaysTotal > 0 ? upcoming14DaysTotal : null,
       lowestProjectedBalance: forecast?.lowestProjectedBalance,
       lowestProjectedDate: forecast?.lowestProjectedDate,
       cashflowRiskLevel: forecast?.riskLevel.displayName,
@@ -422,9 +426,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
           color: isDark ? AppTheme.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withAlpha(10)
-                : Colors.black.withAlpha(7),
+            color:
+                isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(7),
           ),
         ),
         child: Row(
@@ -448,9 +451,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
         color: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
         border: Border(
           top: BorderSide(
-            color: isDark
-                ? Colors.white.withAlpha(10)
-                : Colors.black.withAlpha(7),
+            color:
+                isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(7),
           ),
         ),
       ),
@@ -482,8 +484,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
                     gradient: _isSending ? null : AppTheme.heroGradient,
                     color: _isSending
                         ? (isDark
-                              ? Colors.white.withAlpha(20)
-                              : Colors.black.withAlpha(10))
+                            ? Colors.white.withAlpha(20)
+                            : Colors.black.withAlpha(10))
                         : null,
                     shape: BoxShape.circle,
                   ),
@@ -572,7 +574,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
           _messages.add(
             CopilotMessage(
               role: 'assistant',
-              content: '🔑 ${e.isRetryable ? "Your session has expired. Please sign out and sign in again." : e.message}',
+              content:
+                  '🔑 ${e.isRetryable ? "Your session has expired. Please sign out and sign in again." : e.message}',
               createdAt: DateTime.now(),
             ),
           );

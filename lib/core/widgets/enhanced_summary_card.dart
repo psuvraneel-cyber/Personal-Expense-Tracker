@@ -78,8 +78,7 @@ class EnhancedSummaryCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    gradient:
-                        gradient ??
+                    gradient: gradient ??
                         LinearGradient(
                           colors: [
                             color.withAlpha(isDark ? 40 : 28),
@@ -130,8 +129,7 @@ class EnhancedSummaryCard extends StatelessWidget {
             Container(
               height: 3,
               decoration: BoxDecoration(
-                gradient:
-                    gradient ??
+                gradient: gradient ??
                     LinearGradient(colors: [color, color.withAlpha(60)]),
                 borderRadius: BorderRadius.circular(2),
               ),

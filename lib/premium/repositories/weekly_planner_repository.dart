@@ -45,7 +45,8 @@ class WeeklyPlannerRepository {
     // 1. Check for one-off limit designated specifically for this week
     final oneOffMaps = await db.query(
       'weekly_limits',
-      where: 'categoryId = ? AND recurrencePolicy = ? AND periodStart LIKE ? AND isActive = 1',
+      where:
+          'categoryId = ? AND recurrencePolicy = ? AND periodStart LIKE ? AND isActive = 1',
       whereArgs: [categoryId, 'oneOff', '$weekStart%'],
       limit: 1,
     );
@@ -77,7 +78,8 @@ class WeeklyPlannerRepository {
     return null;
   }
 
-  Future<WeeklyLimit?> getByCategoryId(String categoryId, {DateTime? forDate}) =>
+  Future<WeeklyLimit?> getByCategoryId(String categoryId,
+          {DateTime? forDate}) =>
       getEffectiveLimit(categoryId, forDate: forDate);
 
   /// Alias for getByCategoryId()
@@ -161,7 +163,10 @@ class WeeklyPlannerRepository {
               final catName = item['categoryName'] as String?;
               final limit = (item['weeklyLimit'] as num?)?.toDouble();
 
-              if (catId != null && catName != null && limit != null && limit > 0) {
+              if (catId != null &&
+                  catName != null &&
+                  limit != null &&
+                  limit > 0) {
                 final weeklyLimit = WeeklyLimit(
                   id: _uuid.v4(),
                   categoryId: catId,
@@ -183,7 +188,8 @@ class WeeklyPlannerRepository {
       }
 
       // 2. Check individual weekly_limit_<catId> keys format
-      final keys = prefs.getKeys().where((k) => k.startsWith('weekly_limit_')).toList();
+      final keys =
+          prefs.getKeys().where((k) => k.startsWith('weekly_limit_')).toList();
       if (keys.isNotEmpty) {
         await db.transaction((txn) async {
           for (final k in keys) {

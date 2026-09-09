@@ -32,7 +32,9 @@ class RecurringDetectionService {
 
     // Remove legal/country entity words
     cleaned = cleaned.replaceAll(
-      RegExp(r'\b(pvt|ltd|private|limited|india|inc|corp|services|billdesk|bill\s*desk)\b', caseSensitive: false),
+      RegExp(
+          r'\b(pvt|ltd|private|limited|india|inc|corp|services|billdesk|bill\s*desk)\b',
+          caseSensitive: false),
       '',
     );
 
@@ -89,10 +91,13 @@ class RecurringDetectionService {
       if (items.length >= 3) confidence = 0.85;
       if (items.length >= 4) confidence = 0.95;
 
-      final spanDays = items.last.timestamp.difference(items.first.timestamp).inDays;
-      String reason = 'Detected from ${items.length} recurring payments over $spanDays days';
+      final spanDays =
+          items.last.timestamp.difference(items.first.timestamp).inDays;
+      String reason =
+          'Detected from ${items.length} recurring payments over $spanDays days';
       if (amountAnalysis.isPriceChanged) {
-        reason = 'Detected price change from ₹${amountAnalysis.previousAmount!.toStringAsFixed(0)} to ₹${amountAnalysis.currentAmount.toStringAsFixed(0)} ($reason)';
+        reason =
+            'Detected price change from ₹${amountAnalysis.previousAmount!.toStringAsFixed(0)} to ₹${amountAnalysis.currentAmount.toStringAsFixed(0)} ($reason)';
       }
 
       results.add(
@@ -173,7 +178,8 @@ class RecurringDetectionService {
     if (items.length >= 3) {
       final earlierAmounts = amounts.sublist(0, amounts.length - 1);
       final baselineAmount = earlierAmounts.first;
-      final baselineConsistent = earlierAmounts.every((a) => (a - baselineAmount).abs() < 1.0);
+      final baselineConsistent =
+          earlierAmounts.every((a) => (a - baselineAmount).abs() < 1.0);
 
       if (baselineConsistent && (latestAmount - baselineAmount).abs() >= 1.0) {
         return (

@@ -57,9 +57,9 @@ class EmptyStateWidget extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
-              ),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
             ),
             const SizedBox(height: 8),
 
@@ -68,11 +68,11 @@ class EmptyStateWidget extends StatelessWidget {
               subtitle,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isDark
-                    ? AppTheme.textSecondary
-                    : AppTheme.textSecondaryLight,
-                height: 1.4,
-              ),
+                    color: isDark
+                        ? AppTheme.textSecondary
+                        : AppTheme.textSecondaryLight,
+                    height: 1.4,
+                  ),
             ),
 
             // Optional CTA

@@ -122,9 +122,8 @@ void main() {
         final rawRecords = await repo.getAllFeedbackRecords();
         expect(rawRecords, isNotEmpty);
 
-        final feedbackList = rawRecords
-            .map((r) => UserFeedback.fromMap(r))
-            .toList();
+        final feedbackList =
+            rawRecords.map((r) => UserFeedback.fromMap(r)).toList();
         UserFeedbackStore.loadFromRecords(feedbackList);
 
         // Step C: Verify feedback rule is active post-cold-start (SMS parsed as rejected)
@@ -154,24 +153,29 @@ void main() {
           'pet_reconciliation_watermark',
           nowMs + 3600000,
         ); // +1 hr
-        final futureResult = await service.validateWatermarkForTest(prefs, nowMs);
+        final futureResult =
+            await service.validateWatermarkForTest(prefs, nowMs);
         expect(futureResult, isNull);
 
         // Case B: Negative watermark -> returns null
         await repo.setWatermark('pet_reconciliation_watermark', -500);
-        final negativeResult = await service.validateWatermarkForTest(prefs, nowMs);
+        final negativeResult =
+            await service.validateWatermarkForTest(prefs, nowMs);
         expect(negativeResult, isNull);
 
         // Case C: >30-day old watermark (31 days ago) -> returns null
         final thirtyOneDaysAgoMs = nowMs - (31 * 24 * 60 * 60 * 1000);
-        await repo.setWatermark('pet_reconciliation_watermark', thirtyOneDaysAgoMs);
-        final staleResult = await service.validateWatermarkForTest(prefs, nowMs);
+        await repo.setWatermark(
+            'pet_reconciliation_watermark', thirtyOneDaysAgoMs);
+        final staleResult =
+            await service.validateWatermarkForTest(prefs, nowMs);
         expect(staleResult, isNull);
 
         // Case D: Valid 1-hour old watermark -> returns stored timestamp
         final oneHourAgoMs = nowMs - (1 * 60 * 60 * 1000);
         await repo.setWatermark('pet_reconciliation_watermark', oneHourAgoMs);
-        final validResult = await service.validateWatermarkForTest(prefs, nowMs);
+        final validResult =
+            await service.validateWatermarkForTest(prefs, nowMs);
         expect(validResult, equals(oneHourAgoMs));
       },
     );

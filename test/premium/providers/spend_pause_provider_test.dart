@@ -35,7 +35,8 @@ void main() {
 
       expect(provider.isActive, isTrue);
       expect(provider.until, isNotNull);
-      expect(provider.blockedCategoryIds, containsAll(['cat-dining', 'cat-shopping']));
+      expect(provider.blockedCategoryIds,
+          containsAll(['cat-dining', 'cat-shopping']));
 
       // Exact ID-based blocking verification
       expect(provider.isCategoryBlocked('cat-dining'), isTrue);
@@ -47,7 +48,8 @@ void main() {
       expect(provider.isCategoryBlocked('shop'), isFalse);
     });
 
-    test('deactivate immediately stops pause and clears active state', () async {
+    test('deactivate immediately stops pause and clears active state',
+        () async {
       await provider.activate(
         until: DateTime.now().add(const Duration(hours: 2)),
         categoryIds: ['cat-entertainment'],
@@ -60,7 +62,9 @@ void main() {
       expect(provider.isCategoryBlocked('cat-entertainment'), isFalse);
     });
 
-    test('pruneDeletedCategories cleans up references when categories are deleted (C2)', () async {
+    test(
+        'pruneDeletedCategories cleans up references when categories are deleted (C2)',
+        () async {
       await provider.activate(
         until: DateTime.now().add(const Duration(hours: 2)),
         categoryIds: ['cat-1', 'cat-2', 'cat-3'],

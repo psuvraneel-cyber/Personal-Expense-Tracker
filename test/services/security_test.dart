@@ -31,41 +31,40 @@ void main() {
     // Set up Mock handler for flutter_secure_storage method channel
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-          (MethodCall methodCall) async {
-            final args = methodCall.arguments as Map?;
-            switch (methodCall.method) {
-              case 'write':
-                if (args != null) {
-                  secureStorageMap[args['key'] as String] =
-                      args['value'] as String;
-                }
-                return null;
-              case 'read':
-                if (args != null) {
-                  return secureStorageMap[args['key'] as String];
-                }
-                return null;
-              case 'delete':
-                if (args != null) {
-                  secureStorageMap.remove(args['key'] as String);
-                }
-                return null;
-              case 'readAll':
-                return secureStorageMap;
-              case 'deleteAll':
-                secureStorageMap.clear();
-                return null;
-              case 'containsKey':
-                if (args != null) {
-                  return secureStorageMap.containsKey(args['key'] as String);
-                }
-                return false;
-              default:
-                return null;
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (MethodCall methodCall) async {
+        final args = methodCall.arguments as Map?;
+        switch (methodCall.method) {
+          case 'write':
+            if (args != null) {
+              secureStorageMap[args['key'] as String] = args['value'] as String;
             }
-          },
-        );
+            return null;
+          case 'read':
+            if (args != null) {
+              return secureStorageMap[args['key'] as String];
+            }
+            return null;
+          case 'delete':
+            if (args != null) {
+              secureStorageMap.remove(args['key'] as String);
+            }
+            return null;
+          case 'readAll':
+            return secureStorageMap;
+          case 'deleteAll':
+            secureStorageMap.clear();
+            return null;
+          case 'containsKey':
+            if (args != null) {
+              return secureStorageMap.containsKey(args['key'] as String);
+            }
+            return false;
+          default:
+            return null;
+        }
+      },
+    );
   });
 
   setUp(() {
@@ -77,8 +76,8 @@ void main() {
     test(
       'getDatabaseEncryptionKey generates a secure 256-bit key on first call',
       () async {
-        final key = await SecureStorageService.instance
-            .getDatabaseEncryptionKey();
+        final key =
+            await SecureStorageService.instance.getDatabaseEncryptionKey();
         expect(key, isNotEmpty);
         // Base64Url representation of 32 bytes should be 43 characters long without padding
         expect(key.length, greaterThanOrEqualTo(43));
@@ -89,10 +88,10 @@ void main() {
     test(
       'getDatabaseEncryptionKey retrieves the same key on subsequent calls',
       () async {
-        final key1 = await SecureStorageService.instance
-            .getDatabaseEncryptionKey();
-        final key2 = await SecureStorageService.instance
-            .getDatabaseEncryptionKey();
+        final key1 =
+            await SecureStorageService.instance.getDatabaseEncryptionKey();
+        final key2 =
+            await SecureStorageService.instance.getDatabaseEncryptionKey();
         expect(key1, equals(key2));
       },
     );

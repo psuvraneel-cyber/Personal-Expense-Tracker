@@ -53,8 +53,7 @@ class _FeatureCardState extends State<FeatureCard>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final colors =
-        widget.gradientColors ??
+    final colors = widget.gradientColors ??
         [
           widget.accentColor.withAlpha(isDark ? 40 : 28),
           widget.accentColor.withAlpha(isDark ? 18 : 10),

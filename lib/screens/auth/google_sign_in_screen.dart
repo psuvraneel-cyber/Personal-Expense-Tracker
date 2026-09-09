@@ -47,10 +47,10 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
       parent: _animController,
       curve: Curves.easeOutCubic,
     );
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
-        .animate(
-          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
-        );
+    _slideAnim =
+        Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+    );
     _animController.forward();
   }
 
@@ -160,8 +160,8 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
                   Text(
                     'Personal Expense Tracker',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textTertiary,
-                    ),
+                          color: AppTheme.textTertiary,
+                        ),
                   ),
 
                   const Spacer(),
@@ -237,15 +237,13 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
                     child: ElevatedButton(
                       onPressed:
                           (_isLoading || !_authService.isGoogleSignInSupported)
-                          ? null
-                          : _handleGoogleSignIn,
+                              ? null
+                              : _handleGoogleSignIn,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark
-                            ? const Color(0xFF2D2D44)
-                            : Colors.white,
-                        foregroundColor: isDark
-                            ? Colors.white
-                            : const Color(0xFF3C4043),
+                        backgroundColor:
+                            isDark ? const Color(0xFF2D2D44) : Colors.white,
+                        foregroundColor:
+                            isDark ? Colors.white : const Color(0xFF3C4043),
                         elevation: 2,
                         shadowColor: Colors.black26,
                         shape: RoundedRectangleBorder(
@@ -299,9 +297,8 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
                               );
                             },
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark
-                            ? Colors.white
-                            : AppTheme.primaryDark,
+                        foregroundColor:
+                            isDark ? Colors.white : AppTheme.primaryDark,
                         side: BorderSide(
                           color: isDark
                               ? Colors.white.withValues(alpha: 0.3)
@@ -361,9 +358,9 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
                     'By signing in you agree to our Terms of Service.\nYour financial data is stored securely in your Google account.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textTertiary,
-                      fontSize: 11,
-                    ),
+                          color: AppTheme.textTertiary,
+                          fontSize: 11,
+                        ),
                   ),
                   const SizedBox(height: 32),
                 ],
@@ -391,8 +388,8 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
           child: Text(
             text,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: isDark ? Colors.white.withAlpha(200) : Colors.black87,
-            ),
+                  color: isDark ? Colors.white.withAlpha(200) : Colors.black87,
+                ),
           ),
         ),
       ],

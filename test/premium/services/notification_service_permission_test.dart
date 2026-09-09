@@ -20,7 +20,8 @@ void main() {
   });
 
   group('NotificationService permissionNotifier & permissionStatus', () {
-    test('permissionNotifier initially defaults to granted or valid status', () {
+    test('permissionNotifier initially defaults to granted or valid status',
+        () {
       expect(
         NotificationService.permissionNotifier.value,
         isA<PermissionStatus>(),

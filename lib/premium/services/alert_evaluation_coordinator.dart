@@ -143,8 +143,11 @@ class AlertEvaluationCoordinator {
           now: referenceTime,
         );
       } catch (e, st) {
-        AppLogger.error('Large transaction evaluation error in AlertCoordinator',
-            error: e, stack: st, label: 'AlertCoordinator');
+        AppLogger.error(
+            'Large transaction evaluation error in AlertCoordinator',
+            error: e,
+            stack: st,
+            label: 'AlertCoordinator');
       }
 
       List<AppAlert> duplicateAlerts = [];
@@ -154,8 +157,11 @@ class AlertEvaluationCoordinator {
           now: referenceTime,
         );
       } catch (e, st) {
-        AppLogger.error('Duplicate transaction evaluation error in AlertCoordinator',
-            error: e, stack: st, label: 'AlertCoordinator');
+        AppLogger.error(
+            'Duplicate transaction evaluation error in AlertCoordinator',
+            error: e,
+            stack: st,
+            label: 'AlertCoordinator');
       }
 
       List<RecurringPayment>? confirmedBills;
@@ -531,7 +537,8 @@ class AlertEvaluationCoordinator {
             period: period,
             type: AppAlertType.cashflow,
           );
-          final currentDeficit = hasImminentDeficit ? lowestBal : forecast.projectedEndingBalance;
+          final currentDeficit =
+              hasImminentDeficit ? lowestBal : forecast.projectedEndingBalance;
           for (final a in existing) {
             if (a.stage == AppAlertStage.critical && a.amount != null) {
               final oldBal = a.amount!;
@@ -746,7 +753,8 @@ class AlertEvaluationCoordinator {
   }
 
   /// Resolves alerts for a deleted weekly limit.
-  Future<void> onWeeklyLimitDeleted(String categoryId, {String? weekKey}) async {
+  Future<void> onWeeklyLimitDeleted(String categoryId,
+      {String? weekKey}) async {
     try {
       if (weekKey != null) {
         await _repository.dismissWhere(

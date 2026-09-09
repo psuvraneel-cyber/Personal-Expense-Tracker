@@ -7,7 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Tracks aggregate health counters and recent observation lifecycles WITHOUT
 /// storing or logging sensitive financial content, PII, full SMS text, or account numbers.
 class IngestionDiagnostics {
-  static final IngestionDiagnostics _instance = IngestionDiagnostics._internal();
+  static final IngestionDiagnostics _instance =
+      IngestionDiagnostics._internal();
   factory IngestionDiagnostics() => _instance;
   IngestionDiagnostics._internal();
 
@@ -31,7 +32,8 @@ class IngestionDiagnostics {
   // Ring buffer of recent event records (capped at 50)
   final List<DiagnosticEventEntry> _recentEvents = [];
 
-  List<DiagnosticEventEntry> get recentEvents => List.unmodifiable(_recentEvents);
+  List<DiagnosticEventEntry> get recentEvents =>
+      List.unmodifiable(_recentEvents);
 
   /// Load persisted counts from SharedPreferences
   Future<void> load() async {

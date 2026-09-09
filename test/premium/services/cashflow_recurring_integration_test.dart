@@ -8,7 +8,9 @@ void main() {
   group('CashflowForecastService with Confirmed Recurring Commitments', () {
     final now = DateTime.now();
 
-    test('integrates confirmed upcoming bill without double-counting historical expenses', () {
+    test(
+        'integrates confirmed upcoming bill without double-counting historical expenses',
+        () {
       final txns = <TransactionRecord>[
         TransactionRecord(
           id: '1',
@@ -51,14 +53,17 @@ void main() {
 
       // In loop i=0..29, dailyPoints[i] corresponds to now.day + i.
       // Day 4 is index 4 (now.day + 4), Day 5 is index 5 (now.day + 5).
-      final day3ToDay4Growth = forecastWithBill.dailyPoints[4].balance - forecastWithBill.dailyPoints[3].balance;
-      final day4ToDay5Growth = forecastWithBill.dailyPoints[5].balance - forecastWithBill.dailyPoints[4].balance;
+      final day3ToDay4Growth = forecastWithBill.dailyPoints[4].balance -
+          forecastWithBill.dailyPoints[3].balance;
+      final day4ToDay5Growth = forecastWithBill.dailyPoints[5].balance -
+          forecastWithBill.dailyPoints[4].balance;
 
       // The growth rate drops by exactly ₹15,000 on Day 5 due to the rent bill
       expect(day3ToDay4Growth - day4ToDay5Growth, equals(15000.0));
     });
 
-    test('unconfirmed detected bills are NOT injected into cashflow projection', () {
+    test('unconfirmed detected bills are NOT injected into cashflow projection',
+        () {
       final txns = <TransactionRecord>[
         TransactionRecord(
           id: '1',

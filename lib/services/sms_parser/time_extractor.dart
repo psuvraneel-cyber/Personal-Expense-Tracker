@@ -39,10 +39,10 @@ class TimeResult {
   });
 
   const TimeResult.none()
-    : hour = null,
-      minute = null,
-      second = null,
-      reasons = const ['No time found in SMS body'];
+      : hour = null,
+        minute = null,
+        second = null,
+        reasons = const ['No time found in SMS body'];
 
   @override
   String toString() {

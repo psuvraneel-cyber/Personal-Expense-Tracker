@@ -106,7 +106,6 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   const SizedBox(height: 48),
-
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -120,7 +119,6 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
                   Text(
                     'Welcome, Guest',
                     style: GoogleFonts.poppins(
@@ -134,11 +132,10 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
                     'Choose a username to continue.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textTertiary,
-                    ),
+                          color: AppTheme.textTertiary,
+                        ),
                   ),
                   const SizedBox(height: 48),
-
                   TextFormField(
                     controller: _usernameController,
                     style: TextStyle(
@@ -184,7 +181,6 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _handleGuestSignIn(),
                   ),
-
                   if (_errorMessage != null) ...[
                     const SizedBox(height: 16),
                     Text(
@@ -196,9 +192,7 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
                       textAlign: TextAlign.center,
                     ),
                   ],
-
                   const Spacer(),
-
                   SizedBox(
                     width: double.infinity,
                     height: 56,

@@ -39,7 +39,9 @@ void main() {
   });
 
   group('RecurringTransactionService Lifecycle Tests', () {
-    test('createRule with generateFirstOccurrenceImmediately creates rule and first transaction', () async {
+    test(
+        'createRule with generateFirstOccurrenceImmediately creates rule and first transaction',
+        () async {
       final startDate = DateTime(2026, 8, 20, 10, 0);
       final result = await service.createRule(
         amount: 2500,
@@ -66,7 +68,9 @@ void main() {
       expect(txns.length, 1);
     });
 
-    test('createRule without immediate generation only saves rule with nextOccurrenceDate at startDate', () async {
+    test(
+        'createRule without immediate generation only saves rule with nextOccurrenceDate at startDate',
+        () async {
       final startDate = DateTime(2026, 9, 1, 10, 0);
       final result = await service.createRule(
         amount: 15000,
@@ -105,11 +109,14 @@ void main() {
       expect(rule!.isActive, isFalse);
 
       // Run generation at Aug 10
-      final generated = await service.generateDueOccurrences(now: DateTime(2026, 8, 10));
+      final generated =
+          await service.generateDueOccurrences(now: DateTime(2026, 8, 10));
       expect(generated, isEmpty);
     });
 
-    test('deleteRuleAndAllOccurrences removes rule and all associated transactions', () async {
+    test(
+        'deleteRuleAndAllOccurrences removes rule and all associated transactions',
+        () async {
       final startDate = DateTime(2026, 8, 1, 10, 0);
       final result = await service.createRule(
         amount: 1000,

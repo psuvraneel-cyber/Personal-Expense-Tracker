@@ -81,7 +81,9 @@ void main() {
   });
 
   group('AlertEvaluationCoordinator Tests', () {
-    test('onTransactionsChanged evaluates anomalies, deduplicates, persists, and updates provider', () async {
+    test(
+        'onTransactionsChanged evaluates anomalies, deduplicates, persists, and updates provider',
+        () async {
       // 3 baseline months of ₹100/mo, current month has ₹300 spike, and ₹5,000 income to ensure positive cashflow
       final txns = [
         TransactionRecord(
@@ -142,7 +144,9 @@ void main() {
       expect(provider.alerts.length, equals(1));
     });
 
-    test('onBudgetsChanged evaluates warning and exceeded alerts into database and provider', () async {
+    test(
+        'onBudgetsChanged evaluates warning and exceeded alerts into database and provider',
+        () async {
       final budgets = {'cat_food': 1000.0, 'cat_shopping': 500.0};
       final spent = {'cat_food': 950.0, 'cat_shopping': 600.0}; // 95% and 120%
 
@@ -164,7 +168,8 @@ void main() {
       expect(provider.unreadCount, equals(3));
     });
 
-    test('onRecurringChanged evaluates upcoming bills due within 3 days', () async {
+    test('onRecurringChanged evaluates upcoming bills due within 3 days',
+        () async {
       final bill = RecurringPayment(
         id: 'rec_spotify',
         merchantName: 'Spotify',

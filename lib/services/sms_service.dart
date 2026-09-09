@@ -174,9 +174,8 @@ class SmsService {
   Future<int> _processMessages(List<NativeSmsMessage> messages) async {
     if (messages.isEmpty) return 0;
 
-    final int latestMs = messages
-        .map((m) => m.dateMillis)
-        .reduce((a, b) => a > b ? a : b);
+    final int latestMs =
+        messages.map((m) => m.dateMillis).reduce((a, b) => a > b ? a : b);
 
     AppLogger.debug(
       '[PET-SMS] Routing ${messages.length} messages to FinancialIngestionService.ingestBatch (latestMs=$latestMs)',
@@ -209,10 +208,13 @@ class SmsService {
     _nativeSmsSubscription = _nativeReader.incomingSmsStream.listen(
       (NativeSmsMessage nativeMsg) async {
         try {
-          final promoted = await FinancialIngestionService().ingestMessage(nativeMsg);
+          final promoted =
+              await FinancialIngestionService().ingestMessage(nativeMsg);
           if (promoted != null) {
             final allSms = await _repository.getAllSmsTransactions();
-            final matching = allSms.where((s) => s.id == promoted.sourceObservationId).firstOrNull;
+            final matching = allSms
+                .where((s) => s.id == promoted.sourceObservationId)
+                .firstOrNull;
             if (matching != null) {
               onNewTransaction?.call(matching);
             }
@@ -252,10 +254,13 @@ class SmsService {
     NativeSmsMessage notifMsg,
   ) async {
     try {
-      final promoted = await FinancialIngestionService().ingestMessage(notifMsg);
+      final promoted =
+          await FinancialIngestionService().ingestMessage(notifMsg);
       if (promoted != null) {
         final allSms = await _repository.getAllSmsTransactions();
-        return allSms.where((s) => s.id == promoted.sourceObservationId).firstOrNull;
+        return allSms
+            .where((s) => s.id == promoted.sourceObservationId)
+            .firstOrNull;
       }
       return null;
     } catch (e) {
@@ -270,11 +275,13 @@ class SmsService {
   Future<List<SmsTransaction>> processPendingNotifications() async {
     if (!isSupported) return [];
     try {
-      final promotedList = await FinancialIngestionService().processPendingNotifications();
+      final promotedList =
+          await FinancialIngestionService().processPendingNotifications();
       if (promotedList.isEmpty) return [];
 
       final allSms = await _repository.getAllSmsTransactions();
-      final promotedIds = promotedList.map((p) => p.sourceObservationId).toSet();
+      final promotedIds =
+          promotedList.map((p) => p.sourceObservationId).toSet();
       final matched = allSms.where((s) => promotedIds.contains(s.id)).toList();
       AppLogger.debug(
         '[PET-SMS] Processed ${promotedList.length} cached notifications -> ${matched.length} core ledger transactions',

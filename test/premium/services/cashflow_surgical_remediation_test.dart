@@ -12,7 +12,9 @@ void main() {
   final refDate = DateTime(2026, 3, 15, 10, 0);
 
   group('DEFECT 1 — Variable Expense Cannibalization Remediation', () {
-    test('Scenario 1: New recurring bill absent historically does not reduce variable baseline', () {
+    test(
+        'Scenario 1: New recurring bill absent historically does not reduce variable baseline',
+        () {
       // 30 days of historical variable expenses: ₹20,000 total (~₹667/day)
       final txns = List.generate(
         30,
@@ -59,11 +61,14 @@ void main() {
       // Here, avgDailyExpense was ~667/day, recurringDaily was 15000/30 = 500/day.
       // Old: variableDailyExpense became 667 - 500 = 167/day (crushed/cannibalized!).
       // Expected: variableDailyExpense stays at 667/day, and newBill is separately projected as a bill event.
-      expect(withBillForecast.expectedVariableExpenses, closeTo(baseForecast.expectedVariableExpenses, 1.0));
+      expect(withBillForecast.expectedVariableExpenses,
+          closeTo(baseForecast.expectedVariableExpenses, 1.0));
       expect(withBillForecast.expectedBills, equals(15000.0));
     });
 
-    test('Scenario 2: Recurring bill historically represented is not double-counted', () {
+    test(
+        'Scenario 2: Recurring bill historically represented is not double-counted',
+        () {
       // History has ₹20,000 variable expenses + ₹10,000 recurring internet bill
       final txns = <TransactionRecord>[
         ...List.generate(
@@ -112,11 +117,14 @@ void main() {
       // Future bill is separately counted as expectedBills = 10000
       expect(forecast.expectedBills, equals(10000.0));
       // Total projected outgo = ~20000 variable + 10000 bill = ~30000 (not double counted to 40000!)
-      final totalOutgo = forecast.expectedVariableExpenses + forecast.expectedBills;
+      final totalOutgo =
+          forecast.expectedVariableExpenses + forecast.expectedBills;
       expect(totalOutgo, closeTo(30000.0, 1000.0));
     });
 
-    test('Scenario 3: Long-cycle recurring bill does not cannibalize unrelated living expenses', () {
+    test(
+        'Scenario 3: Long-cycle recurring bill does not cannibalize unrelated living expenses',
+        () {
       // 60 days of living expenses: ₹60,000 (~₹1,000/day)
       final txns = List.generate(
         60,
@@ -155,7 +163,9 @@ void main() {
       expect(forecast.expectedBills, equals(30000.0));
     });
 
-    test('Scenario 4: Recurring bill larger than historical variable spend does not clamp variable spend to zero', () {
+    test(
+        'Scenario 4: Recurring bill larger than historical variable spend does not clamp variable spend to zero',
+        () {
       // Modest historical spending: ₹12,000/month (~₹400/day)
       final txns = List.generate(
         30,
@@ -196,8 +206,12 @@ void main() {
     });
   });
 
-  group('DEFECT 2 — Cashflow Alert Escalation Suppressed by Monthly Deduplication Remediation', () {
-    test('Scenario 1 & 2: Same risk state produces one alert, repeated evaluation is deduplicated', () {
+  group(
+      'DEFECT 2 — Cashflow Alert Escalation Suppressed by Monthly Deduplication Remediation',
+      () {
+    test(
+        'Scenario 1 & 2: Same risk state produces one alert, repeated evaluation is deduplicated',
+        () {
       // Create transactions where balance dips below safety buffer (₹5,000) but remains positive (~₹4,000)
       // Opening balance: 10,000 (credit). Expenses over 10 days: 6,000 total (600/day).
       final txns = <TransactionRecord>[
@@ -237,7 +251,9 @@ void main() {
       expect(alert2!.alertKey, equals(alert1.alertKey));
     });
 
-    test('Scenario 3: Warning escalates to Critical in same month with distinct alertKey', () {
+    test(
+        'Scenario 3: Warning escalates to Critical in same month with distinct alertKey',
+        () {
       // Step 1: Warning state (positive trough below buffer)
       final warningTxns = <TransactionRecord>[
         TransactionRecord(
@@ -301,7 +317,9 @@ void main() {
       expect(criticalAlert.alertKey, isNot(equals(warningAlert.alertKey)));
     });
 
-    test('Scenario 4: Recovery after critical produces null alert allowing dismissal', () {
+    test(
+        'Scenario 4: Recovery after critical produces null alert allowing dismissal',
+        () {
       // High income transactions over 10 days -> safe cashflow
       final healthyTxns = List.generate(
         10,
@@ -347,7 +365,9 @@ void main() {
       expect(alert.title, contains('Cashflow Risk Warning'));
     });
 
-    test('Test B: Buffer breach while non-negative produces reachable safety-buffer alert (warning)', () {
+    test(
+        'Test B: Buffer breach while non-negative produces reachable safety-buffer alert (warning)',
+        () {
       // Starting balance: 10,000. Expenses: 6,000. Trough dips to 4,000 (>= 0 and < 5,000 safety buffer).
       // Balance NEVER becomes negative.
       final txns = <TransactionRecord>[
@@ -448,7 +468,9 @@ void main() {
   });
 
   group('DEFECT 4 — Safe-to-Spend Explanation Consistency Remediation', () {
-    test('Scenario where linear component sum != engine Safe-to-Spend: math deconstruction strictly equals engine result', () {
+    test(
+        'Scenario where linear component sum != engine Safe-to-Spend: math deconstruction strictly equals engine result',
+        () {
       // Opening: 100,000
       // Large bill due on day 3: 60,000
       // Buffer: 25,000
@@ -487,13 +509,17 @@ void main() {
       );
 
       // Verify engine safe-to-spend derivation
-      final expectedHeadroom = (forecast.lowestProjectedBalance - forecast.safetyBuffer).clamp(0.0, double.infinity);
+      final expectedHeadroom =
+          (forecast.lowestProjectedBalance - forecast.safetyBuffer)
+              .clamp(0.0, double.infinity);
       expect(forecast.totalSafeToSpend, equals(expectedHeadroom));
       expect(forecast.safeToSpend, equals(expectedHeadroom / 30));
 
       // The explanation math deconstruction:
       // Lowest projected balance - safety buffer - goal reserves == totalSafeToSpend
-      final mathDeconstructedTotal = (forecast.lowestProjectedBalance - forecast.safetyBuffer - forecast.expectedGoalReserves)
+      final mathDeconstructedTotal = (forecast.lowestProjectedBalance -
+              forecast.safetyBuffer -
+              forecast.expectedGoalReserves)
           .clamp(0.0, double.infinity);
       expect(mathDeconstructedTotal, equals(forecast.totalSafeToSpend));
       expect(mathDeconstructedTotal / 30, equals(forecast.safeToSpend));
@@ -501,7 +527,9 @@ void main() {
   });
 
   group('DEFECT 5 — Canonical Horizon Boundary Remediation', () {
-    test('Canonical [referenceDate, referenceDate + H) applies consistently across all collections', () {
+    test(
+        'Canonical [referenceDate, referenceDate + H) applies consistently across all collections',
+        () {
       final h = 30;
       final boundaryBill0 = RecurringPayment(
         id: 'bill_day0',
@@ -520,7 +548,8 @@ void main() {
         amount: 2000,
         frequency: 'monthly',
         lastPaidAt: refDate.subtract(const Duration(days: 30)),
-        nextDueAt: DateTime(refDate.year, refDate.month, refDate.day + h - 1), // Day 29 (last included)
+        nextDueAt: DateTime(refDate.year, refDate.month,
+            refDate.day + h - 1), // Day 29 (last included)
         categoryId: 'bills',
         status: RecurringStatus.confirmed,
       );
@@ -531,7 +560,8 @@ void main() {
         amount: 4000,
         frequency: 'monthly',
         lastPaidAt: refDate.subtract(const Duration(days: 30)),
-        nextDueAt: DateTime(refDate.year, refDate.month, refDate.day + h), // Day 30 (first excluded)
+        nextDueAt: DateTime(refDate.year, refDate.month,
+            refDate.day + h), // Day 30 (first excluded)
         categoryId: 'bills',
         status: RecurringStatus.confirmed,
       );
@@ -547,7 +577,10 @@ void main() {
       // 1. dailyPoints length must be exactly H = 30
       expect(forecast.dailyPoints.length, equals(30));
       expect(forecast.dailyPoints.first.date.day, equals(refDate.day));
-      expect(forecast.dailyPoints.last.date.day, equals(DateTime(refDate.year, refDate.month, refDate.day + h - 1).day));
+      expect(
+          forecast.dailyPoints.last.date.day,
+          equals(
+              DateTime(refDate.year, refDate.month, refDate.day + h - 1).day));
 
       // 2. Expected bills: Day 0 (1000) + Day 29 (2000) = 3000. Day 30 (4000) MUST BE EXCLUDED!
       expect(forecast.expectedBills, equals(3000.0));
@@ -562,7 +595,8 @@ void main() {
       expect(forecast.dailyPoints.first.billsAmount, equals(1000.0));
       expect(forecast.dailyPoints.last.billsAmount, equals(2000.0));
       // No other day has bills
-      final totalDailyBills = forecast.dailyPoints.fold(0.0, (sum, pt) => sum + pt.billsAmount);
+      final totalDailyBills =
+          forecast.dailyPoints.fold(0.0, (sum, pt) => sum + pt.billsAmount);
       expect(totalDailyBills, equals(3000.0));
     });
   });
@@ -572,7 +606,9 @@ void main() {
       CashflowForecastService.clearCache();
     });
 
-    test('Scenario A: Merchant rename invalidates cache and returns fresh merchant name', () {
+    test(
+        'Scenario A: Merchant rename invalidates cache and returns fresh merchant name',
+        () {
       final bill1 = RecurringPayment(
         id: 'b1',
         merchantName: 'Old Internet Co',
@@ -620,7 +656,9 @@ void main() {
       expect(f2.majorEvents.first.title, equals('New Fiber Provider'));
     });
 
-    test('Scenario B: Older transaction mutation invalidates cache without count changing', () {
+    test(
+        'Scenario B: Older transaction mutation invalidates cache without count changing',
+        () {
       final tOld1 = TransactionRecord(
         id: 'tx_old',
         amount: 1000,
@@ -661,11 +699,15 @@ void main() {
         openingBalanceOverride: 20000,
       );
 
-      expect(f2.expectedVariableExpenses, isNot(equals(f1.expectedVariableExpenses)));
-      expect(f2.expectedVariableExpenses, greaterThan(f1.expectedVariableExpenses));
+      expect(f2.expectedVariableExpenses,
+          isNot(equals(f1.expectedVariableExpenses)));
+      expect(f2.expectedVariableExpenses,
+          greaterThan(f1.expectedVariableExpenses));
     });
 
-    test('Scenario C: Horizon change creates different cache identity and recomputes', () {
+    test(
+        'Scenario C: Horizon change creates different cache identity and recomputes',
+        () {
       final f30 = CashflowForecastService.forecast(
         [],
         confirmedBills: [],
@@ -688,7 +730,9 @@ void main() {
       expect(f60.dailyPoints.length, equals(60));
     });
 
-    test('Scenario D: Safety buffer change creates different cache identity and updates safe-to-spend', () {
+    test(
+        'Scenario D: Safety buffer change creates different cache identity and updates safe-to-spend',
+        () {
       final fBuffer5k = CashflowForecastService.forecast(
         [],
         confirmedBills: [],
@@ -713,7 +757,8 @@ void main() {
       expect(fBuffer10k.totalSafeToSpend, equals(10000.0)); // 20000 - 10000
     });
 
-    test('Scenario E: Equivalent inputs successfully reuse cached instance', () {
+    test('Scenario E: Equivalent inputs successfully reuse cached instance',
+        () {
       final bill = RecurringPayment(
         id: 'b1',
         merchantName: 'Spotify',

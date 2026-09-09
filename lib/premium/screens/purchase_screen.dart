@@ -39,7 +39,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         });
       }
     } on PlatformException catch (e) {
-      AppLogger.error('Error fetching offerings', error: e, label: 'PurchaseScreen');
+      AppLogger.error('Error fetching offerings',
+          error: e, label: 'PurchaseScreen');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -52,8 +53,10 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     if (_selectedPackage == null) return;
     setState(() => _isLoading = true);
     try {
-      final result = await Purchases.purchase(PurchaseParams.package(_selectedPackage!));
-      if (result.customerInfo.entitlements.all["P.E.T Premium"]?.isActive == true) {
+      final result =
+          await Purchases.purchase(PurchaseParams.package(_selectedPackage!));
+      if (result.customerInfo.entitlements.all["P.E.T Premium"]?.isActive ==
+          true) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -178,54 +181,53 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                         const SizedBox(height: 20),
                         // Crown icon with glowing animation
                         Center(
-                          child:
-                              Container(
-                                    padding: const EdgeInsets.all(20),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppTheme.accentPurple.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppTheme.accentPurple
-                                              .withValues(alpha: 0.2),
-                                          blurRadius: 30,
-                                          spreadRadius: 5,
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.workspace_premium_rounded,
-                                      size: 72,
-                                      color: Colors.amber,
-                                    ),
-                                  )
-                                  .animate(
-                                    onPlay: (controller) =>
-                                        controller.repeat(reverse: true),
-                                  )
-                                  .shimmer(
-                                    duration: 2000.ms,
-                                    color: Colors.amber.withValues(alpha: 0.3),
-                                  )
-                                  .scale(
-                                    begin: const Offset(0.95, 0.95),
-                                    end: const Offset(1.05, 1.05),
-                                    duration: 1500.ms,
-                                  ),
+                          child: Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppTheme.accentPurple.withValues(
+                                alpha: 0.15,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.accentPurple
+                                      .withValues(alpha: 0.2),
+                                  blurRadius: 30,
+                                  spreadRadius: 5,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.workspace_premium_rounded,
+                              size: 72,
+                              color: Colors.amber,
+                            ),
+                          )
+                              .animate(
+                                onPlay: (controller) =>
+                                    controller.repeat(reverse: true),
+                              )
+                              .shimmer(
+                                duration: 2000.ms,
+                                color: Colors.amber.withValues(alpha: 0.3),
+                              )
+                              .scale(
+                                begin: const Offset(0.95, 0.95),
+                                end: const Offset(1.05, 1.05),
+                                duration: 1500.ms,
+                              ),
                         ),
                         const SizedBox(height: 24),
                         Text(
-                              'Unlock P.E.T Premium',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900,
-                                color: isDark ? Colors.white : Colors.black87,
-                                letterSpacing: -0.5,
-                              ),
-                              textAlign: TextAlign.center,
-                            )
+                          'Unlock P.E.T Premium',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? Colors.white : Colors.black87,
+                            letterSpacing: -0.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        )
                             .animate()
                             .fadeIn(duration: 400.ms)
                             .slideY(begin: 0.2, end: 0),
@@ -242,49 +244,48 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
                         // Premium Features list
                         _buildFeatureRow(
-                              icon: Icons.auto_awesome_rounded,
-                              title: 'AI Financial Copilot',
-                              subtitle:
-                                  'Custom advice & automated budget adjustments.',
-                              color: const Color(0xFFEC4899),
-                              isDark: isDark,
-                            )
+                          icon: Icons.auto_awesome_rounded,
+                          title: 'AI Financial Copilot',
+                          subtitle:
+                              'Custom advice & automated budget adjustments.',
+                          color: const Color(0xFFEC4899),
+                          isDark: isDark,
+                        )
                             .animate()
                             .fadeIn(delay: 250.ms, duration: 450.ms)
                             .slideX(begin: -0.1, end: 0),
                         const SizedBox(height: 16),
                         _buildFeatureRow(
-                              icon: Icons.account_balance_rounded,
-                              title: 'Advanced Tax Buckets',
-                              subtitle:
-                                  'Track 80C, 80D, HRA deductions dynamically.',
-                              color: const Color(0xFF10B981),
-                              isDark: isDark,
-                            )
+                          icon: Icons.account_balance_rounded,
+                          title: 'Advanced Tax Buckets',
+                          subtitle:
+                              'Track 80C, 80D, HRA deductions dynamically.',
+                          color: const Color(0xFF10B981),
+                          isDark: isDark,
+                        )
                             .animate()
                             .fadeIn(delay: 350.ms, duration: 450.ms)
                             .slideX(begin: -0.1, end: 0),
                         const SizedBox(height: 16),
                         _buildFeatureRow(
-                              icon: Icons.insights_rounded,
-                              title: 'Cashflow Forecasting',
-                              subtitle:
-                                  'Runways, safe-to-spend targets & projections.',
-                              color: const Color(0xFF8B5CF6),
-                              isDark: isDark,
-                            )
+                          icon: Icons.insights_rounded,
+                          title: 'Cashflow Forecasting',
+                          subtitle:
+                              'Runways, safe-to-spend targets & projections.',
+                          color: const Color(0xFF8B5CF6),
+                          isDark: isDark,
+                        )
                             .animate()
                             .fadeIn(delay: 450.ms, duration: 450.ms)
                             .slideX(begin: -0.1, end: 0),
                         const SizedBox(height: 16),
                         _buildFeatureRow(
-                              icon: Icons.timer_rounded,
-                              title: 'Spending Focus Mode',
-                              subtitle:
-                                  'Temporarily pause impulse transactions.',
-                              color: const Color(0xFFF59E0B),
-                              isDark: isDark,
-                            )
+                          icon: Icons.timer_rounded,
+                          title: 'Spending Focus Mode',
+                          subtitle: 'Temporarily pause impulse transactions.',
+                          color: const Color(0xFFF59E0B),
+                          isDark: isDark,
+                        )
                             .animate()
                             .fadeIn(delay: 550.ms, duration: 450.ms)
                             .slideX(begin: -0.1, end: 0),
@@ -316,13 +317,10 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                           ) {
                             final isSelected = _selectedPackage == package;
                             return _buildPackageItem(
-                                  package,
-                                  isSelected,
-                                  isDark,
-                                )
-                                .animate()
-                                .fadeIn(delay: 100.ms)
-                                .scale(
+                              package,
+                              isSelected,
+                              isDark,
+                            ).animate().fadeIn(delay: 100.ms).scale(
                                   begin: const Offset(0.97, 0.97),
                                   end: const Offset(1, 1),
                                   duration: 250.ms,
@@ -337,9 +335,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                               child: Text(
                                 'No subscription packages available at this time.',
                                 style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white38
-                                      : Colors.black38,
+                                  color:
+                                      isDark ? Colors.white38 : Colors.black38,
                                 ),
                               ),
                             ),
@@ -394,9 +391,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                               alpha: 0.4,
                             ),
                           ),
-                          onPressed: _isLoading
-                              ? null
-                              : _purchaseSelectedPackage,
+                          onPressed:
+                              _isLoading ? null : _purchaseSelectedPackage,
                           child: _isLoading
                               ? const SizedBox(
                                   height: 24,
@@ -506,18 +502,18 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         decoration: BoxDecoration(
           color: isDark
               ? (isSelected
-                    ? AppTheme.accentPurple.withValues(alpha: 0.15)
-                    : AppTheme.surfaceDark)
+                  ? AppTheme.accentPurple.withValues(alpha: 0.15)
+                  : AppTheme.surfaceDark)
               : (isSelected
-                    ? AppTheme.accentPurple.withValues(alpha: 0.08)
-                    : AppTheme.surfaceLight),
+                  ? AppTheme.accentPurple.withValues(alpha: 0.08)
+                  : AppTheme.surfaceLight),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
                 ? AppTheme.accentPurple
                 : (isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.08)),
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.08)),
             width: isSelected ? 2 : 1,
           ),
         ),

@@ -51,20 +51,16 @@ class ExportService {
     ];
 
     // Simple CSV generation — escape fields containing commas/quotes
-    final csvString = rows
-        .map((row) {
-          return row
-              .map((field) {
-                if (field.contains(',') ||
-                    field.contains('"') ||
-                    field.contains('\n')) {
-                  return '"${field.replaceAll('"', '""')}"';
-                }
-                return field;
-              })
-              .join(',');
-        })
-        .join('\n');
+    final csvString = rows.map((row) {
+      return row.map((field) {
+        if (field.contains(',') ||
+            field.contains('"') ||
+            field.contains('\n')) {
+          return '"${field.replaceAll('"', '""')}"';
+        }
+        return field;
+      }).join(',');
+    }).join('\n');
     final file = await _writeTempFile(
       'pet_transactions_${_fileTimestamp()}.csv',
       csvString,

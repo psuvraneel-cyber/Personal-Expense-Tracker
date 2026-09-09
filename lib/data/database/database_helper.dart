@@ -120,19 +120,19 @@ class DatabaseHelper {
     if (cipherSupported) {
       final File dbFile = File(path);
       if (await dbFile.exists() && await _isDatabasePlaintext(path)) {
-
         try {
-          final password = await SecureStorageService.instance
-              .getDatabaseEncryptionKey();
+          final password =
+              await SecureStorageService.instance.getDatabaseEncryptionKey();
           await _encryptDatabaseInPlace(path, password);
-          AppLogger.info('Migration to encrypted database complete.', label: 'DB');
+          AppLogger.info('Migration to encrypted database complete.',
+              label: 'DB');
         } catch (e) {
           AppLogger.error('Encryption migration failed', error: e, label: 'DB');
         }
       }
 
-      final password = await SecureStorageService.instance
-          .getDatabaseEncryptionKey();
+      final password =
+          await SecureStorageService.instance.getDatabaseEncryptionKey();
       return await openDatabase(
         path,
         version: 20,
@@ -145,7 +145,6 @@ class DatabaseHelper {
         },
       );
     } else {
-
       return await openDatabase(
         path,
         version: 20,
@@ -188,7 +187,8 @@ class DatabaseHelper {
   }
 
   @visibleForTesting
-  Future<void> onUpgradeForTesting(Database db, int oldVersion, int newVersion) async {
+  Future<void> onUpgradeForTesting(
+      Database db, int oldVersion, int newVersion) async {
     await _onUpgrade(db, oldVersion, newVersion);
   }
 
@@ -517,13 +517,16 @@ class DatabaseHelper {
   Future<void> _migrateToV15(Database db) async {
     // 1. Add recurringRuleId and occurrenceDate columns to transactions if missing
     final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
-    final hasRecurringRuleId = txnCols.any((c) => c['name'] == 'recurringRuleId');
+    final hasRecurringRuleId =
+        txnCols.any((c) => c['name'] == 'recurringRuleId');
     if (!hasRecurringRuleId) {
-      await db.execute('ALTER TABLE transactions ADD COLUMN recurringRuleId TEXT');
+      await db
+          .execute('ALTER TABLE transactions ADD COLUMN recurringRuleId TEXT');
     }
     final hasOccurrenceDate = txnCols.any((c) => c['name'] == 'occurrenceDate');
     if (!hasOccurrenceDate) {
-      await db.execute('ALTER TABLE transactions ADD COLUMN occurrenceDate TEXT');
+      await db
+          .execute('ALTER TABLE transactions ADD COLUMN occurrenceDate TEXT');
     }
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_txn_recurring
@@ -537,7 +540,8 @@ class DatabaseHelper {
     try {
       final legacyRows = await db.query(
         'transactions',
-        where: 'isRecurring = 1 AND recurringFrequency IS NOT NULL AND (recurringRuleId IS NULL OR recurringRuleId = \'\')',
+        where:
+            'isRecurring = 1 AND recurringFrequency IS NOT NULL AND (recurringRuleId IS NULL OR recurringRuleId = \'\')',
       );
 
       for (final row in legacyRows) {
@@ -555,7 +559,8 @@ class DatabaseHelper {
         final accountId = row['accountId'] as String?;
 
         final date = DateTime.tryParse(dateStr) ?? DateTime.now();
-        final freq = RecurringFrequency.fromJson(freqStr) ?? RecurringFrequency.monthly;
+        final freq =
+            RecurringFrequency.fromJson(freqStr) ?? RecurringFrequency.monthly;
         final nextDate = RecurrenceCalculator.computeNextOccurrence(
           anchorDate: date,
           currentOccurrence: date,
@@ -565,39 +570,45 @@ class DatabaseHelper {
         final ruleId = 'rule_legacy_$txnId';
         final nowStr = DateTime.now().toIso8601String();
 
-        await db.insert('recurring_rules', {
-          'id': ruleId,
-          'amount': amount,
-          'type': type,
-          'categoryId': categoryId,
-          'note': note,
-          'paymentMethod': paymentMethod,
-          'frequency': freq.toJson(),
-          'interval': 1,
-          'startDate': date.toIso8601String(),
-          'endDate': null,
-          'nextOccurrenceDate': nextDate.toIso8601String(),
-          'lastGeneratedDate': date.toIso8601String(),
-          'isActive': 1,
-          'merchantName': merchantName,
-          'taxCategory': taxCategory,
-          'source': source,
-          'accountId': accountId,
-          'createdAt': date.toIso8601String(),
-          'updatedAt': nowStr,
-          'userId': null,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        await db.insert(
+            'recurring_rules',
+            {
+              'id': ruleId,
+              'amount': amount,
+              'type': type,
+              'categoryId': categoryId,
+              'note': note,
+              'paymentMethod': paymentMethod,
+              'frequency': freq.toJson(),
+              'interval': 1,
+              'startDate': date.toIso8601String(),
+              'endDate': null,
+              'nextOccurrenceDate': nextDate.toIso8601String(),
+              'lastGeneratedDate': date.toIso8601String(),
+              'isActive': 1,
+              'merchantName': merchantName,
+              'taxCategory': taxCategory,
+              'source': source,
+              'accountId': accountId,
+              'createdAt': date.toIso8601String(),
+              'updatedAt': nowStr,
+              'userId': null,
+            },
+            conflictAlgorithm: ConflictAlgorithm.ignore);
 
         final occId = '${ruleId}_${date.toIso8601String()}';
-        await db.insert('recurring_occurrences', {
-          'id': occId,
-          'ruleId': ruleId,
-          'scheduledDate': date.toIso8601String(),
-          'status': 'generated',
-          'transactionId': txnId,
-          'generatedAt': date.toIso8601String(),
-          'updatedAt': nowStr,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        await db.insert(
+            'recurring_occurrences',
+            {
+              'id': occId,
+              'ruleId': ruleId,
+              'scheduledDate': date.toIso8601String(),
+              'status': 'generated',
+              'transactionId': txnId,
+              'generatedAt': date.toIso8601String(),
+              'updatedAt': nowStr,
+            },
+            conflictAlgorithm: ConflictAlgorithm.ignore);
 
         await db.update(
           'transactions',
@@ -610,7 +621,8 @@ class DatabaseHelper {
         );
       }
     } catch (e) {
-      AppLogger.error('Failed to backfill legacy recurring transactions', error: e, label: 'DB');
+      AppLogger.error('Failed to backfill legacy recurring transactions',
+          error: e, label: 'DB');
     }
   }
 
@@ -653,30 +665,40 @@ class DatabaseHelper {
       final colNames = cols.map((c) => c['name'] as String).toSet();
 
       if (!colNames.contains('status')) {
-        await db.execute("ALTER TABLE recurring_payments ADD COLUMN status TEXT DEFAULT 'confirmed'");
+        await db.execute(
+            "ALTER TABLE recurring_payments ADD COLUMN status TEXT DEFAULT 'confirmed'");
       }
       if (!colNames.contains('isAutopay')) {
-        await db.execute('ALTER TABLE recurring_payments ADD COLUMN isAutopay INTEGER DEFAULT 0');
+        await db.execute(
+            'ALTER TABLE recurring_payments ADD COLUMN isAutopay INTEGER DEFAULT 0');
       }
       if (!colNames.contains('previousAmount')) {
-        await db.execute('ALTER TABLE recurring_payments ADD COLUMN previousAmount REAL');
+        await db.execute(
+            'ALTER TABLE recurring_payments ADD COLUMN previousAmount REAL');
       }
       if (!colNames.contains('priceChangeDetectedAt')) {
-        await db.execute('ALTER TABLE recurring_payments ADD COLUMN priceChangeDetectedAt TEXT');
+        await db.execute(
+            'ALTER TABLE recurring_payments ADD COLUMN priceChangeDetectedAt TEXT');
       }
       if (!colNames.contains('notes')) {
-        await db.execute('ALTER TABLE recurring_payments ADD COLUMN notes TEXT');
+        await db
+            .execute('ALTER TABLE recurring_payments ADD COLUMN notes TEXT');
       }
       if (!colNames.contains('createdAt')) {
-        await db.execute('ALTER TABLE recurring_payments ADD COLUMN createdAt TEXT');
-        await db.execute('UPDATE recurring_payments SET createdAt = lastPaidAt WHERE createdAt IS NULL');
+        await db.execute(
+            'ALTER TABLE recurring_payments ADD COLUMN createdAt TEXT');
+        await db.execute(
+            'UPDATE recurring_payments SET createdAt = lastPaidAt WHERE createdAt IS NULL');
       }
       if (!colNames.contains('updatedAt')) {
-        await db.execute('ALTER TABLE recurring_payments ADD COLUMN updatedAt TEXT');
-        await db.execute('UPDATE recurring_payments SET updatedAt = lastPaidAt WHERE updatedAt IS NULL');
+        await db.execute(
+            'ALTER TABLE recurring_payments ADD COLUMN updatedAt TEXT');
+        await db.execute(
+            'UPDATE recurring_payments SET updatedAt = lastPaidAt WHERE updatedAt IS NULL');
       }
       if (!colNames.contains('detectionReason')) {
-        await db.execute('ALTER TABLE recurring_payments ADD COLUMN detectionReason TEXT');
+        await db.execute(
+            'ALTER TABLE recurring_payments ADD COLUMN detectionReason TEXT');
       }
 
       await db.execute('''
@@ -697,7 +719,8 @@ class DatabaseHelper {
         ON recurring_payment_history (recurringPaymentId)
       ''');
     } catch (e) {
-      AppLogger.error('Failed to run v16 database migration', error: e, label: 'DB');
+      AppLogger.error('Failed to run v16 database migration',
+          error: e, label: 'DB');
     }
   }
 
@@ -727,7 +750,8 @@ class DatabaseHelper {
 
       for (final entry in newColumns.entries) {
         if (!colNames.contains(entry.key)) {
-          await db.execute('ALTER TABLE alerts ADD COLUMN ${entry.key} ${entry.value}');
+          await db.execute(
+              'ALTER TABLE alerts ADD COLUMN ${entry.key} ${entry.value}');
         }
       }
 
@@ -753,7 +777,8 @@ class DatabaseHelper {
 
       // Drop old non-unique index and create unique index on alertKey
       await db.execute('DROP INDEX IF EXISTS idx_alert_key');
-      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_key ON alerts (alertKey)');
+      await db.execute(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_key ON alerts (alertKey)');
 
       // Create composite and filtering indexes
       await db.execute('''
@@ -769,7 +794,8 @@ class DatabaseHelper {
         ON alerts (period)
       ''');
     } catch (e) {
-      AppLogger.error('Failed to run v17 database migration', error: e, label: 'DB');
+      AppLogger.error('Failed to run v17 database migration',
+          error: e, label: 'DB');
     }
   }
 
@@ -846,10 +872,12 @@ class DatabaseHelper {
         final txnColNames = txnCols.map((c) => c['name'] as String).toSet();
 
         if (!txnColNames.contains('sourceObservationId')) {
-          await db.execute('ALTER TABLE transactions ADD COLUMN sourceObservationId TEXT');
+          await db.execute(
+              'ALTER TABLE transactions ADD COLUMN sourceObservationId TEXT');
         }
         if (!txnColNames.contains('sourceFingerprint')) {
-          await db.execute('ALTER TABLE transactions ADD COLUMN sourceFingerprint TEXT');
+          await db.execute(
+              'ALTER TABLE transactions ADD COLUMN sourceFingerprint TEXT');
         }
         await db.execute('''
           CREATE INDEX IF NOT EXISTS idx_txn_source_fingerprint 
@@ -867,24 +895,30 @@ class DatabaseHelper {
           "SELECT name FROM sqlite_master WHERE type='table' AND name='linked_accounts'",
         );
         if (acctTableCheck.isNotEmpty) {
-          final acctCols = await db.rawQuery('PRAGMA table_info(linked_accounts)');
+          final acctCols =
+              await db.rawQuery('PRAGMA table_info(linked_accounts)');
           final acctColNames = acctCols.map((c) => c['name'] as String).toSet();
 
           if (!acctColNames.contains('accountTail')) {
-            await db.execute('ALTER TABLE linked_accounts ADD COLUMN accountTail TEXT');
+            await db.execute(
+                'ALTER TABLE linked_accounts ADD COLUMN accountTail TEXT');
           }
           if (!acctColNames.contains('lastObservedBalance')) {
-            await db.execute('ALTER TABLE linked_accounts ADD COLUMN lastObservedBalance REAL');
+            await db.execute(
+                'ALTER TABLE linked_accounts ADD COLUMN lastObservedBalance REAL');
           }
           if (!acctColNames.contains('lastObservedAt')) {
-            await db.execute('ALTER TABLE linked_accounts ADD COLUMN lastObservedAt TEXT');
+            await db.execute(
+                'ALTER TABLE linked_accounts ADD COLUMN lastObservedAt TEXT');
           }
           if (!acctColNames.contains('bankName')) {
-            await db.execute('ALTER TABLE linked_accounts ADD COLUMN bankName TEXT');
+            await db.execute(
+                'ALTER TABLE linked_accounts ADD COLUMN bankName TEXT');
           }
         }
       } catch (e) {
-        AppLogger.warn('linked_accounts table migration check: $e', label: 'DB');
+        AppLogger.warn('linked_accounts table migration check: $e',
+            label: 'DB');
       }
 
       // 4. Safe, idempotent backfill of existing confirmed/high-confidence SMS transactions
@@ -922,7 +956,9 @@ class DatabaseHelper {
             );
             if (stateRows.isNotEmpty) {
               final status = stateRows.first['status'] as String?;
-              if (status == 'rejected' || status == 'deleted' || status == 'ignored') {
+              if (status == 'rejected' ||
+                  status == 'deleted' ||
+                  status == 'ignored') {
                 continue; // Do not resurrect
               }
             }
@@ -1010,10 +1046,12 @@ class DatabaseHelper {
           }
         }
       } catch (e) {
-        AppLogger.warn('Backfill of sms_transactions failed or skipped: $e', label: 'DB');
+        AppLogger.warn('Backfill of sms_transactions failed or skipped: $e',
+            label: 'DB');
       }
     } catch (e) {
-      AppLogger.error('Failed to run v18 database migration', error: e, label: 'DB');
+      AppLogger.error('Failed to run v18 database migration',
+          error: e, label: 'DB');
     }
   }
 
@@ -1062,7 +1100,8 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE saving_goals ADD COLUMN updatedAt TEXT');
       }
     } catch (e) {
-      AppLogger.error('Failed to run v19 database migration', error: e, label: 'DB');
+      AppLogger.error('Failed to run v19 database migration',
+          error: e, label: 'DB');
     }
   }
 
@@ -1099,7 +1138,8 @@ class DatabaseHelper {
               FROM weekly_limits
             ''');
             await txn.execute('DROP TABLE weekly_limits');
-            await txn.execute('ALTER TABLE weekly_limits_v20 RENAME TO weekly_limits');
+            await txn.execute(
+                'ALTER TABLE weekly_limits_v20 RENAME TO weekly_limits');
             await txn.execute('''
               CREATE INDEX IF NOT EXISTS idx_weekly_limits_category
               ON weekly_limits (categoryId)
@@ -1120,22 +1160,28 @@ class DatabaseHelper {
 
       // 2. Add rich audit columns to goal_history if not present
       final goalHistCols = await db.rawQuery('PRAGMA table_info(goal_history)');
-      final goalHistColNames = goalHistCols.map((c) => c['name'] as String).toSet();
+      final goalHistColNames =
+          goalHistCols.map((c) => c['name'] as String).toSet();
 
       if (!goalHistColNames.contains('previousAmount')) {
-        await db.execute('ALTER TABLE goal_history ADD COLUMN previousAmount REAL');
+        await db
+            .execute('ALTER TABLE goal_history ADD COLUMN previousAmount REAL');
       }
       if (!goalHistColNames.contains('resultingAmount')) {
-        await db.execute('ALTER TABLE goal_history ADD COLUMN resultingAmount REAL');
+        await db.execute(
+            'ALTER TABLE goal_history ADD COLUMN resultingAmount REAL');
       }
       if (!goalHistColNames.contains('source')) {
-        await db.execute("ALTER TABLE goal_history ADD COLUMN source TEXT DEFAULT 'manual'");
+        await db.execute(
+            "ALTER TABLE goal_history ADD COLUMN source TEXT DEFAULT 'manual'");
       }
       if (!goalHistColNames.contains('transactionId')) {
-        await db.execute('ALTER TABLE goal_history ADD COLUMN transactionId TEXT');
+        await db
+            .execute('ALTER TABLE goal_history ADD COLUMN transactionId TEXT');
       }
     } catch (e) {
-      AppLogger.error('Failed to run v20 database migration', error: e, label: 'DB');
+      AppLogger.error('Failed to run v20 database migration',
+          error: e, label: 'DB');
     }
   }
 

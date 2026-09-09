@@ -33,7 +33,9 @@ void main() {
       expect(find.text('Enable'), findsNothing);
     });
 
-    testWidgets('Displays rationale and "Enable" CTA when denied (not yet granted)', (tester) async {
+    testWidgets(
+        'Displays rationale and "Enable" CTA when denied (not yet granted)',
+        (tester) async {
       NotificationService.permissionNotifier.value = PermissionStatus.denied;
 
       await tester.pumpWidget(
@@ -53,7 +55,9 @@ void main() {
       );
     });
 
-    testWidgets('Displays blocked rationale and "Settings" CTA when permanently denied', (tester) async {
+    testWidgets(
+        'Displays blocked rationale and "Settings" CTA when permanently denied',
+        (tester) async {
       NotificationService.permissionNotifier.value =
           PermissionStatus.permanentlyDenied;
 
@@ -74,7 +78,8 @@ void main() {
       );
     });
 
-    testWidgets('Tapping dismiss button hides the banner and saves preference', (tester) async {
+    testWidgets('Tapping dismiss button hides the banner and saves preference',
+        (tester) async {
       NotificationService.permissionNotifier.value = PermissionStatus.denied;
 
       await tester.pumpWidget(
@@ -97,7 +102,8 @@ void main() {
       expect(NotificationPreferencesService.instance.isBannerDismissed, isTrue);
     });
 
-    testWidgets('forceShow: true ignores dismissal and displays banner', (tester) async {
+    testWidgets('forceShow: true ignores dismissal and displays banner',
+        (tester) async {
       NotificationService.permissionNotifier.value = PermissionStatus.denied;
       await NotificationPreferencesService.instance.setBannerDismissed(true);
 

@@ -58,10 +58,13 @@ void main() {
   });
 
   group('P0-P7 Financial Ingestion Pipeline Tests', () {
-    test('Test A — SMS debit creates one observation and one canonical ledger transaction', () async {
+    test(
+        'Test A — SMS debit creates one observation and one canonical ledger transaction',
+        () async {
       final msg = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 500.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Swiggy. Avl Bal Rs 24,500.00. Ref 123456789.',
+        body:
+            'Rs 500.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Swiggy. Avl Bal Rs 24,500.00. Ref 123456789.',
         dateMillis: DateTime(2026, 8, 24, 14, 30).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -83,11 +86,14 @@ void main() {
       // Verify financial_observations table has recorded observation
       final obsRows = await db.query('financial_observations');
       expect(obsRows.length, equals(1));
-      expect(obsRows.first['state'], equals(FinancialObservationState.promoted.name));
+      expect(obsRows.first['state'],
+          equals(FinancialObservationState.promoted.name));
       expect(obsRows.first['sourceIdentifier'], equals('HDFCBK'));
     });
 
-    test('Test B — Notification debit preserves title/body and promotes to canonical ledger', () async {
+    test(
+        'Test B — Notification debit preserves title/body and promotes to canonical ledger',
+        () async {
       final msg = NativeSmsMessage(
         address: 'PhonePe',
         packageName: 'com.phonepe.app',
@@ -110,13 +116,16 @@ void main() {
       expect(ledgerRows.first['merchantName'], equals('Starbucks'));
     });
 
-    test('Test C — Cross-source deduplication collapses SMS and Notification into 1 canonical transaction', () async {
+    test(
+        'Test C — Cross-source deduplication collapses SMS and Notification into 1 canonical transaction',
+        () async {
       final timestamp = DateTime(2026, 8, 24, 16, 0).millisecondsSinceEpoch;
 
       // 1. First event arrives via SMS
       final smsMsg = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 450.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Starbucks. Ref UPI/987654321.',
+        body:
+            'Rs 450.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Starbucks. Ref UPI/987654321.',
         dateMillis: timestamp,
         source: 'sms',
       );
@@ -139,7 +148,9 @@ void main() {
 
       // Ledger must still contain EXACTLY 1 transaction
       final ledgerRows = await db.query('transactions');
-      expect(ledgerRows.length, equals(1), reason: 'Cross-source duplicates must never create 2 ledger transactions');
+      expect(ledgerRows.length, equals(1),
+          reason:
+              'Cross-source duplicates must never create 2 ledger transactions');
       expect(ledgerRows.first['amount'], equals(450.0));
 
       // Observations table contains BOTH observations with provenance linkage
@@ -153,7 +164,9 @@ void main() {
       expect(IngestionDiagnostics().crossSourceMerged, equals(1));
     });
 
-    test('Test E — Uncertain transaction holds in review queue without entering core ledger until confirmed', () async {
+    test(
+        'Test E — Uncertain transaction holds in review queue without entering core ledger until confirmed',
+        () async {
       // Ambiguous message with moderate confidence (0.35 - 0.79)
       final msg = NativeSmsMessage(
         address: 'HDFCBK',
@@ -192,7 +205,9 @@ void main() {
       expect(ledgerAfter.first['merchantName'], equals('Local Shop'));
     });
 
-    test('Test F — Rejected transaction records persistent tombstone and prevents resurrection on re-scan', () async {
+    test(
+        'Test F — Rejected transaction records persistent tombstone and prevents resurrection on re-scan',
+        () async {
       final msg = NativeSmsMessage(
         address: 'SBIINB',
         body: 'Rs 120.00 debited at Unknown Vendor. Info txn.',
@@ -213,7 +228,8 @@ void main() {
 
       // Verify rejected state
       final obsRows = await db.query('financial_observations');
-      expect(obsRows.first['state'], equals(FinancialObservationState.rejected.name));
+      expect(obsRows.first['state'],
+          equals(FinancialObservationState.rejected.name));
 
       // Verify tombstone in sms_processing_state
       final stateRows = await db.query('sms_processing_state');
@@ -221,17 +237,22 @@ void main() {
 
       // Re-scan inbox: ingest same message again
       final rescanResult = await ingestionService.ingestMessage(msg);
-      expect(rescanResult, isNull, reason: 'Re-ingesting rejected event must be dropped');
+      expect(rescanResult, isNull,
+          reason: 'Re-ingesting rejected event must be dropped');
 
       // Core ledger remains empty
       final ledgerRows = await db.query('transactions');
-      expect(ledgerRows.isEmpty, isTrue, reason: 'Rejected event must never enter core ledger');
+      expect(ledgerRows.isEmpty, isTrue,
+          reason: 'Rejected event must never enter core ledger');
     });
 
-    test('Test H — Bill statement is routed to commitments and does NOT create an expense in ledger', () async {
+    test(
+        'Test H — Bill statement is routed to commitments and does NOT create an expense in ledger',
+        () async {
       final msg = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Total Amount Due on your HDFC Bank Credit Card ending 5678 is Rs 14,500.00. Payment Due Date 25-Aug-2026. Min Due Rs 1,000.00.',
+        body:
+            'Total Amount Due on your HDFC Bank Credit Card ending 5678 is Rs 14,500.00. Payment Due Date 25-Aug-2026. Min Due Rs 1,000.00.',
         dateMillis: DateTime(2026, 8, 24, 19, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -241,16 +262,21 @@ void main() {
       // Must NOT be an expense in core ledger
       expect(txn, isNull);
       final ledgerRows = await db.query('transactions');
-      expect(ledgerRows.isEmpty, isTrue, reason: 'Credit card bill statement must never be treated as an expense transaction');
+      expect(ledgerRows.isEmpty, isTrue,
+          reason:
+              'Credit card bill statement must never be treated as an expense transaction');
 
       // Diagnostics check
       expect(IngestionDiagnostics().billEvents, equals(1));
     });
 
-    test('Test I — Balance-only notification does NOT manufacture a fake expense transaction', () async {
+    test(
+        'Test I — Balance-only notification does NOT manufacture a fake expense transaction',
+        () async {
       final msg = NativeSmsMessage(
         address: 'SBIINB',
-        body: 'Dear Customer, Available balance for your A/c XX1234 is Rs 45,230.50 as on 24-Aug-2026.',
+        body:
+            'Dear Customer, Available balance for your A/c XX1234 is Rs 45,230.50 as on 24-Aug-2026.',
         dateMillis: DateTime(2026, 8, 24, 20, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -259,15 +285,19 @@ void main() {
 
       expect(txn, isNull);
       final ledgerRows = await db.query('transactions');
-      expect(ledgerRows.isEmpty, isTrue, reason: 'Balance alert must never manufacture a fake transaction');
+      expect(ledgerRows.isEmpty, isTrue,
+          reason: 'Balance alert must never manufacture a fake transaction');
 
       expect(IngestionDiagnostics().balanceObservations, equals(1));
     });
 
-    test('Test J — Refund message creates income transaction in canonical ledger', () async {
+    test(
+        'Test J — Refund message creates income transaction in canonical ledger',
+        () async {
       final msg = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 299.00 credited to your HDFC Bank A/c XX1234 towards refund from Zomato. Ref 456789123.',
+        body:
+            'Rs 299.00 credited to your HDFC Bank A/c XX1234 towards refund from Zomato. Ref 456789123.',
         dateMillis: DateTime(2026, 8, 24, 21, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -284,7 +314,9 @@ void main() {
       expect(ledgerRows.first['type'], equals('income'));
     });
 
-    test('Test K — User learned merchant rule deterministically overrides classification', () async {
+    test(
+        'Test K — User learned merchant rule deterministically overrides classification',
+        () async {
       // 1. Learn a custom rule
       await merchantRuleService.learnRule(
         identifier: 'kirana_store@upi',
@@ -295,7 +327,8 @@ void main() {
       // 2. Ingest transaction with this UPI ID
       final msg = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 650.00 debited from HDFC Bank A/c XX1234 to VPA kirana_store@upi on 24-Aug-26. Ref 112233.',
+        body:
+            'Rs 650.00 debited from HDFC Bank A/c XX1234 to VPA kirana_store@upi on 24-Aug-26. Ref 112233.',
         dateMillis: DateTime(2026, 8, 24, 22, 0).millisecondsSinceEpoch,
         source: 'sms',
       );

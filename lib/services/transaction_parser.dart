@@ -45,7 +45,7 @@ class ParsedTransaction {
   final String bankName;
   final String transactionType; // 'debit' or 'credit'
   final String
-  transactionSubType; // 'payment', 'collect', 'refund', 'cashback', 'transfer', 'reversal'
+      transactionSubType; // 'payment', 'collect', 'refund', 'cashback', 'transfer', 'reversal'
   final DateTime? parsedDate;
   final String? upiId;
   final String? accountTail; // last 4-6 digits of account

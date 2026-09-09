@@ -118,8 +118,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                     Text(
                       'Your Goals',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                     const Spacer(),
                     Text(
@@ -130,9 +130,9 @@ class _GoalsScreenState extends State<GoalsScreen>
                 ),
                 const SizedBox(height: 10),
                 ...provider.goals.asMap().entries.map(
-                  (e) =>
-                      _buildGoalCard(context, e.value, provider, isDark, e.key),
-                ),
+                      (e) => _buildGoalCard(
+                          context, e.value, provider, isDark, e.key),
+                    ),
               ],
             );
           },
@@ -209,7 +209,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                           return CustomPaint(
                             size: const Size(72, 72),
                             painter: _ArcPainter(
-                              progress: (progress * _animCtrl.value).clamp(0, 1),
+                              progress:
+                                  (progress * _animCtrl.value).clamp(0, 1),
                             ),
                           );
                         },
@@ -271,8 +272,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                   progress >= 1
                       ? '🎉 All complete!'
                       : progress >= 0.5
-                      ? '💪 Halfway there'
-                      : '🚀 Keep going',
+                          ? '💪 Halfway there'
+                          : '🚀 Keep going',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,
@@ -329,8 +330,8 @@ class _GoalsScreenState extends State<GoalsScreen>
             color: isComplete
                 ? AppTheme.incomeGreen.withAlpha(isDark ? 60 : 40)
                 : (isDark
-                      ? Colors.white.withAlpha(10)
-                      : Colors.black.withAlpha(7)),
+                    ? Colors.white.withAlpha(10)
+                    : Colors.black.withAlpha(7)),
           ),
           boxShadow: isComplete
               ? [
@@ -372,7 +373,9 @@ class _GoalsScreenState extends State<GoalsScreen>
                     children: [
                       Text(
                         goal.name,
-                        style: Theme.of(context).textTheme.titleMedium
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       if (goal.isPaused)
@@ -560,8 +563,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                     Text(
                       _fmt.format(goal.targetAmount),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ],
                 ),
@@ -619,9 +622,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                 icon: const Icon(Icons.add_rounded, size: 16),
                 label: const Text('Top Up'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isComplete
-                      ? AppTheme.incomeGreen
-                      : AppTheme.accentPurple,
+                  backgroundColor:
+                      isComplete ? AppTheme.incomeGreen : AppTheme.accentPurple,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -724,7 +726,8 @@ class _GoalsScreenState extends State<GoalsScreen>
               children: [
                 Row(
                   children: [
-                    Text(goal.emoji ?? '🎯', style: const TextStyle(fontSize: 28)),
+                    Text(goal.emoji ?? '🎯',
+                        style: const TextStyle(fontSize: 28)),
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -797,7 +800,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                     onPressed: () async {
                       final amount = double.tryParse(controller.text.trim());
                       if (amount == null || amount <= 0) {
-                        setS(() => topUpError = 'Please enter an amount greater than ₹0');
+                        setS(() => topUpError =
+                            'Please enter an amount greater than ₹0');
                         return;
                       }
                       final res = await provider.topUpGoal(goal.id, amount);
@@ -806,7 +810,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                             'Amount exceeds target by ₹${res.overage.toStringAsFixed(0)}. Remaining needed: ₹${res.allowedAmount.toStringAsFixed(0)}');
                         return;
                       } else if (res.status == TopUpStatus.alreadyAchieved) {
-                        setS(() => topUpError = 'This goal has already reached its target!');
+                        setS(() => topUpError =
+                            'This goal has already reached its target!');
                         return;
                       }
                       if (ctx.mounted) Navigator.pop(ctx);
@@ -876,7 +881,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _goalEmojis.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 8),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 8),
                   itemBuilder: (_, i) {
                     final selected = _goalEmojis[i] == selectedEmoji;
                     return GestureDetector(
@@ -988,7 +994,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                       hasError = true;
                     }
                     if (amount == null || amount <= 0) {
-                      setS(() => amountError = 'Please enter a target greater than ₹0');
+                      setS(() => amountError =
+                          'Please enter a target greater than ₹0');
                       hasError = true;
                     }
 
@@ -1080,7 +1087,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _goalEmojis.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 8),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 8),
                   itemBuilder: (_, i) {
                     final selected = _goalEmojis[i] == selectedEmoji;
                     return GestureDetector(
@@ -1164,8 +1172,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                                 DateTime.now().add(const Duration(days: 90)),
                             firstDate: DateTime.now()
                                 .subtract(const Duration(days: 365)),
-                            lastDate: DateTime.now()
-                                .add(const Duration(days: 3650)),
+                            lastDate:
+                                DateTime.now().add(const Duration(days: 3650)),
                           );
                           if (picked != null) setS(() => targetDate = picked);
                         },

@@ -27,8 +27,7 @@ void main() {
     // ── Variant 1: Original BOB format ─────────────────────────────
     test('V1: Dr. with Cr. to VPA, Ref, AvlBal, colon timestamp', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 500 Dr. from A/C XXXXXX2170 and Cr. to q123456789@ybl. '
+        body: 'Rs 500 Dr. from A/C XXXXXX2170 and Cr. to q123456789@ybl. '
             'Ref:123456789012. AvlBal:Rs39.55 (2026:02:13 01:45:36). '
             'Not you? Call 1234567890/5000-BOB',
         sender: 'AD-BOBRDA',
@@ -80,8 +79,7 @@ void main() {
     // ── Variant 3: INR format, standard date, explicit bank name ──
     test('V3: INR amount, debited keyword, dd-Mon-yyyy date', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'INR 2500.00 debited from A/c no. XXXX3456 to VPA user@ybl '
+        body: 'INR 2500.00 debited from A/c no. XXXX3456 to VPA user@ybl '
             'on 13-Feb-2026. UPI Ref: 112233445566. Bank of Baroda.',
         sender: 'AD-BARODA',
         timestamp: DateTime(2026, 2, 13),
@@ -99,8 +97,7 @@ void main() {
     // ── Variant 4: ₹ symbol, DR (no dot), phone@upi VPA ──────────
     test('V4: ₹ symbol, DR without dot, phone@upi handle', () {
       final r = SmsTransactionParser.parse(
-        body:
-            '₹750 DR. from A/C XXXX8899 and Cr. to 9876543210@upi. '
+        body: '₹750 DR. from A/C XXXX8899 and Cr. to 9876543210@upi. '
             'Ref:111222333444. AvlBal:₹4,250.00 (2026:02:14 09:15:22). '
             'Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
@@ -118,8 +115,7 @@ void main() {
     // ── Variant 5: Minimal BOB debit (no VPA, no balance) ────────
     test('V5: Minimal Dr. format — no VPA or balance', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 100 Dr. from A/C XX5566. Ref:654321098765. '
+        body: 'Rs 100 Dr. from A/C XX5566. Ref:654321098765. '
             'Not you? Call 1234567890/5000-BOB',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 10),
@@ -157,8 +153,7 @@ void main() {
     // ── Variant 7: Different timestamp format (dd-mm-yy) ─────────
     test('V7: Dr. with dd-mm-yy timestamp format', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 800 Dr. from A/C XX9870 and Cr. to shop@paytm. '
+        body: 'Rs 800 Dr. from A/C XX9870 and Cr. to shop@paytm. '
             'Ref:555666777888. AvlBal:Rs1200.00 (13-02-26 14:30). '
             'Not you? Call 1800-BOB',
         sender: 'AD-BOBRDA',
@@ -176,8 +171,7 @@ void main() {
     // ── Variant 8: Rs without space, balance without space ────────
     test('V8: Rs500 (no space) and AvlBal:Rs200 (no space)', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs500 Dr. from A/C XX1122 and Cr. to seller@ybl. '
+        body: 'Rs500 Dr. from A/C XX1122 and Cr. to seller@ybl. '
             'Ref:999888777666. AvlBal:Rs200.75 (2026:02:10 22:00:00). '
             'Not you? Call 1234567890-BOB',
         sender: 'AD-BOBRDA',
@@ -201,8 +195,7 @@ void main() {
   group('BOB Credit — SmsTransactionParser', () {
     test('BOB credit with credited keyword', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 3,000.00 credited to A/C XXXXXX2170 on 13-02-2026. '
+        body: 'Rs 3,000.00 credited to A/C XXXXXX2170 on 13-02-2026. '
             'Ref:998877665544. AvlBal:Rs3039.55. Bank of Baroda',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 13),
@@ -218,8 +211,7 @@ void main() {
 
     test('BOB credit via UPI with from VPA', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 1,500.00 credited to A/C XX2170 from friend@ybl. '
+        body: 'Rs 1,500.00 credited to A/C XX2170 from friend@ybl. '
             'UPI Ref: 445566778899. AvlBal:Rs 4,539.55. Bank of Baroda.',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 13),
@@ -240,8 +232,7 @@ void main() {
   group('Fraud helpline number — must NOT be confused with reference', () {
     test('10-digit helpline is NOT ref; 12-digit Ref is correct', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 200 Dr. from A/C XX1234 and Cr. to pay@ybl. '
+        body: 'Rs 200 Dr. from A/C XX1234 and Cr. to pay@ybl. '
             'Ref:112233445566. AvlBal:Rs800.00. '
             'Not you? Call 1800123456/5000-BOB',
         sender: 'AD-BOBRDA',
@@ -257,8 +248,7 @@ void main() {
 
     test('Helpline with 4-digit number is NOT captured', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 300 Dr. from A/C XX4321 and Cr. to abc@ybl. '
+        body: 'Rs 300 Dr. from A/C XX4321 and Cr. to abc@ybl. '
             'Ref:998877665544. Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 13),
@@ -364,8 +354,7 @@ void main() {
   group('Colon-separated date extraction (BOB-specific)', () {
     test('yyyy:mm:dd hh:mm:ss extracted correctly', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 100 Dr. from A/C XX1234 and Cr. to test@ybl. '
+        body: 'Rs 100 Dr. from A/C XX1234 and Cr. to test@ybl. '
             'Ref:111111111111. AvlBal:Rs900. (2026:02:13 01:45:36). '
             'Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
@@ -382,8 +371,7 @@ void main() {
     test('Falls back to SMS timestamp when no date in body', () {
       final fallbackTs = DateTime(2026, 3, 20);
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 100 Dr. from A/C XX1234 and Cr. to test@ybl. '
+        body: 'Rs 100 Dr. from A/C XX1234 and Cr. to test@ybl. '
             'Ref:111111111111. Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
         timestamp: fallbackTs,
@@ -401,8 +389,7 @@ void main() {
   group('Balance amount exclusion', () {
     test('AvlBal:Rs amount is NOT the transaction amount', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 250 Dr. from A/C XX9999 and Cr. to payee@ybl. '
+        body: 'Rs 250 Dr. from A/C XX9999 and Cr. to payee@ybl. '
             'Ref:222333444555. AvlBal:Rs10,000.00 (2026:02:13 12:00:00). '
             'Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
@@ -419,8 +406,7 @@ void main() {
 
     test('AvlBal without space is correctly excluded', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 50 Dr. from A/C XX1111 and Cr. to x@ybl. '
+        body: 'Rs 50 Dr. from A/C XX1111 and Cr. to x@ybl. '
             'Ref:333444555666. AvlBal:Rs50,000.00. Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 13),
@@ -452,8 +438,7 @@ void main() {
     /// 3. Only the debit keyword is found → exclusive debit → DEBIT direction
     test('Dr.+Cr. in same SMS = DEBIT (money sent)', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
+        body: 'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
             'Ref:123456789012. Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 13),
@@ -486,13 +471,11 @@ void main() {
     /// - A bank sends a duplicate confirmation
     /// - The user re-processes their SMS inbox
     test('Same ref number across two parses yields same ref for dedup', () {
-      const sms1 =
-          'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
+      const sms1 = 'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
           'Ref:123456789012. AvlBal:Rs39.55 (2026:02:13 01:45:36). '
           'Not you? Call 1234567890/5000-BOB';
 
-      const sms2 =
-          'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
+      const sms2 = 'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
           'Ref:123456789012. AvlBal:Rs39.55 (2026:02:13 01:45:36). '
           'Not you? Call 1234567890/5000-BOB';
 
@@ -517,15 +500,13 @@ void main() {
 
     test('Different ref numbers are NOT deduplicated', () {
       final r1 = SmsTransactionParser.parse(
-        body:
-            'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
+        body: 'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
             'Ref:123456789012. Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 13),
       );
       final r2 = SmsTransactionParser.parse(
-        body:
-            'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
+        body: 'Rs 500 Dr. from A/C XX2170 and Cr. to pay@ybl. '
             'Ref:999888777666. Not you? Call 5000-BOB',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 13),
@@ -546,8 +527,7 @@ void main() {
   group('BOB non-transaction messages — must reject', () {
     test('BOB OTP message rejected', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Your OTP for Bank of Baroda net banking is 345678. '
+        body: 'Your OTP for Bank of Baroda net banking is 345678. '
             'Do not share with anyone. Valid for 5 minutes.',
         sender: 'AD-BOBRDA',
         timestamp: DateTime(2026, 2, 13),
@@ -558,8 +538,7 @@ void main() {
 
     test('BOB promotional message rejected', () {
       final r = SmsTransactionParser.parse(
-        body:
-            'Bank of Baroda: Get up to Rs 5000 cashback on home loan. '
+        body: 'Bank of Baroda: Get up to Rs 5000 cashback on home loan. '
             'Apply now at https://bob.in/offer. T&C apply.',
         sender: 'VK-BOBRDA',
         timestamp: DateTime(2026, 2, 13),

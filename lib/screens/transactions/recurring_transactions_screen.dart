@@ -50,7 +50,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('All recurring transactions are up to date'),
+                      content:
+                          Text('All recurring transactions are up to date'),
                     ),
                   );
                 }
@@ -70,7 +71,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
         },
         backgroundColor: AppTheme.accentTeal,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('New Rule', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text('New Rule',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: GradientBackground(
         animate: false,
@@ -91,7 +93,10 @@ class RecurringTransactionsScreen extends StatelessWidget {
                           const SizedBox(height: 16),
                           Text(
                             'No Recurring Transactions',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
                           ),
@@ -100,7 +105,9 @@ class RecurringTransactionsScreen extends StatelessWidget {
                             'Create recurring rules for regular salaries, rent, subscriptions, or utility bills to auto-generate ledger entries.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+                              color: isDark
+                                  ? AppTheme.textSecondary
+                                  : AppTheme.textSecondaryLight,
                               fontSize: 14,
                             ),
                           ),
@@ -121,9 +128,12 @@ class RecurringTransactionsScreen extends StatelessWidget {
                       itemCount: rules.length,
                       itemBuilder: (context, index) {
                         final rule = rules[index];
-                        final category = catProvider.getCategoryById(rule.categoryId);
+                        final category =
+                            catProvider.getCategoryById(rule.categoryId);
                         final isExpense = rule.type == TransactionType.expense;
-                        final amountColor = isExpense ? ColorTokens.expense : ColorTokens.income;
+                        final amountColor = isExpense
+                            ? ColorTokens.expense
+                            : ColorTokens.income;
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: Spacing.md),
@@ -132,13 +142,17 @@ class RecurringTransactionsScreen extends StatelessWidget {
                             gradient: isDark
                                 ? ColorTokens.darkCardGradient
                                 : ColorTokens.lightCardGradient,
-                            borderRadius: BorderRadius.circular(Spacing.cardRadius),
+                            borderRadius:
+                                BorderRadius.circular(Spacing.cardRadius),
                             border: Border.all(
-                              color: isDark ? ColorTokens.darkBorder : ColorTokens.lightBorder,
+                              color: isDark
+                                  ? ColorTokens.darkBorder
+                                  : ColorTokens.lightBorder,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: (isDark ? Colors.black : Colors.grey).withAlpha(
+                                color: (isDark ? Colors.black : Colors.grey)
+                                    .withAlpha(
                                   isDark ? 20 : 10,
                                 ),
                                 blurRadius: 16,
@@ -155,10 +169,12 @@ class RecurringTransactionsScreen extends StatelessWidget {
                                     width: 44,
                                     height: 44,
                                     decoration: BoxDecoration(
-                                      color: (category?.color ?? Colors.grey).withAlpha(
+                                      color: (category?.color ?? Colors.grey)
+                                          .withAlpha(
                                         isDark ? 30 : 20,
                                       ),
-                                      borderRadius: BorderRadius.circular(Spacing.chipRadius),
+                                      borderRadius: BorderRadius.circular(
+                                          Spacing.chipRadius),
                                     ),
                                     child: Icon(
                                       category?.icon ?? Icons.category,
@@ -169,7 +185,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           category?.name ?? 'Unknown',
@@ -182,7 +199,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
                                         Text(
                                           rule.note.isNotEmpty
                                               ? rule.note
-                                              : (rule.merchantName ?? rule.frequency.displayName),
+                                              : (rule.merchantName ??
+                                                  rule.frequency.displayName),
                                           style: TextStyle(
                                             fontSize: 13,
                                             color: isDark
@@ -212,14 +230,20 @@ class RecurringTransactionsScreen extends StatelessWidget {
                                         ),
                                         decoration: BoxDecoration(
                                           color: rule.isActive
-                                              ? AppTheme.accentTeal.withAlpha(25)
+                                              ? AppTheme.accentTeal
+                                                  .withAlpha(25)
                                               : Colors.grey.withAlpha(30),
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                         ),
                                         child: Text(
-                                          rule.isActive ? rule.frequency.displayName : 'Paused',
+                                          rule.isActive
+                                              ? rule.frequency.displayName
+                                              : 'Paused',
                                           style: TextStyle(
-                                            color: rule.isActive ? AppTheme.accentTeal : Colors.grey,
+                                            color: rule.isActive
+                                                ? AppTheme.accentTeal
+                                                : Colors.grey,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -231,7 +255,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
                               ),
                               const Divider(height: 24),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
@@ -308,9 +333,14 @@ class RecurringTransactionsScreen extends StatelessWidget {
                                         value: 'delete',
                                         child: Row(
                                           children: [
-                                            Icon(Icons.delete_outline, size: 18, color: AppTheme.expenseRed),
+                                            Icon(Icons.delete_outline,
+                                                size: 18,
+                                                color: AppTheme.expenseRed),
                                             SizedBox(width: 8),
-                                            Text('Delete Rule', style: TextStyle(color: AppTheme.expenseRed)),
+                                            Text('Delete Rule',
+                                                style: TextStyle(
+                                                    color:
+                                                        AppTheme.expenseRed)),
                                           ],
                                         ),
                                       ),
@@ -380,8 +410,10 @@ class RecurringTransactionsScreen extends StatelessWidget {
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.expenseRed),
-                child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.expenseRed),
+                child:
+                    const Text('Delete', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -406,7 +438,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
     RecurringRule rule,
     RecurringTransactionProvider provider,
   ) {
-    final amountController = TextEditingController(text: rule.amount.toStringAsFixed(0));
+    final amountController =
+        TextEditingController(text: rule.amount.toStringAsFixed(0));
     final noteController = TextEditingController(text: rule.note);
     RecurringFrequency selectedFreq = rule.frequency;
 
@@ -426,7 +459,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: isDark ? AppTheme.cardDark : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -450,7 +484,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 TextField(
                   controller: amountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     labelText: 'Amount (₹)',
                     border: OutlineInputBorder(),
@@ -492,7 +527,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: () async {
-                      final parsedAmount = double.tryParse(amountController.text);
+                      final parsedAmount =
+                          double.tryParse(amountController.text);
                       if (parsedAmount == null || parsedAmount <= 0) return;
 
                       Navigator.pop(ctx);
@@ -505,7 +541,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
                       );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Recurring rule updated')),
+                          const SnackBar(
+                              content: Text('Recurring rule updated')),
                         );
                       }
                     },
@@ -517,7 +554,8 @@ class RecurringTransactionsScreen extends StatelessWidget {
                     ),
                     child: const Text(
                       'Save Changes',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),

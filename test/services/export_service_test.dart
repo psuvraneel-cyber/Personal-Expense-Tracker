@@ -26,42 +26,41 @@ void main() {
     // Mock SharePlus channel (new)
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('dev.fluttercommunity.plus/share'),
-          (methodCall) async {
-            if (methodCall.method == 'share' ||
-                methodCall.method == 'shareFiles') {
-              // Store parameters to verify
-              final args = methodCall.arguments as Map;
-              final paths = args['paths'] as List?;
-              if (paths != null) {
-                for (final p in paths) {
-                  sharedFiles.add(p.toString());
-                }
-              }
-              return null;
+      const MethodChannel('dev.fluttercommunity.plus/share'),
+      (methodCall) async {
+        if (methodCall.method == 'share' || methodCall.method == 'shareFiles') {
+          // Store parameters to verify
+          final args = methodCall.arguments as Map;
+          final paths = args['paths'] as List?;
+          if (paths != null) {
+            for (final p in paths) {
+              sharedFiles.add(p.toString());
             }
-            return null;
-          },
-        );
+          }
+          return null;
+        }
+        return null;
+      },
+    );
 
     // Mock SharePlus channel (legacy fallback)
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('plugins.flutter.io/share'),
-          (methodCall) async {
-            if (methodCall.method == 'share') {
-              final args = methodCall.arguments as Map;
-              final paths = args['paths'] as List?;
-              if (paths != null) {
-                for (final p in paths) {
-                  sharedFiles.add(p.toString());
-                }
-              }
-              return null;
+      const MethodChannel('plugins.flutter.io/share'),
+      (methodCall) async {
+        if (methodCall.method == 'share') {
+          final args = methodCall.arguments as Map;
+          final paths = args['paths'] as List?;
+          if (paths != null) {
+            for (final p in paths) {
+              sharedFiles.add(p.toString());
             }
-            return null;
-          },
-        );
+          }
+          return null;
+        }
+        return null;
+      },
+    );
   });
 
   setUp(() {

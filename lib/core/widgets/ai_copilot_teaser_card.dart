@@ -18,8 +18,7 @@ class AiCopilotTeaserCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final message =
-        insight ??
+    final message = insight ??
         'Track more transactions to unlock personalised spending insights from your AI Copilot.';
 
     return GestureDetector(
@@ -42,9 +41,8 @@ class AiCopilotTeaserCard extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withAlpha(10)
-                : Colors.black.withAlpha(6),
+            color:
+                isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(6),
           ),
         ),
         child: Row(

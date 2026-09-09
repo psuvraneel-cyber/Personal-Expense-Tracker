@@ -112,7 +112,8 @@ void main() {
       );
 
       try {
-        await goalRepo.mutateGoalWithHistory(goal: updatedGoal, history: duplicateHistory);
+        await goalRepo.mutateGoalWithHistory(
+            goal: updatedGoal, history: duplicateHistory);
         fail('Should have thrown DatabaseException due to abort conflict');
       } catch (e) {
         expect(e, isA<DatabaseException>());
@@ -125,7 +126,9 @@ void main() {
   });
 
   group('AlertEvaluator & Coordinator Goal Reserves Parity', () {
-    test('evaluateCashflowRisk triggers alert when goal reserves lower available balance', () {
+    test(
+        'evaluateCashflowRisk triggers alert when goal reserves lower available balance',
+        () {
       final now = DateTime.now();
       // Ledger starting balance = 8,000. Safety buffer = 5,000.
       // Without goal reserves: 8,000 > 5,000 safety buffer -> NO alert.
@@ -165,7 +168,9 @@ void main() {
       expect(alertWithGoals!.stage, AppAlertStage.warning);
     });
 
-    test('AlertEvaluationCoordinator cleans up milestone alerts on withdrawal regression', () async {
+    test(
+        'AlertEvaluationCoordinator cleans up milestone alerts on withdrawal regression',
+        () async {
       final coordinator = AlertEvaluationCoordinator(
         repository: alertRepo,
         savingGoalRepository: goalRepo,
@@ -184,7 +189,10 @@ void main() {
       await coordinator.onGoalsChanged([achievedGoal], now: now);
 
       final activeAlerts = await alertRepo.getPage();
-      expect(activeAlerts.any((a) => a.alertKey == 'goal_achieved:goal_milestone_regress'), isTrue);
+      expect(
+          activeAlerts
+              .any((a) => a.alertKey == 'goal_achieved:goal_milestone_regress'),
+          isTrue);
 
       // Now regress goal due to withdrawal (drop from 10,000 to 6,000 = 60%)
       final regressedGoal = achievedGoal.copyWith(currentAmount: 6000);
@@ -192,7 +200,10 @@ void main() {
 
       final updatedAlerts = await alertRepo.getPage();
       // The 100% achievement alert must have been cleaned up/dismissed!
-      expect(updatedAlerts.any((a) => a.alertKey == 'goal_achieved:goal_milestone_regress'), isFalse);
+      expect(
+          updatedAlerts
+              .any((a) => a.alertKey == 'goal_achieved:goal_milestone_regress'),
+          isFalse);
     });
   });
 }

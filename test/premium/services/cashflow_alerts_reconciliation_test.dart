@@ -92,7 +92,9 @@ void main() {
   });
 
   group('CF-06: Reference Date Propagation', () {
-    test('evaluateCashflowRisk produces deterministic alerts for a historical or simulated referenceDate', () {
+    test(
+        'evaluateCashflowRisk produces deterministic alerts for a historical or simulated referenceDate',
+        () {
       final simDate = DateTime(2026, 3, 15, 12, 0);
       // Ensure >= 7 days of history so confidence is not insufficientData
       final deficitTxns = [
@@ -124,7 +126,9 @@ void main() {
   });
 
   group('CF-07 & CF-08: Recurring Commitments in Alert Coordinator', () {
-    test('onTransactionsChanged includes confirmed bills from RecurringPaymentRepository', () async {
+    test(
+        'onTransactionsChanged includes confirmed bills from RecurringPaymentRepository',
+        () async {
       // Insert a confirmed upcoming rent liability into repository
       final bill = RecurringPayment(
         id: 'rec_rent_major',
@@ -160,13 +164,17 @@ void main() {
       await coordinator.onTransactionsChanged(txns, now: now);
 
       final dbAlerts = await alertRepo.getPage();
-      final cashflowAlerts = dbAlerts.where((a) => a.type == AppAlertType.cashflow).toList();
+      final cashflowAlerts =
+          dbAlerts.where((a) => a.type == AppAlertType.cashflow).toList();
       expect(cashflowAlerts.length, equals(1));
       expect(cashflowAlerts.first.title, contains('Cashflow Risk Warning'));
-      expect(provider.alerts.any((a) => a.type == AppAlertType.cashflow), isTrue);
+      expect(
+          provider.alerts.any((a) => a.type == AppAlertType.cashflow), isTrue);
     });
 
-    test('onRecurringChanged triggers cashflow risk evaluation alongside bill alert', () async {
+    test(
+        'onRecurringChanged triggers cashflow risk evaluation alongside bill alert',
+        () async {
       // Insert transactions into repository so onRecurringChanged can read them
       await db.insert('transactions', {
         'id': 't_hist_1',
@@ -190,7 +198,8 @@ void main() {
         amount: 80000,
         frequency: 'quarterly',
         lastPaidAt: now.subtract(const Duration(days: 90)),
-        nextDueAt: now.add(const Duration(days: 2)), // 2 days -> triggers bill alert too
+        nextDueAt: now
+            .add(const Duration(days: 2)), // 2 days -> triggers bill alert too
         categoryId: 'insurance',
         status: RecurringStatus.confirmed,
       );
@@ -198,8 +207,10 @@ void main() {
       await coordinator.onRecurringChanged([insuranceBill], now: now);
 
       final dbAlerts = await alertRepo.getPage();
-      final billAlert = dbAlerts.where((a) => a.type == AppAlertType.bill).toList();
-      final cashflowAlert = dbAlerts.where((a) => a.type == AppAlertType.cashflow).toList();
+      final billAlert =
+          dbAlerts.where((a) => a.type == AppAlertType.bill).toList();
+      final cashflowAlert =
+          dbAlerts.where((a) => a.type == AppAlertType.cashflow).toList();
 
       expect(billAlert.length, equals(1));
       expect(cashflowAlert.length, equals(1));
@@ -207,7 +218,9 @@ void main() {
   });
 
   group('CF-09 & CF-10: Risk Deduplication & Auto-Reconciliation', () {
-    test('reconciles and auto-dismisses cashflow danger alert when salary resolves deficit', () async {
+    test(
+        'reconciles and auto-dismisses cashflow danger alert when salary resolves deficit',
+        () async {
       // 1. Initial state: heavy expenses causing cashflow deficit alert (>= 7 days history)
       final deficitTxns = [
         TransactionRecord(
@@ -229,8 +242,11 @@ void main() {
       await coordinator.onTransactionsChanged(deficitTxns, now: now);
 
       var alerts = await alertRepo.getPage();
-      expect(alerts.any((a) => a.type == AppAlertType.cashflow && !a.isDismissed), isTrue);
-      expect(provider.alerts.any((a) => a.type == AppAlertType.cashflow), isTrue);
+      expect(
+          alerts.any((a) => a.type == AppAlertType.cashflow && !a.isDismissed),
+          isTrue);
+      expect(
+          provider.alerts.any((a) => a.type == AppAlertType.cashflow), isTrue);
 
       // 2. User deposits ₹150,000 monthly salary, completely resolving deficit & turning cashflow healthy
       final resolvedTxns = [
@@ -249,9 +265,12 @@ void main() {
 
       // 3. Verify cashflow alert was auto-reconciled (dismissed in repo and removed from active provider list)
       alerts = await alertRepo.getPage();
-      final unDismissedCashflowAlerts = alerts.where((a) => a.type == AppAlertType.cashflow && !a.isDismissed).toList();
+      final unDismissedCashflowAlerts = alerts
+          .where((a) => a.type == AppAlertType.cashflow && !a.isDismissed)
+          .toList();
       expect(unDismissedCashflowAlerts, isEmpty);
-      expect(provider.alerts.any((a) => a.type == AppAlertType.cashflow), isFalse);
+      expect(
+          provider.alerts.any((a) => a.type == AppAlertType.cashflow), isFalse);
     });
   });
 }

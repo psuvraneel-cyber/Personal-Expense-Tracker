@@ -176,9 +176,8 @@ class ReconciliationService {
         '[Reconciliation] Fetched ${messages.length} candidate SMS',
       );
 
-      final latestMs = messages
-          .map((m) => m.dateMillis)
-          .reduce((a, b) => a > b ? a : b);
+      final latestMs =
+          messages.map((m) => m.dateMillis).reduce((a, b) => a > b ? a : b);
 
       // ── 5. Route through canonical FinancialIngestionService (DEF-02 Fix) ─
       // Ensures full consensus classification, FinancialObservation recording,
@@ -245,14 +244,16 @@ class ReconciliationService {
   }
 
   @visibleForTesting
-  Future<int?> validateWatermarkForTest(SharedPreferences prefs, int nowMs) async {
+  Future<int?> validateWatermarkForTest(
+      SharedPreferences prefs, int nowMs) async {
     return _getValidatedWatermark(nowMs);
   }
 
   /// Returns the last sync timestamp (watermark or last run).
   Future<DateTime?> getLastSyncTimestamp() async {
-    final watermark = await _repository.getWatermark('reconciliation_watermark') ??
-        await _repository.getWatermark(_kWatermarkKey);
+    final watermark =
+        await _repository.getWatermark('reconciliation_watermark') ??
+            await _repository.getWatermark(_kWatermarkKey);
     final smsServiceWatermark = await _repository.getWatermark('sms_watermark');
     final prefs = await SharedPreferences.getInstance();
     final lastRun = prefs.getInt(_kLastRunKey);
@@ -269,15 +270,15 @@ class ReconciliationService {
     return DateTime.fromMillisecondsSinceEpoch(latestMs);
   }
 
-
   // ═══════════════════════════════════════════════════════════════════
   //  DIAGNOSTICS
   // ═══════════════════════════════════════════════════════════════════
 
   /// Get diagnostic info for debugging.
   Future<Map<String, dynamic>> getDiagnostics() async {
-    final watermark = await _repository.getWatermark('reconciliation_watermark') ??
-        await _repository.getWatermark(_kWatermarkKey);
+    final watermark =
+        await _repository.getWatermark('reconciliation_watermark') ??
+            await _repository.getWatermark(_kWatermarkKey);
     final prefs = await SharedPreferences.getInstance();
     final lastRun = prefs.getInt(_kLastRunKey);
 

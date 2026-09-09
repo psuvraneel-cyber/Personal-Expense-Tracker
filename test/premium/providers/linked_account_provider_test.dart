@@ -5,7 +5,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('LinkedAccountProvider Production Safety', () {
-    test('isTesting defaults to false and connectMockAccount throws in production', () async {
+    test(
+        'isTesting defaults to false and connectMockAccount throws in production',
+        () async {
       final provider = LinkedAccountProvider();
 
       expect(provider.isTesting, isFalse);

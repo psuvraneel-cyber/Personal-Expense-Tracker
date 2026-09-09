@@ -242,9 +242,12 @@ class FakeFirestoreSyncService implements FirestoreSyncService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class FakeRecurringTransactionRepoForSyncTest extends RecurringTransactionRepository {
+class FakeRecurringTransactionRepoForSyncTest
+    extends RecurringTransactionRepository {
   @override
-  Future<List<RecurringRule>> getDueRules(DateTime now, {String? userId}) async => [];
+  Future<List<RecurringRule>> getDueRules(DateTime now,
+          {String? userId}) async =>
+      [];
 
   @override
   Future<List<RecurringRule>> getAllRules({String? userId}) async => [];
@@ -902,7 +905,8 @@ void main() {
     );
 
     group('Web specific behavior', () {
-      test('On web, stream directly populates memory without SQLite calls', () async {
+      test('On web, stream directly populates memory without SQLite calls',
+          () async {
         // We set kIsWeb to true mock or verify that stream updates provider.
         // Note: transaction_provider.dart uses kIsWeb directly from foundation.
         // Under testing framework, kIsWeb is false since we are running native test environment,

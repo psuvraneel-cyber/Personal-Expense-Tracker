@@ -12,7 +12,7 @@ class SmsTransaction {
   final String bankName;
   final String transactionType; // 'debit' or 'credit'
   final String
-  transactionSubType; // 'payment', 'collect', 'refund', 'cashback', 'transfer', 'reversal'
+      transactionSubType; // 'payment', 'collect', 'refund', 'cashback', 'transfer', 'reversal'
   final DateTime timestamp;
   final String rawSmsBody;
   final String smsSender;

@@ -30,10 +30,12 @@ class MockSyncForLWW implements FirestoreSyncService {
   int get sessionGeneration => 1;
 
   @override
-  AccountSession get currentSession => const AccountSession(uid: 'test_user', generation: 1);
+  AccountSession get currentSession =>
+      const AccountSession(uid: 'test_user', generation: 1);
 
   @override
-  Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) => const Stream.empty();
+  Stream<List<TransactionRecord>> transactionsStream({int? limit = 1000}) =>
+      const Stream.empty();
 
   @override
   Stream<List<Map<String, dynamic>>> tombstonesStream() => const Stream.empty();
@@ -89,7 +91,9 @@ void main() {
   });
 
   group('Distributed LWW & Tombstone Reconciliation', () {
-    test('triggerSyncQueue discards update if tombstone deletedAt is newer than txn updatedAt', () async {
+    test(
+        'triggerSyncQueue discards update if tombstone deletedAt is newer than txn updatedAt',
+        () async {
       final repo = TransactionRepository();
       final provider = TransactionProvider(
         repository: repo,
@@ -129,12 +133,15 @@ void main() {
 
       // The queued action must have been cleared
       final pending = await repo.getPendingSyncActions('test_user');
-      expect(pending.where((a) => a['transactionId'] == 'tx_conflict'), isEmpty);
+      expect(
+          pending.where((a) => a['transactionId'] == 'tx_conflict'), isEmpty);
 
       provider.dispose();
     });
 
-    test('triggerSyncQueue allows update if txn updatedAt is newer than tombstone deletedAt', () async {
+    test(
+        'triggerSyncQueue allows update if txn updatedAt is newer than tombstone deletedAt',
+        () async {
       final repo = TransactionRepository();
       final provider = TransactionProvider(
         repository: repo,
@@ -174,7 +181,9 @@ void main() {
       provider.dispose();
     });
 
-    test('GoalProvider reconcileRemoteGoals uploads newer local goals to Firestore', () async {
+    test(
+        'GoalProvider reconcileRemoteGoals uploads newer local goals to Firestore',
+        () async {
       final repo = SavingGoalRepository();
       final provider = GoalProvider(
         repository: repo,
@@ -207,7 +216,8 @@ void main() {
       // Local goal should not be overwritten
       expect(provider.goals.first.name, 'Local Goal 2.0');
       // Local goal should be synced up to Firestore
-      expect(mockSync.upsertedGoals.any((g) => g.id == 'goal_newer_local'), isTrue);
+      expect(mockSync.upsertedGoals.any((g) => g.id == 'goal_newer_local'),
+          isTrue);
 
       provider.dispose();
     });

@@ -37,12 +37,10 @@ class MetricPillRow extends StatelessWidget {
             value: _formatter.format(spentToday),
             label: 'Spent\nToday',
             backgroundColor: PETColors.spentPillBg(isDark),
-            valueColor: isDark
-                ? AppTheme.textPrimary
-                : AppTheme.textPrimaryLight,
-            labelColor: isDark
-                ? AppTheme.textSecondary
-                : AppTheme.textSecondaryLight,
+            valueColor:
+                isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
+            labelColor:
+                isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
           ),
         ),
         const SizedBox(width: 10),
@@ -51,12 +49,10 @@ class MetricPillRow extends StatelessWidget {
             value: _formatter.format(budgetRemaining.abs()),
             label: budgetRemaining >= 0 ? 'Budget\nLeft' : 'Over\nBudget',
             backgroundColor: PETColors.budgetPillBg(isDark),
-            valueColor: budgetRemaining >= 0
-                ? PETColors.success
-                : PETColors.alert,
-            labelColor: isDark
-                ? AppTheme.textSecondary
-                : AppTheme.textSecondaryLight,
+            valueColor:
+                budgetRemaining >= 0 ? PETColors.success : PETColors.alert,
+            labelColor:
+                isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
           ),
         ),
         const SizedBox(width: 10),
@@ -66,9 +62,8 @@ class MetricPillRow extends StatelessWidget {
             label: 'Score\n/100',
             backgroundColor: PETColors.scorePillBg(isDark),
             valueColor: _scoreColor(spendScore),
-            labelColor: isDark
-                ? AppTheme.textSecondary
-                : AppTheme.textSecondaryLight,
+            labelColor:
+                isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
           ),
         ),
       ],

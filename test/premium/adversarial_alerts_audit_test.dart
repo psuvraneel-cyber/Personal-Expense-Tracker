@@ -68,7 +68,8 @@ void main() {
   }
 
   group('Adversarial Audit 1: Anomaly Detection Mathematics & Scoping', () {
-    test('3 normal months + 1 normal current month does NOT trigger anomaly', () {
+    test('3 normal months + 1 normal current month does NOT trigger anomaly',
+        () {
       final txns = [
         // 3 baseline months (April, May, June) @ ₹5,000 each
         TransactionRecord(
@@ -111,7 +112,8 @@ void main() {
         now: now,
       );
 
-      expect(alerts, isEmpty, reason: 'Normal spending must not trigger anomaly');
+      expect(alerts, isEmpty,
+          reason: 'Normal spending must not trigger anomaly');
     });
 
     test('Genuine spike (>= 1.8x and delta >= 300) DOES trigger anomaly', () {
@@ -160,7 +162,9 @@ void main() {
       expect(alerts.first.message, contains('2.5x higher than usual'));
     });
 
-    test('Zero baseline suppresses anomaly (no division by zero / explosive ratios)', () {
+    test(
+        'Zero baseline suppresses anomaly (no division by zero / explosive ratios)',
+        () {
       final txns = [
         // No historical transactions in category 'travel'
         TransactionRecord(
@@ -190,7 +194,9 @@ void main() {
       expect(alerts, isEmpty);
     });
 
-    test('Low delta spike (e.g. ₹10 to ₹20) is suppressed by minSpendDelta (300)', () {
+    test(
+        'Low delta spike (e.g. ₹10 to ₹20) is suppressed by minSpendDelta (300)',
+        () {
       final txns = [
         TransactionRecord(
           id: 'b1',
@@ -216,10 +222,13 @@ void main() {
         minSpendDelta: 300.0,
       );
 
-      expect(alerts, isEmpty, reason: 'Small ₹15 delta must not cause user noise');
+      expect(alerts, isEmpty,
+          reason: 'Small ₹15 delta must not cause user noise');
     });
 
-    test('Year boundary transition (Dec 2025 -> Jan 2026) correctly scopes baseline and detects anomaly', () {
+    test(
+        'Year boundary transition (Dec 2025 -> Jan 2026) correctly scopes baseline and detects anomaly',
+        () {
       final janRef = DateTime(2026, 1, 15);
       final txns = [
         TransactionRecord(
@@ -268,7 +277,9 @@ void main() {
   });
 
   group('Adversarial Audit 2: Budget State Transitions & Identity', () {
-    test('89% does not alert, 90% triggers warning, 100% triggers exceeded, 125% triggers critical', () {
+    test(
+        '89% does not alert, 90% triggers warning, 100% triggers exceeded, 125% triggers critical',
+        () {
       final budgets = {'food': 1000.0};
 
       // 89% -> No alert
@@ -335,8 +346,12 @@ void main() {
     });
   });
 
-  group('Adversarial Audit 3: Duplicate Transaction Filtering & Commutative Keys', () {
-    test('Flags same merchant and amount within 15 mins (case-insensitive and trimmed)', () {
+  group(
+      'Adversarial Audit 3: Duplicate Transaction Filtering & Commutative Keys',
+      () {
+    test(
+        'Flags same merchant and amount within 15 mins (case-insensitive and trimmed)',
+        () {
       final txns = [
         TransactionRecord(
           id: 'd1',
@@ -365,7 +380,9 @@ void main() {
       expect(alerts.first.alertKey, equals('dup_txn:d1_d2'));
     });
 
-    test('SUPPRESSES false duplicate when merchant names are different even if category matches', () {
+    test(
+        'SUPPRESSES false duplicate when merchant names are different even if category matches',
+        () {
       final txns = [
         TransactionRecord(
           id: 'u1',
@@ -390,10 +407,13 @@ void main() {
         now: now,
       );
 
-      expect(alerts, isEmpty, reason: 'Different merchants must never be flagged as duplicates');
+      expect(alerts, isEmpty,
+          reason: 'Different merchants must never be flagged as duplicates');
     });
 
-    test('Commutative alertKey is deterministic regardless of evaluation order or timestamp equality', () {
+    test(
+        'Commutative alertKey is deterministic regardless of evaluation order or timestamp equality',
+        () {
       final tA = TransactionRecord(
         id: 'z_second',
         amount: 250,
@@ -421,12 +441,15 @@ void main() {
 
       expect(alertsForward.first.alertKey, equals('dup_txn:a_first_z_second'));
       expect(alertsReverse.first.alertKey, equals('dup_txn:a_first_z_second'));
-      expect(alertsForward.first.alertKey, equals(alertsReverse.first.alertKey));
+      expect(
+          alertsForward.first.alertKey, equals(alertsReverse.first.alertKey));
     });
   });
 
   group('Adversarial Audit 4: Large Transaction False Positive Resistance', () {
-    test('Normal monthly rent (₹25,000 with ₹30,000 budget and ₹25,000 median) is NOT flagged', () {
+    test(
+        'Normal monthly rent (₹25,000 with ₹30,000 budget and ₹25,000 median) is NOT flagged',
+        () {
       final txns = [
         TransactionRecord(
           id: 'r1',
@@ -452,10 +475,14 @@ void main() {
         now: now,
       );
 
-      expect(alerts, isEmpty, reason: 'Normal rent expenditure matching category median must not be flagged');
+      expect(alerts, isEmpty,
+          reason:
+              'Normal rent expenditure matching category median must not be flagged');
     });
 
-    test('Marked recurring transactions (isRecurring = true) are NEVER flagged as large transaction alerts', () {
+    test(
+        'Marked recurring transactions (isRecurring = true) are NEVER flagged as large transaction alerts',
+        () {
       final txns = [
         TransactionRecord(
           id: 'rec1',
@@ -477,7 +504,9 @@ void main() {
       expect(alerts, isEmpty);
     });
 
-    test('Genuine outlier (median ₹200, sudden ₹3,000 dining expense) IS flagged', () {
+    test(
+        'Genuine outlier (median ₹200, sudden ₹3,000 dining expense) IS flagged',
+        () {
       final txns = [
         TransactionRecord(
           id: 'd1',
@@ -515,7 +544,9 @@ void main() {
   });
 
   group('Adversarial Audit 5: Cashflow 14-Day Horizon & Imminent Deficit', () {
-    test('Flags imminent deficit occurring within 14 days even if ending 30-day balance is positive', () {
+    test(
+        'Flags imminent deficit occurring within 14 days even if ending 30-day balance is positive',
+        () {
       final txns = List.generate(
         10,
         (i) => TransactionRecord(
@@ -539,7 +570,9 @@ void main() {
   });
 
   group('Adversarial Audit 6: Concurrency & Race Condition Serialization', () {
-    test('Parallel rapid calls to processAndDispatch insert exactly 1 alert with 0 duplicates', () async {
+    test(
+        'Parallel rapid calls to processAndDispatch insert exactly 1 alert with 0 duplicates',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -565,12 +598,16 @@ void main() {
       ]);
 
       final activeCount = await repo.getActiveCount();
-      expect(activeCount, equals(1), reason: 'Concurrent processAndDispatch must not insert duplicate alerts');
+      expect(activeCount, equals(1),
+          reason:
+              'Concurrent processAndDispatch must not insert duplicate alerts');
     });
   });
 
   group('Adversarial Audit 7: Entity Lifecycle & Retention Cleanups', () {
-    test('onBillResolved marks bill alert as dismissed and resolvedAt populated', () async {
+    test(
+        'onBillResolved marks bill alert as dismissed and resolvedAt populated',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -599,7 +636,8 @@ void main() {
       expect(resolved.resolvedAt, isNotNull);
     });
 
-    test('onGoalDeleted marks goal alert as dismissed and resolvedAt populated', () async {
+    test('onGoalDeleted marks goal alert as dismissed and resolvedAt populated',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -628,7 +666,9 @@ void main() {
       expect(resolved.resolvedAt, isNotNull);
     });
 
-    test('purgeOldDismissedAlerts purges read/dismissed alerts older than retention threshold', () async {
+    test(
+        'purgeOldDismissedAlerts purges read/dismissed alerts older than retention threshold',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
 
@@ -667,7 +707,8 @@ void main() {
       expect(remainingRecent, isNotNull);
     });
 
-    test('transaction deletion auto-resolves large transaction alert', () async {
+    test('transaction deletion auto-resolves large transaction alert',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -704,7 +745,8 @@ void main() {
       expect(resolved.resolvedAt, isNotNull);
     });
 
-    test('downward spend reset below 90% auto-resolves active budget alerts', () async {
+    test('downward spend reset below 90% auto-resolves active budget alerts',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -748,8 +790,12 @@ void main() {
     });
   });
 
-  group('Adversarial Audit 8: Final Release-Gate Lifecycle & Regression Invariants', () {
-    test('transaction deletion of first transaction (t1) in duplicate pair auto-resolves duplicate alert', () async {
+  group(
+      'Adversarial Audit 8: Final Release-Gate Lifecycle & Regression Invariants',
+      () {
+    test(
+        'transaction deletion of first transaction (t1) in duplicate pair auto-resolves duplicate alert',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -775,8 +821,12 @@ void main() {
       await coordinator.onTransactionsChanged([t1, t2], now: now);
 
       final activeAlertsInitial = await repo.getPage();
-      expect(activeAlertsInitial.any((a) => a.type == AppAlertType.duplicateTransaction), isTrue);
-      final dupAlert = activeAlertsInitial.firstWhere((a) => a.type == AppAlertType.duplicateTransaction);
+      expect(
+          activeAlertsInitial
+              .any((a) => a.type == AppAlertType.duplicateTransaction),
+          isTrue);
+      final dupAlert = activeAlertsInitial
+          .firstWhere((a) => a.type == AppAlertType.duplicateTransaction);
       expect(dupAlert.alertKey, equals('dup_txn:dup_txn_alpha_dup_txn_beta'));
 
       // 2. User deletes t1 (the first transaction of the pair)
@@ -784,13 +834,17 @@ void main() {
 
       // 3. Duplicate alert must be auto-resolved
       final resolvedAlert = await repo.getById(dupAlert.id);
-      expect(resolvedAlert!.isDismissed, isTrue, reason: 'Deleting either transaction in duplicate pair must resolve duplicate alert');
+      expect(resolvedAlert!.isDismissed, isTrue,
+          reason:
+              'Deleting either transaction in duplicate pair must resolve duplicate alert');
       expect(resolvedAlert.resolvedAt, isNotNull);
       final activeAlertsAfter = await repo.getPage();
       expect(activeAlertsAfter.any((a) => a.id == dupAlert.id), isFalse);
     });
 
-    test('downward spend recalibration from 105% to 95% dismisses exceeded alert and activates warning alert', () async {
+    test(
+        'downward spend recalibration from 105% to 95% dismisses exceeded alert and activates warning alert',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -813,7 +867,8 @@ void main() {
 
       var alerts = await repo.getPage();
       expect(alerts.any((a) => a.stage == AppAlertStage.exceeded), isTrue);
-      final exceededAlert = alerts.firstWhere((a) => a.stage == AppAlertStage.exceeded);
+      final exceededAlert =
+          alerts.firstWhere((a) => a.stage == AppAlertStage.exceeded);
 
       // 2. Spending drops to 95% (₹950 / ₹1,000)
       await coordinator.onTransactionsChanged(
@@ -833,14 +888,18 @@ void main() {
 
       // 3. Exceeded alert must be dismissed/resolved, and warning alert active
       final oldExceeded = await repo.getById(exceededAlert.id);
-      expect(oldExceeded!.isDismissed, isTrue, reason: 'Exceeded alert must be auto-resolved when spend drops to 95%');
+      expect(oldExceeded!.isDismissed, isTrue,
+          reason:
+              'Exceeded alert must be auto-resolved when spend drops to 95%');
 
       alerts = await repo.getPage();
       expect(alerts.any((a) => a.stage == AppAlertStage.warning), isTrue);
       expect(alerts.any((a) => a.stage == AppAlertStage.exceeded), isFalse);
     });
 
-    test('re-evaluation after auto-resolve reactivates alert when threshold re-breached (new -> resolved -> re-evaluate)', () async {
+    test(
+        're-evaluation after auto-resolve reactivates alert when threshold re-breached (new -> resolved -> re-evaluate)',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -862,7 +921,8 @@ void main() {
       );
 
       var active = await repo.getPage();
-      final warningAlert = active.firstWhere((a) => a.stage == AppAlertStage.warning);
+      final warningAlert =
+          active.firstWhere((a) => a.stage == AppAlertStage.warning);
       final warningAlertId = warningAlert.id;
 
       // 2. Spend drops to 80% (₹800 / ₹1,000) -> warning alert auto-resolved
@@ -909,12 +969,16 @@ void main() {
       );
 
       final reactivated = await repo.getById(warningAlertId);
-      expect(reactivated!.isDismissed, isFalse, reason: 'Auto-resolved alert must be reactivated when condition re-occurs');
+      expect(reactivated!.isDismissed, isFalse,
+          reason:
+              'Auto-resolved alert must be reactivated when condition re-occurs');
       expect(reactivated.resolvedAt, isNull);
       expect(reactivated.amount, equals(950.0));
     });
 
-    test('onBudgetsChanged auto-resolves exceeded alert when budget is adjusted upward', () async {
+    test(
+        'onBudgetsChanged auto-resolves exceeded alert when budget is adjusted upward',
+        () async {
       final ctx = await createTestContext();
       final repo = ctx.repo;
       final coordinator = ctx.coordinator;
@@ -928,7 +992,8 @@ void main() {
 
       var active = await repo.getPage();
       expect(active.any((a) => a.stage == AppAlertStage.exceeded), isTrue);
-      final exceededAlert = active.firstWhere((a) => a.stage == AppAlertStage.exceeded);
+      final exceededAlert =
+          active.firstWhere((a) => a.stage == AppAlertStage.exceeded);
 
       // 2. User adjusts budget upward to ₹2,000 (spent is now 1,050 / 2,000 = 52.5% < 90%)
       await coordinator.onBudgetsChanged(
@@ -939,7 +1004,8 @@ void main() {
 
       // 3. Exceeded alert must be dismissed
       final oldAlert = await repo.getById(exceededAlert.id);
-      expect(oldAlert!.isDismissed, isTrue, reason: 'Budget adjustment upward must auto-resolve exceeded alert');
+      expect(oldAlert!.isDismissed, isTrue,
+          reason: 'Budget adjustment upward must auto-resolve exceeded alert');
       expect(oldAlert.resolvedAt, isNotNull);
       expect(await repo.getActiveCount(), equals(0));
     });

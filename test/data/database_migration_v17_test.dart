@@ -11,7 +11,9 @@ void main() {
   });
 
   group('SQLite Migration v17 Tests (Alerts Centre 2.0 Upgrade)', () {
-    test('Fresh install at v17 creates alerts table with all columns and composite indexes', () async {
+    test(
+        'Fresh install at v17 creates alerts table with all columns and composite indexes',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'v17_fresh_test.db');
 
@@ -52,7 +54,8 @@ void main() {
         expect(colNames.contains('resolvedAt'), isTrue);
 
         // Verify indexes
-        final indexes = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='alerts'");
+        final indexes = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='alerts'");
         final indexNames = indexes.map((i) => i['name'] as String).toSet();
 
         expect(indexNames.contains('idx_alert_key'), isTrue);
@@ -70,7 +73,9 @@ void main() {
       }
     });
 
-    test('Migration from version 16 to 17 adds new columns, removes duplicates, and creates unique index', () async {
+    test(
+        'Migration from version 16 to 17 adds new columns, removes duplicates, and creates unique index',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'migration_v16_to_v17_test.db');
 
@@ -123,7 +128,8 @@ void main() {
           dbPath,
           version: 17,
           onUpgrade: (db, oldVersion, newVersion) async {
-            await DatabaseHelper().onUpgradeForTesting(db, oldVersion, newVersion);
+            await DatabaseHelper()
+                .onUpgradeForTesting(db, oldVersion, newVersion);
           },
         );
 

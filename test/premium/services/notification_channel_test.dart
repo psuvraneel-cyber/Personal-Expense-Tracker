@@ -91,18 +91,22 @@ void main() {
         equals('pet_cashflow_insights'),
       );
       expect(
-        NotificationService.channelIdFor(NotificationCategory.transactionDetected),
+        NotificationService.channelIdFor(
+            NotificationCategory.transactionDetected),
         equals('pet_transactions'),
       );
     });
 
-    test('channelFor defines expected importance and sound/vibration flags', () {
-      final budgetCh = NotificationService.channelFor(NotificationCategory.budget);
+    test('channelFor defines expected importance and sound/vibration flags',
+        () {
+      final budgetCh =
+          NotificationService.channelFor(NotificationCategory.budget);
       expect(budgetCh.importance, equals(Importance.high));
       expect(budgetCh.playSound, isTrue);
       expect(budgetCh.enableVibration, isTrue);
 
-      final anomalyCh = NotificationService.channelFor(NotificationCategory.anomaly);
+      final anomalyCh =
+          NotificationService.channelFor(NotificationCategory.anomaly);
       expect(anomalyCh.importance, equals(Importance.high));
       expect(anomalyCh.playSound, isTrue);
       expect(anomalyCh.enableVibration, isTrue);
@@ -112,27 +116,32 @@ void main() {
       expect(billCh.playSound, isTrue);
       expect(billCh.enableVibration, isTrue);
 
-      final dailyCh = NotificationService.channelFor(NotificationCategory.dailySummary);
+      final dailyCh =
+          NotificationService.channelFor(NotificationCategory.dailySummary);
       expect(dailyCh.importance, equals(Importance.defaultImportance));
       expect(dailyCh.playSound, isTrue);
       expect(dailyCh.enableVibration, isFalse);
 
-      final weeklyCh = NotificationService.channelFor(NotificationCategory.weeklyReport);
+      final weeklyCh =
+          NotificationService.channelFor(NotificationCategory.weeklyReport);
       expect(weeklyCh.importance, equals(Importance.low));
       expect(weeklyCh.playSound, isFalse);
       expect(weeklyCh.enableVibration, isFalse);
 
-      final goalCh = NotificationService.channelFor(NotificationCategory.goalProgress);
+      final goalCh =
+          NotificationService.channelFor(NotificationCategory.goalProgress);
       expect(goalCh.importance, equals(Importance.defaultImportance));
       expect(goalCh.playSound, isTrue);
       expect(goalCh.enableVibration, isFalse);
 
-      final cashflowCh = NotificationService.channelFor(NotificationCategory.cashflow);
+      final cashflowCh =
+          NotificationService.channelFor(NotificationCategory.cashflow);
       expect(cashflowCh.importance, equals(Importance.defaultImportance));
       expect(cashflowCh.playSound, isTrue);
       expect(cashflowCh.enableVibration, isFalse);
 
-      final txnCh = NotificationService.channelFor(NotificationCategory.transactionDetected);
+      final txnCh = NotificationService.channelFor(
+          NotificationCategory.transactionDetected);
       expect(txnCh.importance, equals(Importance.high));
       expect(txnCh.playSound, isTrue);
       expect(txnCh.enableVibration, isTrue);

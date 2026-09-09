@@ -70,7 +70,9 @@ void main() {
       expect(classified.transactionType, equals('debit'));
     });
 
-    test('HIGH-1 Regression: 12-digit UPI ref numbers survive redaction unmangled', () {
+    test(
+        'HIGH-1 Regression: 12-digit UPI ref numbers survive redaction unmangled',
+        () {
       // HDFC Bank sample with 12-digit UPI Ref
       const hdfcMsg =
           'Rs 500.00 debited from A/c XX1234 on 20-Jul-26 to VPA swiggy@hdfcbank UPI Ref 402312345678.';

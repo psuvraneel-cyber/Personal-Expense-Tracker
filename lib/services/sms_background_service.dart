@@ -156,8 +156,8 @@ void smsCallbackDispatcher() {
         // Evaluate Daily Expense Reminder (P2-1)
         final dailyEnabled =
             await NotificationPreferencesService.isCategoryEnabled(
-              NotificationCategory.dailySummary,
-            );
+          NotificationCategory.dailySummary,
+        );
         if (dailyEnabled) {
           final reminderHour =
               await NotificationPreferencesService.getReminderHour();

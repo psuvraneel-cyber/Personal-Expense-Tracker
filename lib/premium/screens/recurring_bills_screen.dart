@@ -81,10 +81,14 @@ Color _billColor(String name) {
   if (n.contains('netflix')) return const Color(0xFFE50914);
   if (n.contains('spotify')) return const Color(0xFF1DB954);
   if (n.contains('prime')) return const Color(0xFF00A8E1);
-  if (n.contains('hotstar') || n.contains('disney')) return const Color(0xFF1C6EDC);
-  if (n.contains('gym') || n.contains('fitness') || n.contains('cult')) return const Color(0xFFF59E0B);
-  if (n.contains('electricity') || n.contains('power')) return const Color(0xFFF59E0B);
-  if (n.contains('insurance') || n.contains('lic')) return const Color(0xFF10B981);
+  if (n.contains('hotstar') || n.contains('disney'))
+    return const Color(0xFF1C6EDC);
+  if (n.contains('gym') || n.contains('fitness') || n.contains('cult'))
+    return const Color(0xFFF59E0B);
+  if (n.contains('electricity') || n.contains('power'))
+    return const Color(0xFFF59E0B);
+  if (n.contains('insurance') || n.contains('lic'))
+    return const Color(0xFF10B981);
   if (n.contains('rent')) return const Color(0xFF8B5CF6);
   return AppTheme.accentTeal;
 }
@@ -180,14 +184,17 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                 const SizedBox(height: 12),
                 if (_selectedTab == 0) ...[
                   if (confirmed.isEmpty)
-                    _buildEmptyTabMessage('No active recurring commitments.', isDark)
+                    _buildEmptyTabMessage(
+                        'No active recurring commitments.', isDark)
                   else
-                    ...confirmed.map((r) => _buildBillCard(context, r, provider, isDark)),
+                    ...confirmed.map(
+                        (r) => _buildBillCard(context, r, provider, isDark)),
                 ] else ...[
                   if (cancelled.isEmpty)
                     _buildEmptyTabMessage('No cancelled commitments.', isDark)
                   else
-                    ...cancelled.map((r) => _buildBillCard(context, r, provider, isDark)),
+                    ...cancelled.map(
+                        (r) => _buildBillCard(context, r, provider, isDark)),
                 ],
               ],
             );
@@ -268,9 +275,7 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      weekTotal == 0
-                          ? 'None due'
-                          : _currFmt.format(weekTotal),
+                      weekTotal == 0 ? 'None due' : _currFmt.format(weekTotal),
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -362,7 +367,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                 ),
           ),
           const SizedBox(height: 12),
-          ...detected.map((item) => _buildDetectedCard(context, item, provider, isDark)),
+          ...detected.map(
+              (item) => _buildDetectedCard(context, item, provider, isDark)),
         ],
       ),
     );
@@ -381,7 +387,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
         color: isDark ? AppTheme.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(8),
+          color:
+              isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(8),
         ),
       ),
       child: Column(
@@ -393,7 +400,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: _billColor(item.merchantName).withAlpha(isDark ? 35 : 22),
+                  color:
+                      _billColor(item.merchantName).withAlpha(isDark ? 35 : 22),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -409,7 +417,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                   children: [
                     Text(
                       item.merchantName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     Text(
                       '${item.frequencyEnum.displayName} • Last paid ${_shortDateFmt.format(item.lastPaidAt)}',
@@ -450,7 +459,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
             const SizedBox(height: 4),
             Text(
               item.detectionReason!,
-              style: const TextStyle(fontSize: 11, color: AppTheme.textTertiary),
+              style:
+                  const TextStyle(fontSize: 11, color: AppTheme.textTertiary),
             ),
           ],
           const SizedBox(height: 8),
@@ -459,14 +469,19 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
             children: [
               TextButton(
                 onPressed: () => provider.dismissDetected(item.id),
-                child: const Text('Dismiss', style: TextStyle(color: AppTheme.textTertiary, fontSize: 12)),
+                child: const Text('Dismiss',
+                    style:
+                        TextStyle(color: AppTheme.textTertiary, fontSize: 12)),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
-                onPressed: () => _showAddOrEditBillSheet(context, existingBill: item, isConfirmingDetection: true),
+                onPressed: () => _showAddOrEditBillSheet(context,
+                    existingBill: item, isConfirmingDetection: true),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 child: const Text('Edit', style: TextStyle(fontSize: 12)),
               ),
@@ -475,10 +490,13 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                 onPressed: () => provider.confirmDetected(item.id),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accentTeal,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('Confirm', style: TextStyle(fontSize: 12, color: Colors.white)),
+                child: const Text('Confirm',
+                    style: TextStyle(fontSize: 12, color: Colors.white)),
               ),
             ],
           ),
@@ -499,7 +517,10 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
       children: [
         Text(
           'Next 7 Days',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         Row(
@@ -513,7 +534,9 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                 )
                 .toList();
             final hasBill = dayBills.isNotEmpty;
-            final isToday = day.day == now.day && day.month == now.month && day.year == now.year;
+            final isToday = day.day == now.day &&
+                day.month == now.month &&
+                day.year == now.year;
 
             return Expanded(
               child: Column(
@@ -523,7 +546,9 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: isToday ? AppTheme.accentPurple : AppTheme.textTertiary,
+                      color: isToday
+                          ? AppTheme.accentPurple
+                          : AppTheme.textTertiary,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -533,19 +558,26 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                     decoration: BoxDecoration(
                       color: hasBill
                           ? AppTheme.warningYellow.withAlpha(isDark ? 40 : 28)
-                          : (isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(5)),
+                          : (isDark
+                              ? Colors.white.withAlpha(8)
+                              : Colors.black.withAlpha(5)),
                       shape: BoxShape.circle,
-                      border: hasBill ? Border.all(color: AppTheme.warningYellow, width: 2) : null,
+                      border: hasBill
+                          ? Border.all(color: AppTheme.warningYellow, width: 2)
+                          : null,
                     ),
                     child: Center(
                       child: Text(
                         '${day.day}',
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: hasBill ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight:
+                              hasBill ? FontWeight.w700 : FontWeight.w500,
                           color: hasBill
                               ? AppTheme.warningYellow
-                              : (isToday ? AppTheme.accentPurple : AppTheme.textTertiary),
+                              : (isToday
+                                  ? AppTheme.accentPurple
+                                  : AppTheme.textTertiary),
                         ),
                       ),
                     ),
@@ -618,7 +650,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
         bill.nextDueAt.month == now.month &&
         bill.nextDueAt.day == now.day;
     final daysUntil = bill.nextDueAt.difference(now).inDays;
-    final isOverdue = !isCancelled && bill.nextDueAt.isBefore(now) && !isDueToday;
+    final isOverdue =
+        !isCancelled && bill.nextDueAt.isBefore(now) && !isDueToday;
     final isDueSoon = !isCancelled && !isOverdue && daysUntil <= 3;
 
     final statusColor = isCancelled
@@ -641,7 +674,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
 
     return Dismissible(
       key: Key(bill.id),
-      direction: isCancelled ? DismissDirection.none : DismissDirection.endToStart,
+      direction:
+          isCancelled ? DismissDirection.none : DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
@@ -672,7 +706,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
             SnackBar(
               content: Text('${bill.merchantName} snoozed by one cycle'),
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           );
         }
@@ -690,7 +725,9 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
             border: Border.all(
               color: isOverdue
                   ? AppTheme.expenseRed.withAlpha(60)
-                  : (isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(7)),
+                  : (isDark
+                      ? Colors.white.withAlpha(10)
+                      : Colors.black.withAlpha(7)),
             ),
           ),
           child: Row(
@@ -699,7 +736,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: _billColor(bill.merchantName).withAlpha(isDark ? 35 : 22),
+                  color:
+                      _billColor(bill.merchantName).withAlpha(isDark ? 35 : 22),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -719,18 +757,25 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                           child: Text(
                             bill.merchantName,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.w700,
-                                  decoration: isCancelled ? TextDecoration.lineThrough : null,
+                                  decoration: isCancelled
+                                      ? TextDecoration.lineThrough
+                                      : null,
                                 ),
                           ),
                         ),
                         if (bill.isAutopay) ...[
                           const SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1),
                             decoration: BoxDecoration(
-                              color: AppTheme.accentPurple.withAlpha(isDark ? 35 : 20),
+                              color: AppTheme.accentPurple
+                                  .withAlpha(isDark ? 35 : 20),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: const Text(
@@ -749,9 +794,11 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1.5),
                           decoration: BoxDecoration(
-                            color: AppTheme.accentTeal.withAlpha(isDark ? 25 : 18),
+                            color:
+                                AppTheme.accentTeal.withAlpha(isDark ? 25 : 18),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -765,7 +812,9 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          isCancelled ? 'Cancelled' : 'Due ${_shortDateFmt.format(bill.nextDueAt)}',
+                          isCancelled
+                              ? 'Cancelled'
+                              : 'Due ${_shortDateFmt.format(bill.nextDueAt)}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -781,12 +830,15 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: isCancelled ? AppTheme.textTertiary : AppTheme.expenseRed,
+                      color: isCancelled
+                          ? AppTheme.textTertiary
+                          : AppTheme.expenseRed,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: statusColor.withAlpha(25),
                       borderRadius: BorderRadius.circular(20),
@@ -850,7 +902,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(
-                      color: _billColor(bill.merchantName).withAlpha(isDark ? 40 : 25),
+                      color: _billColor(bill.merchantName)
+                          .withAlpha(isDark ? 40 : 25),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(
@@ -866,7 +919,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                       children: [
                         Text(
                           bill.merchantName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 18),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -897,16 +951,19 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.accentPurple.withAlpha(20),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.accentPurple.withAlpha(40)),
+                    border:
+                        Border.all(color: AppTheme.accentPurple.withAlpha(40)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.trending_up_rounded, color: AppTheme.accentPurple, size: 20),
+                      const Icon(Icons.trending_up_rounded,
+                          color: AppTheme.accentPurple, size: 20),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Price changed: ${_currFmt.format(bill.previousAmount)} → ${_currFmt.format(bill.amount)} (${bill.priceDifference >= 0 ? '+' : ''}${_currFmt.format(bill.priceDifference)}/cycle)',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
@@ -917,18 +974,24 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.black.withAlpha(30) : Colors.grey.withAlpha(15),
+                  color: isDark
+                      ? Colors.black.withAlpha(30)
+                      : Colors.grey.withAlpha(15),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(
                   children: [
-                    _buildDetailRow('Next Payment', _dateFmt.format(bill.nextDueAt)),
+                    _buildDetailRow(
+                        'Next Payment', _dateFmt.format(bill.nextDueAt)),
                     const Divider(height: 16),
-                    _buildDetailRow('Last Paid', _dateFmt.format(bill.lastPaidAt)),
+                    _buildDetailRow(
+                        'Last Paid', _dateFmt.format(bill.lastPaidAt)),
                     const Divider(height: 16),
-                    _buildDetailRow('Payment Mode', bill.isAutopay ? 'Autopay' : 'Manual Payment'),
+                    _buildDetailRow('Payment Mode',
+                        bill.isAutopay ? 'Autopay' : 'Manual Payment'),
                     const Divider(height: 16),
-                    _buildDetailRow('Annual Spend', _currFmt.format(bill.annualAmount)),
+                    _buildDetailRow(
+                        'Annual Spend', _currFmt.format(bill.annualAmount)),
                     if (bill.notes != null && bill.notes!.isNotEmpty) ...[
                       const Divider(height: 16),
                       _buildDetailRow('Notes', bill.notes!),
@@ -946,11 +1009,14 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                           Navigator.pop(ctx);
                           await _promptMarkAsPaid(context, bill, provider);
                         },
-                        icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white),
-                        label: const Text('Mark as Paid', style: TextStyle(color: Colors.white)),
+                        icon: const Icon(Icons.check_circle_outline_rounded,
+                            color: Colors.white),
+                        label: const Text('Mark as Paid',
+                            style: TextStyle(color: Colors.white)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.incomeGreen,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
@@ -963,7 +1029,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('${bill.merchantName} snoozed 1 cycle'),
+                              content:
+                                  Text('${bill.merchantName} snoozed 1 cycle'),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
@@ -972,8 +1039,10 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                       icon: const Icon(Icons.snooze_rounded),
                       label: const Text('Snooze'),
                       style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                       ),
                     ),
                   ],
@@ -1000,14 +1069,17 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('${bill.merchantName} cancelled. History preserved.'),
+                              content: Text(
+                                  '${bill.merchantName} cancelled. History preserved.'),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
                         }
                       },
-                      icon: const Icon(Icons.cancel_outlined, size: 18, color: AppTheme.warningYellow),
-                      label: const Text('Cancel Plan', style: TextStyle(color: AppTheme.warningYellow)),
+                      icon: const Icon(Icons.cancel_outlined,
+                          size: 18, color: AppTheme.warningYellow),
+                      label: const Text('Cancel Plan',
+                          style: TextStyle(color: AppTheme.warningYellow)),
                     )
                   else
                     TextButton.icon(
@@ -1017,17 +1089,21 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('${bill.merchantName} reactivated.'),
+                              content:
+                                  Text('${bill.merchantName} reactivated.'),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
                         }
                       },
-                      icon: const Icon(Icons.refresh_rounded, size: 18, color: AppTheme.accentTeal),
-                      label: const Text('Reactivate', style: TextStyle(color: AppTheme.accentTeal)),
+                      icon: const Icon(Icons.refresh_rounded,
+                          size: 18, color: AppTheme.accentTeal),
+                      label: const Text('Reactivate',
+                          style: TextStyle(color: AppTheme.accentTeal)),
                     ),
                   IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.expenseRed),
+                    icon: const Icon(Icons.delete_outline_rounded,
+                        color: AppTheme.expenseRed),
                     tooltip: 'Delete Permanently',
                     onPressed: () async {
                       Navigator.pop(ctx);
@@ -1035,12 +1111,16 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                         context: context,
                         builder: (dCtx) => AlertDialog(
                           title: const Text('Delete Commitment?'),
-                          content: Text('Permanently delete ${bill.merchantName} and its payment history? This cannot be undone.'),
+                          content: Text(
+                              'Permanently delete ${bill.merchantName} and its payment history? This cannot be undone.'),
                           actions: [
-                            TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Keep')),
+                            TextButton(
+                                onPressed: () => Navigator.pop(dCtx, false),
+                                child: const Text('Keep')),
                             TextButton(
                               onPressed: () => Navigator.pop(dCtx, true),
-                              child: const Text('Delete', style: TextStyle(color: AppTheme.expenseRed)),
+                              child: const Text('Delete',
+                                  style: TextStyle(color: AppTheme.expenseRed)),
                             ),
                           ],
                         ),
@@ -1050,7 +1130,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('${bill.merchantName} deleted permanently'),
+                              content: Text(
+                                  '${bill.merchantName} deleted permanently'),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
@@ -1071,8 +1152,10 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: AppTheme.textTertiary, fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text(label,
+            style: const TextStyle(color: AppTheme.textTertiary, fontSize: 13)),
+        Text(value,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
       ],
     );
   }
@@ -1085,14 +1168,16 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
     RecurringProvider provider,
   ) async {
     DateTime paidDate = DateTime.now();
-    final amountCtrl = TextEditingController(text: bill.amount.toStringAsFixed(0));
+    final amountCtrl =
+        TextEditingController(text: bill.amount.toStringAsFixed(0));
     final noteCtrl = TextEditingController();
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text('Record Payment for ${bill.merchantName}'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1108,8 +1193,10 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
               const SizedBox(height: 12),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Payment Date', style: TextStyle(fontSize: 13)),
-                subtitle: Text(_dateFmt.format(paidDate), style: const TextStyle(fontWeight: FontWeight.bold)),
+                title:
+                    const Text('Payment Date', style: TextStyle(fontSize: 13)),
+                subtitle: Text(_dateFmt.format(paidDate),
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
                 trailing: const Icon(Icons.calendar_today_rounded, size: 20),
                 onTap: () async {
                   final picked = await showDatePicker(
@@ -1134,28 +1221,36 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () async {
-                final amount = double.tryParse(amountCtrl.text.trim()) ?? bill.amount;
+                final amount =
+                    double.tryParse(amountCtrl.text.trim()) ?? bill.amount;
                 await provider.markAsPaid(
                   bill.id,
                   paidAt: paidDate,
                   amount: amount,
-                  note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
+                  note: noteCtrl.text.trim().isEmpty
+                      ? null
+                      : noteCtrl.text.trim(),
                 );
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Payment of ${_currFmt.format(amount)} recorded for ${bill.merchantName}. Schedule updated.'),
+                      content: Text(
+                          'Payment of ${_currFmt.format(amount)} recorded for ${bill.merchantName}. Schedule updated.'),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.incomeGreen),
-              child: const Text('Confirm Paid', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.incomeGreen),
+              child: const Text('Confirm Paid',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -1216,17 +1311,22 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                   child: Text(
                     'No payments recorded yet.\nMark occurrences as paid to build history.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: AppTheme.textTertiary),
+                    style: Theme.of(ctx)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: AppTheme.textTertiary),
                   ),
                 ),
               )
             else
               ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.45),
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.45),
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: history.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (ctx, i) {
                     final h = history[i];
                     return ListTile(
@@ -1236,14 +1336,20 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                         backgroundColor: AppTheme.incomeGreen,
                         child: Icon(Icons.check, size: 16, color: Colors.white),
                       ),
-                      title: Text(_dateFmt.format(h.paidAt), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      title: Text(_dateFmt.format(h.paidAt),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14)),
                       subtitle: Text(
                         '${h.source.toUpperCase()}${h.notes != null ? " • ${h.notes}" : ""}',
-                        style: const TextStyle(fontSize: 11, color: AppTheme.textTertiary),
+                        style: const TextStyle(
+                            fontSize: 11, color: AppTheme.textTertiary),
                       ),
                       trailing: Text(
                         _currFmt.format(h.amount),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.incomeGreen),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: AppTheme.incomeGreen),
                       ),
                     );
                   },
@@ -1266,12 +1372,16 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
     final catProvider = context.read<CategoryProvider>();
 
     final isEdit = existingBill != null && !isConfirmingDetection;
-    final merchantCtrl = TextEditingController(text: existingBill?.merchantName ?? '');
-    final amountCtrl = TextEditingController(text: existingBill != null ? existingBill.amount.toStringAsFixed(0) : '');
+    final merchantCtrl =
+        TextEditingController(text: existingBill?.merchantName ?? '');
+    final amountCtrl = TextEditingController(
+        text:
+            existingBill != null ? existingBill.amount.toStringAsFixed(0) : '');
     final noteCtrl = TextEditingController(text: existingBill?.notes ?? '');
 
     String frequency = existingBill?.frequency ?? 'monthly';
-    DateTime nextDue = existingBill?.nextDueAt ?? DateTime.now().add(const Duration(days: 30));
+    DateTime nextDue =
+        existingBill?.nextDueAt ?? DateTime.now().add(const Duration(days: 30));
     String categoryId = existingBill?.categoryId ?? 'other';
     bool isAutopay = existingBill?.isAutopay ?? false;
 
@@ -1329,29 +1439,41 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                   items: const [
                     DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
                     DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                    DropdownMenuItem(value: 'quarterly', child: Text('Every 3 months')),
-                    DropdownMenuItem(value: 'semiannual', child: Text('Every 6 months')),
+                    DropdownMenuItem(
+                        value: 'quarterly', child: Text('Every 3 months')),
+                    DropdownMenuItem(
+                        value: 'semiannual', child: Text('Every 6 months')),
                     DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
                   ],
                   onChanged: (v) => setS(() => frequency = v ?? 'monthly'),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: BorderSide(color: Colors.grey.withAlpha(80)),
                   ),
-                  leading: const Icon(Icons.calendar_today_rounded, color: AppTheme.accentTeal),
-                  title: const Text('Next Payment Date', style: TextStyle(fontSize: 12, color: AppTheme.textTertiary)),
-                  subtitle: Text(_dateFmt.format(nextDue), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  trailing: const Text('Change', style: TextStyle(color: AppTheme.accentTeal, fontWeight: FontWeight.w600)),
+                  leading: const Icon(Icons.calendar_today_rounded,
+                      color: AppTheme.accentTeal),
+                  title: const Text('Next Payment Date',
+                      style: TextStyle(
+                          fontSize: 12, color: AppTheme.textTertiary)),
+                  subtitle: Text(_dateFmt.format(nextDue),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14)),
+                  trailing: const Text('Change',
+                      style: TextStyle(
+                          color: AppTheme.accentTeal,
+                          fontWeight: FontWeight.w600)),
                   onTap: () async {
                     final picked = await showDatePicker(
                       context: ctx,
                       initialDate: nextDue,
                       firstDate: DateTime(2020),
-                      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                      lastDate:
+                          DateTime.now().add(const Duration(days: 365 * 5)),
                     );
                     if (picked != null) {
                       setS(() => nextDue = picked);
@@ -1360,26 +1482,32 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: catProvider.categories.any((c) => c.id == categoryId)
-                      ? categoryId
-                      : 'other',
+                  initialValue:
+                      catProvider.categories.any((c) => c.id == categoryId)
+                          ? categoryId
+                          : 'other',
                   decoration: const InputDecoration(
                     labelText: 'Category',
                     prefixIcon: Icon(Icons.category_rounded),
                   ),
                   items: [
-                    const DropdownMenuItem(value: 'other', child: Text('General / Other')),
-                    ...catProvider.categories
-                        .where((c) => c.id != 'other')
-                        .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                    const DropdownMenuItem(
+                        value: 'other', child: Text('General / Other')),
+                    ...catProvider.categories.where((c) => c.id != 'other').map(
+                        (c) =>
+                            DropdownMenuItem(value: c.id, child: Text(c.name))),
                   ],
                   onChanged: (v) => setS(() => categoryId = v ?? 'other'),
                 ),
                 const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Automatic Payment (Autopay)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text('Remind to check balance rather than manual bill payment.', style: TextStyle(fontSize: 11)),
+                  title: const Text('Automatic Payment (Autopay)',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: const Text(
+                      'Remind to check balance rather than manual bill payment.',
+                      style: TextStyle(fontSize: 11)),
                   value: isAutopay,
                   activeThumbColor: AppTheme.accentTeal,
                   onChanged: (v) => setS(() => isAutopay = v),
@@ -1398,11 +1526,13 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                   child: ElevatedButton(
                     onPressed: () {
                       final name = merchantCtrl.text.trim();
-                      final amount = double.tryParse(amountCtrl.text.trim()) ?? 0;
+                      final amount =
+                          double.tryParse(amountCtrl.text.trim()) ?? 0;
                       if (name.isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
                           const SnackBar(
-                            content: Text('Please enter a merchant or subscription name.'),
+                            content: Text(
+                                'Please enter a merchant or subscription name.'),
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
@@ -1411,14 +1541,17 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                       if (amount <= 0) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
                           const SnackBar(
-                            content: Text('Please enter a valid amount greater than \u20B90.'),
+                            content: Text(
+                                'Please enter a valid amount greater than \u20B90.'),
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
                         return;
                       }
 
-                      final notes = noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim();
+                      final notes = noteCtrl.text.trim().isEmpty
+                          ? null
+                          : noteCtrl.text.trim();
 
                       if (isEdit) {
                         provider.editBill(
@@ -1431,7 +1564,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                           isAutopay: isAutopay,
                           notes: notes,
                         );
-                      } else if (isConfirmingDetection && existingBill != null) {
+                      } else if (isConfirmingDetection &&
+                          existingBill != null) {
                         provider.confirmDetected(
                           existingBill.id,
                           merchantName: name,
@@ -1463,8 +1597,13 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: Text(
-                      isEdit ? 'Save Changes' : isConfirmingDetection ? 'Confirm Commitment' : 'Add Bill',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      isEdit
+                          ? 'Save Changes'
+                          : isConfirmingDetection
+                              ? 'Confirm Commitment'
+                              : 'Add Bill',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -1513,7 +1652,8 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
             ElevatedButton.icon(
               onPressed: () => _showAddOrEditBillSheet(context),
               icon: const Icon(Icons.add_rounded, color: Colors.white),
-              label: const Text('Add Bill', style: TextStyle(color: Colors.white)),
+              label:
+                  const Text('Add Bill', style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accentTeal,
                 shape: RoundedRectangleBorder(

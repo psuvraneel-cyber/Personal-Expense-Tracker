@@ -15,8 +15,7 @@ class OemBatteryDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      backgroundColor:
-          isDark ? AppTheme.cardDarkSurface : AppTheme.cardLight,
+      backgroundColor: isDark ? AppTheme.cardDarkSurface : AppTheme.cardLight,
       title: Row(
         children: [
           Container(
@@ -83,9 +82,8 @@ class OemBatteryDialog extends StatelessWidget {
           child: Text(
             'Later',
             style: TextStyle(
-              color: isDark
-                  ? AppTheme.textSecondary
-                  : AppTheme.textSecondaryLight,
+              color:
+                  isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
             ),
           ),
         ),

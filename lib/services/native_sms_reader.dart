@@ -57,9 +57,11 @@ class NativeSmsMessage {
     final String? pkg = map['package'] as String?;
     final String rawAddress = map['address'] as String? ?? '';
     // If address is empty but package is provided (notification), use package as address
-    final String finalAddress = rawAddress.isNotEmpty ? rawAddress : (pkg ?? '');
+    final String finalAddress =
+        rawAddress.isNotEmpty ? rawAddress : (pkg ?? '');
     final String? title = map['title'] as String?;
-    final String source = map['source'] as String? ?? (pkg != null ? 'notification' : 'sms');
+    final String source =
+        map['source'] as String? ?? (pkg != null ? 'notification' : 'sms');
 
     return NativeSmsMessage(
       address: finalAddress,
@@ -194,8 +196,8 @@ class NativeSmsReader {
   /// ALL apps with RECEIVE_SMS permission, not just the default SMS app.
   Stream<NativeSmsMessage> get incomingSmsStream {
     _incomingSmsStream ??= _eventChannel.receiveBroadcastStream().map(
-      (event) => NativeSmsMessage.fromMap(event as Map<dynamic, dynamic>),
-    );
+          (event) => NativeSmsMessage.fromMap(event as Map<dynamic, dynamic>),
+        );
     return _incomingSmsStream!;
   }
 
@@ -205,11 +207,11 @@ class NativeSmsReader {
   /// which captures push notifications from Google Pay, PhonePe, Paytm,
   /// and other whitelisted financial apps.
   Stream<NativeSmsMessage> get incomingNotificationStream {
-    _incomingNotificationStream ??= _notificationEventChannel
-        .receiveBroadcastStream()
-        .map(
-          (event) => NativeSmsMessage.fromMap(event as Map<dynamic, dynamic>),
-        );
+    _incomingNotificationStream ??=
+        _notificationEventChannel.receiveBroadcastStream().map(
+              (event) =>
+                  NativeSmsMessage.fromMap(event as Map<dynamic, dynamic>),
+            );
     return _incomingNotificationStream!;
   }
 
@@ -280,7 +282,8 @@ class NativeSmsReader {
       );
       return [];
     } catch (e) {
-      AppLogger.debug('[NativeSmsReader] Error popping pending notifications: $e');
+      AppLogger.debug(
+          '[NativeSmsReader] Error popping pending notifications: $e');
       return [];
     }
   }
@@ -304,7 +307,8 @@ class NativeSmsReader {
       );
       return [];
     } catch (e) {
-      AppLogger.debug('[NativeSmsReader] Error peeking pending notifications: $e');
+      AppLogger.debug(
+          '[NativeSmsReader] Error peeking pending notifications: $e');
       return [];
     }
   }
@@ -319,7 +323,8 @@ class NativeSmsReader {
       );
       return success ?? false;
     } catch (e) {
-      AppLogger.debug('[NativeSmsReader] Error acknowledging notifications: $e');
+      AppLogger.debug(
+          '[NativeSmsReader] Error acknowledging notifications: $e');
       return false;
     }
   }

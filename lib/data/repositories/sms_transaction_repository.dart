@@ -9,7 +9,7 @@ class SmsTransactionRepository {
   final DatabaseHelper _dbHelper;
 
   SmsTransactionRepository({DatabaseHelper? dbHelper})
-    : _dbHelper = dbHelper ?? DatabaseHelper();
+      : _dbHelper = dbHelper ?? DatabaseHelper();
 
   // ─── Watermark & Metadata Management ──────────────────────────────
 
@@ -322,7 +322,8 @@ class SmsTransactionRepository {
     final db = await _dbHelper.database;
     final set = <String>{};
 
-    final stateResult = await db.query('sms_processing_state', columns: ['smsHash']);
+    final stateResult =
+        await db.query('sms_processing_state', columns: ['smsHash']);
     for (final r in stateResult) {
       set.add(r['smsHash'] as String);
     }
@@ -498,14 +499,14 @@ class SmsTransactionRepository {
           whereArgs: [smsHash],
           limit: 1,
         );
-        final existingStatus =
-            existingState.isNotEmpty
-                ? existingState.first['status'] as String?
-                : null;
+        final existingStatus = existingState.isNotEmpty
+            ? existingState.first['status'] as String?
+            : null;
 
-        final targetStatus = (existingStatus == 'ignored' && status == 'deleted')
-            ? 'ignored'
-            : status;
+        final targetStatus =
+            (existingStatus == 'ignored' && status == 'deleted')
+                ? 'ignored'
+                : status;
 
         await txn.insert(
           'sms_processing_state',

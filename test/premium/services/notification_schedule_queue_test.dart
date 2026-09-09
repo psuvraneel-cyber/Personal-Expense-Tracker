@@ -46,7 +46,9 @@ void main() {
   });
 
   group('NotificationService scheduleNotification queueing', () {
-    test('scheduleNotification before initialize queues and flushes on initialize completion', () async {
+    test(
+        'scheduleNotification before initialize queues and flushes on initialize completion',
+        () async {
       final futureDate = DateTime.now().add(const Duration(days: 2));
 
       expect(NotificationService.pendingScheduledCount, equals(0));
@@ -71,7 +73,9 @@ void main() {
       expect(NotificationService.pendingScheduledCount, equals(0));
     });
 
-    test('scheduleNotification before initialize drops expired item when initialize completes', () async {
+    test(
+        'scheduleNotification before initialize drops expired item when initialize completes',
+        () async {
       final pastDate = DateTime.now().subtract(const Duration(days: 1));
 
       expect(NotificationService.pendingScheduledCount, equals(0));

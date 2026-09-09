@@ -222,8 +222,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           );
           final cat = catProvider.getCategoryById(topCat.key);
           final catName = cat?.name ?? 'a category';
-          aiInsight =
-              'Your top spending is $catName at '
+          aiInsight = 'Your top spending is $catName at '
               '${formatter.format(topCat.value)} this month. ${healthResult.tip}';
         }
 
@@ -267,20 +266,20 @@ class _DashboardScreenState extends State<DashboardScreen>
                               PageRouteBuilder(
                                 pageBuilder: (context, anim, secAnim) =>
                                     const CalculatorScreen(),
-                                transitionsBuilder: (context, anim, secAnim, child) =>
-                                    SlideTransition(
-                                      position:
-                                          Tween(
-                                            begin: const Offset(1, 0),
-                                            end: Offset.zero,
-                                          ).animate(
-                                            CurvedAnimation(
-                                              parent: anim,
-                                              curve: Curves.easeOutCubic,
-                                            ),
-                                          ),
-                                      child: child,
+                                transitionsBuilder:
+                                    (context, anim, secAnim, child) =>
+                                        SlideTransition(
+                                  position: Tween(
+                                    begin: const Offset(1, 0),
+                                    end: Offset.zero,
+                                  ).animate(
+                                    CurvedAnimation(
+                                      parent: anim,
+                                      curve: Curves.easeOutCubic,
                                     ),
+                                  ),
+                                  child: child,
+                                ),
                                 transitionDuration: const Duration(
                                   milliseconds: 300,
                                 ),
@@ -482,9 +481,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 16,
-              color: isDark
-                  ? Colors.white.withAlpha(200)
-                  : AppTheme.accentPurple,
+              color:
+                  isDark ? Colors.white.withAlpha(200) : AppTheme.accentPurple,
             ),
           ],
         ),
@@ -709,9 +707,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: isDark
-                      ? AppTheme.textPrimary
-                      : AppTheme.textPrimaryLight,
+                  color:
+                      isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
                 ),
               ),
               const SizedBox(height: 20),
@@ -740,8 +737,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         color: isSelected
                             ? AppTheme.accentPurple
                             : (isDark
-                                  ? Colors.white.withAlpha(8)
-                                  : Colors.grey.withAlpha(20)),
+                                ? Colors.white.withAlpha(8)
+                                : Colors.grey.withAlpha(20)),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Center(
@@ -751,11 +748,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                             color: isSelected
                                 ? Colors.white
                                 : (isDark
-                                      ? AppTheme.textSecondary
-                                      : AppTheme.textSecondaryLight),
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
+                                    ? AppTheme.textSecondary
+                                    : AppTheme.textSecondaryLight),
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w500,
                             fontSize: 13,
                           ),
                         ),
@@ -789,9 +785,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withAlpha(6)
-                : Colors.grey.withAlpha(15),
+            color:
+                isDark ? Colors.white.withAlpha(6) : Colors.grey.withAlpha(15),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
@@ -944,8 +939,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 color: isSelected
                     ? Colors.white
                     : (isDark
-                          ? AppTheme.textSecondary
-                          : AppTheme.textSecondaryLight),
+                        ? AppTheme.textSecondary
+                        : AppTheme.textSecondaryLight),
               ),
             ),
           ),
@@ -986,9 +981,8 @@ class _DashboardScreenState extends State<DashboardScreen>
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: isDark
-                    ? AppTheme.textPrimary
-                    : AppTheme.textPrimaryLight,
+                color:
+                    isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
               ),
             ),
           ],
@@ -1003,15 +997,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     List<String> labels,
     bool isDark,
   ) {
-    final maxValue = values.isNotEmpty
-        ? values.reduce((a, b) => a > b ? a : b)
-        : 0.0;
+    final maxValue =
+        values.isNotEmpty ? values.reduce((a, b) => a > b ? a : b) : 0.0;
     final maxSpending = maxValue > 0 ? maxValue : 100.0;
     final labelPrefix = _statsTab == 0
         ? 'Day'
         : _statsTab == 1
-        ? 'Month'
-        : 'Year';
+            ? 'Month'
+            : 'Year';
 
     return Container(
       height: 200,
@@ -1058,13 +1051,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                   if (labels.length <= 12) {
                     shouldShow = true;
                   } else if (labels.length <= 20) {
-                    shouldShow =
-                        index == 0 ||
+                    shouldShow = index == 0 ||
                         index == lastIndex ||
                         (index + 1) % 2 == 0;
                   } else {
-                    shouldShow =
-                        index == 0 ||
+                    shouldShow = index == 0 ||
                         index == lastIndex ||
                         (index + 1) % 5 == 0;
                   }
@@ -1138,9 +1129,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 return touchedSpots.map((spot) {
                   if (spot.y == 0) return null;
                   final index = spot.x.toInt();
-                  final label = index >= 0 && index < labels.length
-                      ? labels[index]
-                      : '';
+                  final label =
+                      index >= 0 && index < labels.length ? labels[index] : '';
                   return LineTooltipItem(
                     '$labelPrefix $label\n₹${spot.y.toStringAsFixed(0)}',
                     const TextStyle(
@@ -1302,9 +1292,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             const SizedBox(height: 16),
             ...display.map((txn) {
               final isDebit = txn.transactionType == 'debit';
-              final amountColor = isDebit
-                  ? AppTheme.expenseRed
-                  : AppTheme.incomeGreen;
+              final amountColor =
+                  isDebit ? AppTheme.expenseRed : AppTheme.incomeGreen;
               final prefix = isDebit ? '- ' : '+ ';
               final now = DateTime.now();
               final today = DateTime(now.year, now.month, now.day);
@@ -1566,9 +1555,8 @@ class _DashboardScreenState extends State<DashboardScreen>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: isDark
-                    ? AppTheme.textPrimary
-                    : AppTheme.textPrimaryLight,
+                color:
+                    isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
               ),
             ),
             const SizedBox(height: 8),

@@ -14,9 +14,9 @@ enum TransactionType {
 
   /// User-facing display name.
   String get displayName => switch (this) {
-    TransactionType.income => 'Income',
-    TransactionType.expense => 'Expense',
-  };
+        TransactionType.income => 'Income',
+        TransactionType.expense => 'Expense',
+      };
 
   /// Deserialize from string, defaulting to [expense].
   static TransactionType fromJson(String? value) {
@@ -68,10 +68,10 @@ enum TransactionSource {
 
   /// User-facing display name.
   String get displayName => switch (this) {
-    TransactionSource.manual => 'Manual',
-    TransactionSource.sms => 'SMS',
-    TransactionSource.notification => 'Notification',
-  };
+        TransactionSource.manual => 'Manual',
+        TransactionSource.sms => 'SMS',
+        TransactionSource.notification => 'Notification',
+      };
 
   /// Deserialize from string, defaulting to [manual].
   static TransactionSource fromJson(String? value) {
@@ -95,20 +95,22 @@ enum RecurringFrequency {
 
   /// User-facing display name.
   String get displayName => switch (this) {
-    RecurringFrequency.daily => 'Daily',
-    RecurringFrequency.weekly => 'Weekly',
-    RecurringFrequency.monthly => 'Monthly',
-    RecurringFrequency.quarterly => 'Every 3 months',
-    RecurringFrequency.semiannual => 'Every 6 months',
-    RecurringFrequency.yearly => 'Yearly',
-  };
+        RecurringFrequency.daily => 'Daily',
+        RecurringFrequency.weekly => 'Weekly',
+        RecurringFrequency.monthly => 'Monthly',
+        RecurringFrequency.quarterly => 'Every 3 months',
+        RecurringFrequency.semiannual => 'Every 6 months',
+        RecurringFrequency.yearly => 'Yearly',
+      };
 
   /// Deserialize from string, returning null if input is null.
   static RecurringFrequency? fromJson(String? value) {
     if (value == null) return null;
     final normalized = value.toLowerCase().trim();
-    if (normalized == 'every 3 months' || normalized == '3months') return RecurringFrequency.quarterly;
-    if (normalized == 'every 6 months' || normalized == '6months') return RecurringFrequency.semiannual;
+    if (normalized == 'every 3 months' || normalized == '3months')
+      return RecurringFrequency.quarterly;
+    if (normalized == 'every 6 months' || normalized == '6months')
+      return RecurringFrequency.semiannual;
     return RecurringFrequency.values.firstWhere(
       (e) => e.name == normalized,
       orElse: () => RecurringFrequency.monthly,
@@ -127,10 +129,10 @@ enum RecurringStatus {
 
   /// User-facing display name.
   String get displayName => switch (this) {
-    RecurringStatus.detected => 'Detected',
-    RecurringStatus.confirmed => 'Confirmed',
-    RecurringStatus.cancelled => 'Cancelled',
-  };
+        RecurringStatus.detected => 'Detected',
+        RecurringStatus.confirmed => 'Confirmed',
+        RecurringStatus.cancelled => 'Cancelled',
+      };
 
   /// Deserialize from string, defaulting to [confirmed].
   static RecurringStatus fromJson(String? value) {
@@ -139,4 +141,3 @@ enum RecurringStatus {
     return RecurringStatus.confirmed;
   }
 }
-

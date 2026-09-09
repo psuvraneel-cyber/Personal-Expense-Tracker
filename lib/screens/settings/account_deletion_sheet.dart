@@ -220,9 +220,8 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _confirmChecked
-                        ? Colors.red.shade600
-                        : Colors.grey,
+                    backgroundColor:
+                        _confirmChecked ? Colors.red.shade600 : Colors.grey,
                   ),
                   onPressed: _confirmChecked ? _executeDelete : null,
                   icon: const Icon(
@@ -402,12 +401,12 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
           child: _step == 0
               ? _buildInfoStep()
               : _step == 1
-              ? _buildReAuthStep()
-              : _step == 2
-              ? _buildConfirmStep()
-              : _step == 3
-              ? _buildDeletingStep()
-              : _buildDoneStep(),
+                  ? _buildReAuthStep()
+                  : _step == 2
+                      ? _buildConfirmStep()
+                      : _step == 3
+                          ? _buildDeletingStep()
+                          : _buildDoneStep(),
         ),
       ),
     );

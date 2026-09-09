@@ -126,8 +126,10 @@ class PremiumEntitlementService {
     final release = isReleaseOverride ?? kReleaseMode;
     final debug = isDebugOverride ?? kDebugMode;
 
-    final testKey = (testStoreKeyOverride ?? AppEnv.revenueCatTestStoreApiKey).trim();
-    final androidKey = (androidKeyOverride ?? AppEnv.revenueCatAndroidApiKey).trim();
+    final testKey =
+        (testStoreKeyOverride ?? AppEnv.revenueCatTestStoreApiKey).trim();
+    final androidKey =
+        (androidKeyOverride ?? AppEnv.revenueCatAndroidApiKey).trim();
 
     // Critical invariant: Secret API keys must NEVER exist in client apps
     if (testKey.startsWith('sk_') ||
@@ -224,7 +226,8 @@ class PremiumEntitlementService {
     try {
       await Purchases.logIn(uid);
     } catch (e) {
-      AppLogger.error('logIn failed', error: e, label: 'PremiumEntitlementService');
+      AppLogger.error('logIn failed',
+          error: e, label: 'PremiumEntitlementService');
     }
   }
 
@@ -233,7 +236,8 @@ class PremiumEntitlementService {
     try {
       await Purchases.logOut();
     } catch (e) {
-      AppLogger.error('logOut failed', error: e, label: 'PremiumEntitlementService');
+      AppLogger.error('logOut failed',
+          error: e, label: 'PremiumEntitlementService');
     }
     // Clear cached entitlement so the next user starts fresh
     final prefs = await SharedPreferences.getInstance();
@@ -277,7 +281,8 @@ class PremiumEntitlementService {
 
       return isActive;
     } catch (e) {
-      AppLogger.error('Error checking premium', error: e, label: 'PremiumEntitlementService');
+      AppLogger.error('Error checking premium',
+          error: e, label: 'PremiumEntitlementService');
 
       // Fall back to cached value instead of returning false
       if (uid != null) {

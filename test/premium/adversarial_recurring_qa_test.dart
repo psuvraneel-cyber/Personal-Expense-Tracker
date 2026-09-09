@@ -409,17 +409,13 @@ void main() {
         final sep18Index = 17;
         final sep25Index = 24;
 
-        final dropSep4 =
-            forecast.dailyPoints[sep4Index - 1].balance -
+        final dropSep4 = forecast.dailyPoints[sep4Index - 1].balance -
             forecast.dailyPoints[sep4Index].balance;
-        final dropSep11 =
-            forecast.dailyPoints[sep11Index - 1].balance -
+        final dropSep11 = forecast.dailyPoints[sep11Index - 1].balance -
             forecast.dailyPoints[sep11Index].balance;
-        final dropSep18 =
-            forecast.dailyPoints[sep18Index - 1].balance -
+        final dropSep18 = forecast.dailyPoints[sep18Index - 1].balance -
             forecast.dailyPoints[sep18Index].balance;
-        final dropSep25 =
-            forecast.dailyPoints[sep25Index - 1].balance -
+        final dropSep25 = forecast.dailyPoints[sep25Index - 1].balance -
             forecast.dailyPoints[sep25Index].balance;
 
         // Defect 1 Remediation: Unrelated historical living expenses are NOT cannibalized

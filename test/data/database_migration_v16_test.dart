@@ -11,7 +11,9 @@ void main() {
   });
 
   group('SQLite Migration v16 Tests (Recurring Commitments Upgrade)', () {
-    test('Fresh install at v16 creates all tables including recurring_payment_history with all columns', () async {
+    test(
+        'Fresh install at v16 creates all tables including recurring_payment_history with all columns',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'v16_fresh_test.db');
 
@@ -25,7 +27,8 @@ void main() {
         );
 
         // Verify recurring_payments columns
-        final recCols = await db.rawQuery('PRAGMA table_info(recurring_payments)');
+        final recCols =
+            await db.rawQuery('PRAGMA table_info(recurring_payments)');
         final colNames = recCols.map((c) => c['name'] as String).toSet();
         expect(colNames.contains('status'), isTrue);
         expect(colNames.contains('isAutopay'), isTrue);
@@ -52,7 +55,9 @@ void main() {
       }
     });
 
-    test('Migration from version 15 to 16 preserves existing rows and defaults new columns', () async {
+    test(
+        'Migration from version 15 to 16 preserves existing rows and defaults new columns',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'migration_v15_to_v16_test.db');
 
@@ -99,34 +104,45 @@ void main() {
           version: 16,
           onUpgrade: (db, oldVersion, newVersion) async {
             if (oldVersion < 16) {
-              final cols = await db.rawQuery('PRAGMA table_info(recurring_payments)');
+              final cols =
+                  await db.rawQuery('PRAGMA table_info(recurring_payments)');
               final colNames = cols.map((c) => c['name'] as String).toSet();
 
               if (!colNames.contains('status')) {
-                await db.execute("ALTER TABLE recurring_payments ADD COLUMN status TEXT DEFAULT 'confirmed'");
+                await db.execute(
+                    "ALTER TABLE recurring_payments ADD COLUMN status TEXT DEFAULT 'confirmed'");
               }
               if (!colNames.contains('isAutopay')) {
-                await db.execute('ALTER TABLE recurring_payments ADD COLUMN isAutopay INTEGER DEFAULT 0');
+                await db.execute(
+                    'ALTER TABLE recurring_payments ADD COLUMN isAutopay INTEGER DEFAULT 0');
               }
               if (!colNames.contains('previousAmount')) {
-                await db.execute('ALTER TABLE recurring_payments ADD COLUMN previousAmount REAL');
+                await db.execute(
+                    'ALTER TABLE recurring_payments ADD COLUMN previousAmount REAL');
               }
               if (!colNames.contains('priceChangeDetectedAt')) {
-                await db.execute('ALTER TABLE recurring_payments ADD COLUMN priceChangeDetectedAt TEXT');
+                await db.execute(
+                    'ALTER TABLE recurring_payments ADD COLUMN priceChangeDetectedAt TEXT');
               }
               if (!colNames.contains('notes')) {
-                await db.execute('ALTER TABLE recurring_payments ADD COLUMN notes TEXT');
+                await db.execute(
+                    'ALTER TABLE recurring_payments ADD COLUMN notes TEXT');
               }
               if (!colNames.contains('createdAt')) {
-                await db.execute('ALTER TABLE recurring_payments ADD COLUMN createdAt TEXT');
-                await db.execute('UPDATE recurring_payments SET createdAt = lastPaidAt WHERE createdAt IS NULL');
+                await db.execute(
+                    'ALTER TABLE recurring_payments ADD COLUMN createdAt TEXT');
+                await db.execute(
+                    'UPDATE recurring_payments SET createdAt = lastPaidAt WHERE createdAt IS NULL');
               }
               if (!colNames.contains('updatedAt')) {
-                await db.execute('ALTER TABLE recurring_payments ADD COLUMN updatedAt TEXT');
-                await db.execute('UPDATE recurring_payments SET updatedAt = lastPaidAt WHERE updatedAt IS NULL');
+                await db.execute(
+                    'ALTER TABLE recurring_payments ADD COLUMN updatedAt TEXT');
+                await db.execute(
+                    'UPDATE recurring_payments SET updatedAt = lastPaidAt WHERE updatedAt IS NULL');
               }
               if (!colNames.contains('detectionReason')) {
-                await db.execute('ALTER TABLE recurring_payments ADD COLUMN detectionReason TEXT');
+                await db.execute(
+                    'ALTER TABLE recurring_payments ADD COLUMN detectionReason TEXT');
               }
 
               await db.execute('''
@@ -146,7 +162,8 @@ void main() {
         );
 
         // 3. Verify existing row is preserved and has new column defaults
-        final rows = await dbV16.query('recurring_payments', where: 'id = ?', whereArgs: ['legacy_rec_1']);
+        final rows = await dbV16.query('recurring_payments',
+            where: 'id = ?', whereArgs: ['legacy_rec_1']);
         expect(rows.length, equals(1));
         final row = rows.first;
         expect(row['merchantName'], equals('Netflix'));

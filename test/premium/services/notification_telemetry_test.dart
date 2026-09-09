@@ -27,7 +27,8 @@ void main() {
         if (methodCall.method == 'initialize') {
           return true;
         }
-        if (methodCall.method == 'show' || methodCall.method == 'zonedSchedule') {
+        if (methodCall.method == 'show' ||
+            methodCall.method == 'zonedSchedule') {
           throw PlatformException(
             code: 'TEST_ERROR',
             message: 'Simulated notification error for telemetry testing',
@@ -46,7 +47,9 @@ void main() {
   });
 
   group('NotificationService Crashlytics telemetry fallback', () {
-    test('showInstant error degrades gracefully without crashing when Crashlytics is uninitialized', () async {
+    test(
+        'showInstant error degrades gracefully without crashing when Crashlytics is uninitialized',
+        () async {
       // Calling showInstant when plugin throws PlatformException
       await expectLater(
         NotificationService.showInstant(
@@ -59,7 +62,9 @@ void main() {
       );
     });
 
-    test('scheduleNotification error degrades gracefully without crashing when Crashlytics is uninitialized', () async {
+    test(
+        'scheduleNotification error degrades gracefully without crashing when Crashlytics is uninitialized',
+        () async {
       await expectLater(
         NotificationService.scheduleNotification(
           id: 998,

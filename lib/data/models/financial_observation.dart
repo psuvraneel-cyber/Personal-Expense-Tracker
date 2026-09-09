@@ -11,7 +11,8 @@ enum FinancialObservationSource {
 
   static FinancialObservationSource fromJson(String? value) {
     if (value == 'notification') return FinancialObservationSource.notification;
-    if (value == 'reconciliation') return FinancialObservationSource.reconciliation;
+    if (value == 'reconciliation')
+      return FinancialObservationSource.reconciliation;
     return FinancialObservationSource.sms;
   }
 }
@@ -175,7 +176,8 @@ class FinancialObservation {
       packageName: map['packageName'] as String?,
       title: map['title'] as String?,
       body: map['body'] as String? ?? '',
-      normalizedText: map['normalizedText'] as String? ?? map['body'] as String? ?? '',
+      normalizedText:
+          map['normalizedText'] as String? ?? map['body'] as String? ?? '',
       receivedAt: map['receivedAt'] != null
           ? DateTime.parse(map['receivedAt'] as String)
           : DateTime.now(),
@@ -241,7 +243,8 @@ class FinancialObservation {
       state: state ?? this.state,
       stateReason: stateReason ?? this.stateReason,
       confidence: confidence ?? this.confidence,
-      canonicalTransactionId: canonicalTransactionId ?? this.canonicalTransactionId,
+      canonicalTransactionId:
+          canonicalTransactionId ?? this.canonicalTransactionId,
       relatedBillId: relatedBillId ?? this.relatedBillId,
       observedBalance: observedBalance ?? this.observedBalance,
       accountTail: accountTail ?? this.accountTail,

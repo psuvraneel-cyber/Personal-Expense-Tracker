@@ -51,9 +51,8 @@ class BudgetProgressBar extends StatelessWidget {
           color: isDark ? AppTheme.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withAlpha(6)
-                : Colors.black.withAlpha(6),
+            color:
+                isDark ? Colors.white.withAlpha(6) : Colors.black.withAlpha(6),
           ),
           boxShadow: [
             BoxShadow(
@@ -89,7 +88,9 @@ class BudgetProgressBar extends StatelessWidget {
                     children: [
                       Text(
                         categoryName,
-                        style: Theme.of(context).textTheme.titleMedium
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
                             ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
@@ -146,9 +147,8 @@ class BudgetProgressBar extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: value,
                     minHeight: 8,
-                    backgroundColor: isDark
-                        ? AppTheme.surfaceDark
-                        : const Color(0xFFE2E8F0),
+                    backgroundColor:
+                        isDark ? AppTheme.surfaceDark : const Color(0xFFE2E8F0),
                     valueColor: AlwaysStoppedAnimation(progressColor),
                   ),
                 );

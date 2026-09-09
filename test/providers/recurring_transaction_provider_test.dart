@@ -21,7 +21,8 @@ class FakeRecurringFirestoreSyncService implements FirestoreSyncService {
   String get currentUserId => 'test_user_id';
 
   @override
-  Stream<List<RecurringRule>> recurringRulesStream() => rulesStreamController.stream;
+  Stream<List<RecurringRule>> recurringRulesStream() =>
+      rulesStreamController.stream;
 
   @override
   Future<void> upsertRecurringRule(RecurringRule rule) async {
@@ -83,7 +84,8 @@ void main() {
   });
 
   group('RecurringTransactionProvider Tests', () {
-    test('createRule adds rule to provider and generates initial occurrence', () async {
+    test('createRule adds rule to provider and generates initial occurrence',
+        () async {
       await provider.loadRules();
       expect(provider.allRules, isEmpty);
 

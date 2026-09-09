@@ -78,7 +78,8 @@ class RecurringOccurrence {
       'scheduledDate': Timestamp.fromDate(scheduledDate),
       'status': status.toJson(),
       'transactionId': transactionId,
-      'generatedAt': generatedAt != null ? Timestamp.fromDate(generatedAt!) : null,
+      'generatedAt':
+          generatedAt != null ? Timestamp.fromDate(generatedAt!) : null,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
@@ -96,8 +97,7 @@ class RecurringOccurrence {
       status: RecurringOccurrenceStatus.fromJson(data['status'] as String?),
       transactionId: data['transactionId'] as String?,
       generatedAt: (data['generatedAt'] as Timestamp?)?.toDate(),
-      updatedAt:
-          (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 

@@ -144,9 +144,8 @@ class ClassificationRepository {
     final cutoffMillis = DateTime.now()
         .subtract(Duration(days: maxAgeDays))
         .millisecondsSinceEpoch;
-    final cutoffIso = DateTime.now()
-        .subtract(Duration(days: maxAgeDays))
-        .toIso8601String();
+    final cutoffIso =
+        DateTime.now().subtract(Duration(days: maxAgeDays)).toIso8601String();
 
     // Delete rows older than maxAgeDays
     await db.delete(

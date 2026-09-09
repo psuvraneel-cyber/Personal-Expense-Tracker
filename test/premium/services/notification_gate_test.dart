@@ -57,7 +57,8 @@ void main() {
       expect(isEnabled, isFalse);
     });
 
-    test('showInstant processes notification when category is enabled', () async {
+    test('showInstant processes notification when category is enabled',
+        () async {
       await NotificationPreferencesService.instance.setCategoryEnabled(
         NotificationCategory.budget,
         true,
@@ -69,7 +70,8 @@ void main() {
       expect(isEnabled, isTrue);
     });
 
-    test('scheduleNotification drops notification when category is disabled', () async {
+    test('scheduleNotification drops notification when category is disabled',
+        () async {
       await NotificationPreferencesService.instance.setCategoryEnabled(
         NotificationCategory.bill,
         false,

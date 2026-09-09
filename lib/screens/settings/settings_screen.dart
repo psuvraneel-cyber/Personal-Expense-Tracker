@@ -133,7 +133,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.battery_charging_full_rounded,
             iconColor: AppTheme.incomeGreen,
             title: 'Battery & Autostart Settings',
-            subtitle: 'Prevent MIUI/ColorOS/FuntouchOS from stopping SMS alerts',
+            subtitle:
+                'Prevent MIUI/ColorOS/FuntouchOS from stopping SMS alerts',
             onTap: () {
               showDialog(
                 context: context,
@@ -196,58 +197,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (value != null) _savePaymentMethod(value);
             },
             child: Column(
-              children:
-                  [
-                    'UPI',
-                    'Credit Card',
-                    'Debit Card',
-                    'Cash',
-                    'Bank Transfer',
-                    'Net Banking',
-                    'PayPal',
-                  ].map((method) {
-                    final isSelected = _defaultPaymentMethod == method;
-                    IconData icon;
-                    switch (method) {
-                      case 'UPI':
-                        icon = Icons.phone_android;
-                        break;
-                      case 'Credit Card':
-                        icon = Icons.credit_card;
-                        break;
-                      case 'Debit Card':
-                        icon = Icons.credit_card_outlined;
-                        break;
-                      case 'Bank Transfer':
-                        icon = Icons.account_balance;
-                        break;
-                      case 'Net Banking':
-                        icon = Icons.language;
-                        break;
-                      case 'PayPal':
-                        icon = Icons.paypal_outlined;
-                        break;
-                      case 'Wallet':
-                        icon = Icons.account_balance_wallet_outlined;
-                        break;
-                      default:
-                        icon = Icons.payments_outlined;
-                    }
-                    return _buildSettingTile(
-                      context,
-                      isDark: isDark,
-                      icon: icon,
-                      iconColor: isSelected
-                          ? AppTheme.accentPurple
-                          : AppTheme.textTertiary,
-                      title: method,
-                      trailing: Radio<String>(
-                        value: method,
-                        activeColor: AppTheme.accentPurple,
-                      ),
-                      onTap: () => _savePaymentMethod(method),
-                    );
-                  }).toList(),
+              children: [
+                'UPI',
+                'Credit Card',
+                'Debit Card',
+                'Cash',
+                'Bank Transfer',
+                'Net Banking',
+                'PayPal',
+              ].map((method) {
+                final isSelected = _defaultPaymentMethod == method;
+                IconData icon;
+                switch (method) {
+                  case 'UPI':
+                    icon = Icons.phone_android;
+                    break;
+                  case 'Credit Card':
+                    icon = Icons.credit_card;
+                    break;
+                  case 'Debit Card':
+                    icon = Icons.credit_card_outlined;
+                    break;
+                  case 'Bank Transfer':
+                    icon = Icons.account_balance;
+                    break;
+                  case 'Net Banking':
+                    icon = Icons.language;
+                    break;
+                  case 'PayPal':
+                    icon = Icons.paypal_outlined;
+                    break;
+                  case 'Wallet':
+                    icon = Icons.account_balance_wallet_outlined;
+                    break;
+                  default:
+                    icon = Icons.payments_outlined;
+                }
+                return _buildSettingTile(
+                  context,
+                  isDark: isDark,
+                  icon: icon,
+                  iconColor: isSelected
+                      ? AppTheme.accentPurple
+                      : AppTheme.textTertiary,
+                  title: method,
+                  trailing: Radio<String>(
+                    value: method,
+                    activeColor: AppTheme.accentPurple,
+                  ),
+                  onTap: () => _savePaymentMethod(method),
+                );
+              }).toList(),
             ),
           ),
           const SizedBox(height: 16),
@@ -402,8 +402,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final messenger = ScaffoldMessenger.of(context);
                 if (value) {
                   // Check device support first
-                  final canAuth = await BiometricService.instance
-                      .canAuthenticate();
+                  final canAuth =
+                      await BiometricService.instance.canAuthenticate();
                   if (!canAuth) {
                     messenger.showSnackBar(
                       const SnackBar(
@@ -417,10 +417,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     return;
                   }
                   // Verify identity before enabling biometric lock
-                  final authenticated = await BiometricService.instance
-                      .authenticate(
-                        reason: 'Verify your identity to enable biometric lock',
-                      );
+                  final authenticated =
+                      await BiometricService.instance.authenticate(
+                    reason: 'Verify your identity to enable biometric lock',
+                  );
                   if (!authenticated) return;
                 }
                 await BiometricService.instance.setEnabled(value);
@@ -574,9 +574,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Text(
       title,
       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.5,
-      ),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
     );
   }
 
@@ -615,8 +615,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: isSelected
                       ? AppTheme.accentPurple
                       : (isDark
-                            ? AppTheme.textTertiary
-                            : AppTheme.textSecondaryLight),
+                          ? AppTheme.textTertiary
+                          : AppTheme.textSecondaryLight),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -627,8 +627,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: isSelected
                         ? AppTheme.accentPurple
                         : (isDark
-                              ? AppTheme.textTertiary
-                              : AppTheme.textSecondaryLight),
+                            ? AppTheme.textTertiary
+                            : AppTheme.textSecondaryLight),
                   ),
                 ),
               ],
@@ -680,9 +680,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           color: isDark ? AppTheme.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withAlpha(15)
-                : const Color(0xFFE2E8F0),
+            color:
+                isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Row(
@@ -703,8 +702,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Text(
                     title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
@@ -739,9 +738,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final customCategories = catProvider.categories
-                .where((c) => c.isCustom)
-                .toList();
+            final customCategories =
+                catProvider.categories.where((c) => c.isCustom).toList();
 
             return Padding(
               padding: EdgeInsets.only(
@@ -972,9 +970,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             child: Icon(
                               icon,
-                              color: selectedIcon == icon
-                                  ? selectedColor
-                                  : null,
+                              color:
+                                  selectedIcon == icon ? selectedColor : null,
                               size: 22,
                             ),
                           ),
@@ -1273,7 +1270,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (!kIsWeb) {
         await DatabaseHelper().wipeAllUserData().catchError((e) {
-          AppLogger.error('Database wipeAllUserData failed during logout', error: e);
+          AppLogger.error('Database wipeAllUserData failed during logout',
+              error: e);
         });
       }
 

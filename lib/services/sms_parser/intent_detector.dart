@@ -66,12 +66,12 @@ class IntentResult {
   });
 
   const IntentResult.none()
-    : hasIntent = false,
-      direction = null,
-      subType = TransactionSubType.unknown,
-      channel = TransactionChannel.unknown,
-      reasons = const ['No transaction intent detected'],
-      isPendingCollect = false;
+      : hasIntent = false,
+        direction = null,
+        subType = TransactionSubType.unknown,
+        channel = TransactionChannel.unknown,
+        reasons = const ['No transaction intent detected'],
+        isPendingCollect = false;
 }
 
 /// Detects transaction intent in an SMS body.

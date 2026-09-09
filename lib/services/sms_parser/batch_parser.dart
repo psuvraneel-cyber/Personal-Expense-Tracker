@@ -59,20 +59,20 @@ class RawSmsMessage {
   }
 
   Map<String, dynamic> toMap() => {
-    'id': id,
-    'body': body,
-    'sender': sender,
-    'dateMillis': dateMillis,
-    'type': type,
-  };
+        'id': id,
+        'body': body,
+        'sender': sender,
+        'dateMillis': dateMillis,
+        'type': type,
+      };
 
   factory RawSmsMessage.fromMap(Map<String, dynamic> map) => RawSmsMessage(
-    id: map['id'] as String,
-    body: map['body'] as String,
-    sender: map['sender'] as String,
-    dateMillis: map['dateMillis'] as int,
-    type: map['type'] as int? ?? 1,
-  );
+        id: map['id'] as String,
+        body: map['body'] as String,
+        sender: map['sender'] as String,
+        dateMillis: map['dateMillis'] as int,
+        type: map['type'] as int? ?? 1,
+      );
 }
 
 /// Result from batch parsing (one per successfully parsed SMS).

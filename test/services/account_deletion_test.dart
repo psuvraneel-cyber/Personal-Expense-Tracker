@@ -266,10 +266,10 @@ void main() {
   setUp(() async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('purchases_flutter'), (
-          methodCall,
-        ) async {
-          return <dynamic, dynamic>{};
-        });
+      methodCall,
+    ) async {
+      return <dynamic, dynamic>{};
+    });
     SharedPreferences.setMockInitialValues({});
     db = await openDatabase(
       inMemoryDatabasePath,
@@ -319,9 +319,8 @@ void main() {
 
     test('Full safe deletion progress order verification', () async {
       // 1. Populate Firestore document collections
-      final userDoc =
-          firestore.collection('users').doc('test_uid_123')
-              as FakeUserDocumentReference;
+      final userDoc = firestore.collection('users').doc('test_uid_123')
+          as FakeUserDocumentReference;
       final txnsCol =
           userDoc.collection('transactions') as FakeCollectionReference;
       final t1 = FakeDocumentReference();
@@ -429,9 +428,8 @@ void main() {
 
     test('Idempotent partial cloud failure retry test', () async {
       // 1. Populate Firestore document collections
-      final userDoc =
-          firestore.collection('users').doc('test_uid_123')
-              as FakeUserDocumentReference;
+      final userDoc = firestore.collection('users').doc('test_uid_123')
+          as FakeUserDocumentReference;
       final txnsCol =
           userDoc.collection('transactions') as FakeCollectionReference;
       final t1 = FakeDocumentReference();

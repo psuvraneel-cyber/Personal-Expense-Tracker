@@ -11,7 +11,8 @@ void main() {
     });
 
     // ── Test 1: Debug + override ON ─────────────────────────────────────────
-    test('Debug build + override ON → isDeveloperPremiumAccessEnabled = true', () {
+    test('Debug build + override ON → isDeveloperPremiumAccessEnabled = true',
+        () {
       // Default is ON in debug
       final result = PremiumEntitlementService.isDeveloperPremiumAccessEnabled(
         isDebugOverride: true,
@@ -22,7 +23,8 @@ void main() {
     });
 
     // ── Test 2: Debug + override OFF ────────────────────────────────────────
-    test('Debug build + override OFF → isDeveloperPremiumAccessEnabled = false', () {
+    test('Debug build + override OFF → isDeveloperPremiumAccessEnabled = false',
+        () {
       PremiumEntitlementService.setDeveloperPremiumAccess(
         false,
         isDebugOverride: true,
@@ -76,7 +78,9 @@ void main() {
     });
 
     // ── Test 5: Debug + override ON → isPremiumEnabled returns true ──────────
-    test('Debug build + override ON → isPremiumEnabled() returns true immediately', () async {
+    test(
+        'Debug build + override ON → isPremiumEnabled() returns true immediately',
+        () async {
       final isPremium = await PremiumEntitlementService.isPremiumEnabled(
         isDebugMode: true,
         isReleaseMode: false,
@@ -86,7 +90,9 @@ void main() {
     });
 
     // ── Test 6: Release + override ON → isPremiumEnabled does NOT bypass ─────
-    test('Release build + override ON → isPremiumEnabled does NOT bypass RevenueCat', () async {
+    test(
+        'Release build + override ON → isPremiumEnabled does NOT bypass RevenueCat',
+        () async {
       // The override is ON (default), but we're simulating a release check.
       // isPremiumEnabled should NOT short-circuit — it will fall through to
       // the RevenueCat check (which will throw since we're in a test env).
@@ -144,7 +150,8 @@ void main() {
     });
 
     // ── Test 8: Profile mode (neither debug nor release) → always false ─────
-    test('Profile build (debug=false, release=false) → override always false', () {
+    test('Profile build (debug=false, release=false) → override always false',
+        () {
       final result = PremiumEntitlementService.isDeveloperPremiumAccessEnabled(
         isDebugOverride: false,
         isReleaseOverride: false,
@@ -154,7 +161,9 @@ void main() {
     });
 
     // ── Test 9: Release build cannot read the override flag ──────────────────
-    test('Release build cannot read developer override regardless of stored state', () {
+    test(
+        'Release build cannot read developer override regardless of stored state',
+        () {
       // Simulate: developer turns override ON in debug
       PremiumEntitlementService.setDeveloperPremiumAccess(
         true,

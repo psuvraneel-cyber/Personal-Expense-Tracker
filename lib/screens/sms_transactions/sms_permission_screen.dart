@@ -159,9 +159,8 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
-                  color: isDark
-                      ? AppTheme.textPrimary
-                      : AppTheme.textPrimaryLight,
+                  color:
+                      isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
                   height: 1.2,
                 ),
               ),
@@ -185,8 +184,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               _FeatureCard(
                 icon: Icons.security_rounded,
                 title: '100% On-Device',
-                description:
-                    'SMS data never leaves your phone. All parsing '
+                description: 'SMS data never leaves your phone. All parsing '
                     'happens locally with zero network calls.',
                 isDark: isDark,
               ),
@@ -194,8 +192,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               _FeatureCard(
                 icon: Icons.auto_awesome_rounded,
                 title: 'Smart Detection',
-                description:
-                    'Supports HDFC, SBI, ICICI, Axis, and 15+ other '
+                description: 'Supports HDFC, SBI, ICICI, Axis, and 15+ other '
                     'Indian banks. Auto-categorizes spending.',
                 isDark: isDark,
               ),
@@ -203,8 +200,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               _FeatureCard(
                 icon: Icons.notifications_active_rounded,
                 title: 'Real-Time Tracking',
-                description:
-                    'New transactions are captured instantly when you '
+                description: 'New transactions are captured instantly when you '
                     'receive a bank SMS, even in the background.',
                 isDark: isDark,
               ),
@@ -212,8 +208,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               _FeatureCard(
                 icon: Icons.filter_alt_rounded,
                 title: 'No Duplicates',
-                description:
-                    'Each SMS is fingerprinted to prevent the same '
+                description: 'Each SMS is fingerprinted to prevent the same '
                     'transaction from being recorded twice.',
                 isDark: isDark,
               ),

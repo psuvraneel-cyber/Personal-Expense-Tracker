@@ -111,8 +111,7 @@ class AlertEvaluator {
         severity = AlertSeverity.warning;
         title = 'Budget warning';
         final percentUsed = (progress * 100).toStringAsFixed(0);
-        message =
-            'You are close to your budget limit ($percentUsed% used).';
+        message = 'You are close to your budget limit ($percentUsed% used).';
         stageKey = 'warning';
       }
 
@@ -234,9 +233,8 @@ class AlertEvaluator {
         id: idGenerator.v4(),
         type: AppAlertType.anomaly,
         stage: AppAlertStage.warning,
-        severity: spike.ratio >= 2.5
-            ? AlertSeverity.critical
-            : AlertSeverity.warning,
+        severity:
+            spike.ratio >= 2.5 ? AlertSeverity.critical : AlertSeverity.warning,
         title: 'Spending spike detected',
         message:
             'This category is ${spike.ratio.toStringAsFixed(1)}x higher than usual.',

@@ -46,9 +46,8 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final pauseProvider = context.watch<SpendPauseProvider>();
     final catProvider = context.watch<CategoryProvider>();
-    final expenseCategories = catProvider.categories
-        .where((c) => c.type == 'expense')
-        .toList();
+    final expenseCategories =
+        catProvider.categories.where((c) => c.type == 'expense').toList();
 
     // Sync selected category IDs from provider if active
     if (pauseProvider.isActive && _selectedCategoryIds.isEmpty) {
@@ -221,9 +220,8 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
                   : Colors.black.withAlpha(5),
               labelStyle: TextStyle(
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                color: selected
-                    ? AppTheme.accentPurple
-                    : AppTheme.textSecondary,
+                color:
+                    selected ? AppTheme.accentPurple : AppTheme.textSecondary,
               ),
               side: BorderSide(
                 color: selected
@@ -285,7 +283,8 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  IconData(c.iconCodePoint, fontFamily: c.iconFontFamily ?? 'MaterialIcons'),
+                  IconData(c.iconCodePoint,
+                      fontFamily: c.iconFontFamily ?? 'MaterialIcons'),
                   color: AppTheme.accentPurple,
                   size: 20,
                 ),
@@ -296,9 +295,8 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
               ),
               trailing: Icon(
                 isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                color: isSelected
-                    ? AppTheme.accentPurple
-                    : AppTheme.textTertiary,
+                color:
+                    isSelected ? AppTheme.accentPurple : AppTheme.textTertiary,
               ),
               onTap: () {
                 setState(() {
@@ -338,10 +336,12 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
     bool isDark,
   ) {
     final blockedNames = pauseProvider.blockedCategoryIds
-        .map((id) => catProvider.categories.firstWhere(
+        .map((id) => catProvider.categories
+            .firstWhere(
               (c) => c.id == id,
               orElse: () => catProvider.categories.first,
-            ).name)
+            )
+            .name)
         .toSet()
         .join(', ');
 
@@ -423,8 +423,19 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
       return 'Ends in $m:$s';
     } else {
       const months = [
-        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        '',
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
       ];
       return 'Active until ${until.day} ${months[until.month]}';
     }

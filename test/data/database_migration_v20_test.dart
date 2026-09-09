@@ -10,8 +10,12 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  group('SQLite Migration v20 Tests (Weekly Limits Partial Uniqueness & Goal History Audit)', () {
-    test('Fresh install at v20 creates weekly_limits with partial indexes and enriched goal_history', () async {
+  group(
+      'SQLite Migration v20 Tests (Weekly Limits Partial Uniqueness & Goal History Audit)',
+      () {
+    test(
+        'Fresh install at v20 creates weekly_limits with partial indexes and enriched goal_history',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'v20_fresh_test.db');
 
@@ -37,14 +41,17 @@ void main() {
         expect(limitColNames.contains('createdAt'), isTrue);
         expect(limitColNames.contains('updatedAt'), isTrue);
 
-        final limitIndexes = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='weekly_limits'");
+        final limitIndexes = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='weekly_limits'");
         final indexNames = limitIndexes.map((i) => i['name'] as String).toSet();
         expect(indexNames.contains('idx_weekly_limits_recurring'), isTrue);
         expect(indexNames.contains('idx_weekly_limits_one_off'), isTrue);
 
         // 2. Verify goal_history enriched audit columns
-        final historyCols = await db.rawQuery('PRAGMA table_info(goal_history)');
-        final historyColNames = historyCols.map((c) => c['name'] as String).toSet();
+        final historyCols =
+            await db.rawQuery('PRAGMA table_info(goal_history)');
+        final historyColNames =
+            historyCols.map((c) => c['name'] as String).toSet();
         expect(historyColNames.contains('previousAmount'), isTrue);
         expect(historyColNames.contains('resultingAmount'), isTrue);
         expect(historyColNames.contains('source'), isTrue);
@@ -60,7 +67,9 @@ void main() {
       }
     });
 
-    test('Migration from v19 to v20 preserves existing weekly_limits and goal_history, enables coexisting recurring and one-off limits', () async {
+    test(
+        'Migration from v19 to v20 preserves existing weekly_limits and goal_history, enables coexisting recurring and one-off limits',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'v19_to_v20_migration_test.db');
 
@@ -154,7 +163,8 @@ void main() {
           dbPath,
           version: 20,
           onUpgrade: (db, oldVersion, newVersion) async {
-            await DatabaseHelper().onUpgradeForTesting(db, oldVersion, newVersion);
+            await DatabaseHelper()
+                .onUpgradeForTesting(db, oldVersion, newVersion);
           },
         );
 
@@ -189,8 +199,11 @@ void main() {
           'isActive': 1,
         });
 
-        final limitsWithOneOff = await db.query('weekly_limits', where: 'categoryId = ?', whereArgs: ['cat_food']);
-        expect(limitsWithOneOff.length, equals(2), reason: 'Recurring and one-off limits can co-exist for the same category');
+        final limitsWithOneOff = await db.query('weekly_limits',
+            where: 'categoryId = ?', whereArgs: ['cat_food']);
+        expect(limitsWithOneOff.length, equals(2),
+            reason:
+                'Recurring and one-off limits can co-exist for the same category');
 
         // 4. Verify partial index enforcement: duplicate recurring limit should FAIL
         expect(
@@ -205,7 +218,8 @@ void main() {
             'isActive': 1,
           }),
           throwsA(isA<DatabaseException>()),
-          reason: 'Duplicate recurring rule for same category must be rejected by partial unique index',
+          reason:
+              'Duplicate recurring rule for same category must be rejected by partial unique index',
         );
 
         // 5. Verify partial index enforcement: duplicate one-off for SAME periodStart should FAIL
@@ -222,14 +236,16 @@ void main() {
             'isActive': 1,
           }),
           throwsA(isA<DatabaseException>()),
-          reason: 'Duplicate one-off rule for same category and periodStart must be rejected',
+          reason:
+              'Duplicate one-off rule for same category and periodStart must be rejected',
         );
 
         // 6. Test Idempotency: Re-running migration v19 -> v20 should succeed cleanly
         await DatabaseHelper().onUpgradeForTesting(db, 19, 20);
 
         final limitsFinal = await db.query('weekly_limits');
-        expect(limitsFinal.length, equals(2), reason: 'Re-running migration must not alter existing rows');
+        expect(limitsFinal.length, equals(2),
+            reason: 'Re-running migration must not alter existing rows');
 
         await db.close();
       } finally {

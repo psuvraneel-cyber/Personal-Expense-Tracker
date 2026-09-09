@@ -161,10 +161,13 @@ class TransactionProvider extends ChangeNotifier {
           await _repository
               .migrateGuestSyncActions('guest_user', currentUserId)
               .catchError((Object e) {
-                debugPrint('[Sync] Failed to migrate guest sync actions: $e');
-              });
-          await _repository.migrateGuestSyncActions('guest_user', currentUserId).catchError((Object e) {
-            AppLogger.error('Failed to migrate guest sync actions', error: e, label: 'Sync');
+            debugPrint('[Sync] Failed to migrate guest sync actions: $e');
+          });
+          await _repository
+              .migrateGuestSyncActions('guest_user', currentUserId)
+              .catchError((Object e) {
+            AppLogger.error('Failed to migrate guest sync actions',
+                error: e, label: 'Sync');
           });
         }
         _transactions = await _repository.getAllTransactions();
@@ -174,7 +177,8 @@ class TransactionProvider extends ChangeNotifier {
         // Check and generate any due recurring occurrences
         await checkRecurringOccurrences(reloadIfGenerated: false);
       } catch (e) {
-        AppLogger.error('Error loading transactions from SQLite', error: e, label: 'TransactionProvider');
+        AppLogger.error('Error loading transactions from SQLite',
+            error: e, label: 'TransactionProvider');
       }
       // Attach real-time listener in the background (non-blocking).
       _subscribeToFirestoreStream();
@@ -191,11 +195,13 @@ class TransactionProvider extends ChangeNotifier {
     bool reloadIfGenerated = true,
   }) async {
     if (kIsWeb) return [];
-    if (_repository.runtimeType != TransactionRepository && _recurringService == null) {
+    if (_repository.runtimeType != TransactionRepository &&
+        _recurringService == null) {
       return [];
     }
     try {
-      final userId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
+      final userId =
+          _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : null;
       final service = _recurringService ?? RecurringTransactionService();
       final generated = await service.generateDueOccurrences(userId: userId);
       if (generated.isNotEmpty && reloadIfGenerated) {
@@ -206,7 +212,8 @@ class TransactionProvider extends ChangeNotifier {
       }
       return generated;
     } catch (e) {
-      AppLogger.error('Error generating due recurring transactions', error: e, label: 'TransactionProvider');
+      AppLogger.error('Error generating due recurring transactions',
+          error: e, label: 'TransactionProvider');
       return [];
     }
   }
@@ -218,7 +225,9 @@ class TransactionProvider extends ChangeNotifier {
       debugPrint(
         '[Sync] Skip subscribing to Firestore streams: account deletion in progress',
       );
-      AppLogger.warn('Skip subscribing to Firestore streams: account deletion in progress', label: 'Sync');
+      AppLogger.warn(
+          'Skip subscribing to Firestore streams: account deletion in progress',
+          label: 'Sync');
       return;
     }
     await _firestoreSubscription?.cancel();
@@ -236,7 +245,9 @@ class TransactionProvider extends ChangeNotifier {
       _firestoreSubscription = stream.listen(
         (remoteList) {
           if (!_firestoreSync.currentSession.matches(expectedSession)) {
-            AppLogger.debug('Discarding stale transaction snapshot (session mismatch)', label: 'Sync');
+            AppLogger.debug(
+                'Discarding stale transaction snapshot (session mismatch)',
+                label: 'Sync');
             return;
           }
           _transactions = remoteList;
@@ -250,7 +261,8 @@ class TransactionProvider extends ChangeNotifier {
         },
         onError: (Object e) {
           if (!_firestoreSync.currentSession.matches(expectedSession)) return;
-          AppLogger.error('Firestore stream error', error: e, label: 'Firestore');
+          AppLogger.error('Firestore stream error',
+              error: e, label: 'Firestore');
           _syncStatus = SyncStatus.error;
           _syncError = e.toString();
           notifyListeners();
@@ -261,7 +273,8 @@ class TransactionProvider extends ChangeNotifier {
       await completer.future.timeout(
         const Duration(seconds: 8),
         onTimeout: () {
-          AppLogger.warn('Firestore stream first event timed out', label: 'Firestore');
+          AppLogger.warn('Firestore stream first event timed out',
+              label: 'Firestore');
         },
       );
     } else {
@@ -270,14 +283,16 @@ class TransactionProvider extends ChangeNotifier {
       _firestoreSubscription = stream.listen(
         (remoteList) async {
           if (!_firestoreSync.currentSession.matches(expectedSession)) {
-            AppLogger.debug('Discarding stale transaction snapshot (session mismatch)', label: 'Sync');
+            AppLogger.debug(
+                'Discarding stale transaction snapshot (session mismatch)',
+                label: 'Sync');
             return;
           }
 
           // Incrementally sync SQLite using safe LWW merge-upsert (no deletions).
           final localAll = await _repository.getAllTransactions().catchError(
-            (_) => <TransactionRecord>[],
-          );
+                (_) => <TransactionRecord>[],
+              );
           if (!_firestoreSync.currentSession.matches(expectedSession)) return;
           final localMap = {for (final t in localAll) t.id: t};
 
@@ -308,7 +323,9 @@ class TransactionProvider extends ChangeNotifier {
           }
 
           if (txnsToUpsert.isNotEmpty) {
-            await _repository.insertTransactionsBatch(txnsToUpsert).catchError((Object e) {
+            await _repository
+                .insertTransactionsBatch(txnsToUpsert)
+                .catchError((Object e) {
               AppLogger.error(
                 'batch upsert remote rows failed',
                 error: e,
@@ -322,9 +339,8 @@ class TransactionProvider extends ChangeNotifier {
           // Defensive logging for skipped deletes of local records not in bounded snapshot
           final remoteIds = remoteList.map((t) => t.id).toSet();
           final localIds = localAll.map((t) => t.id).toSet();
-          final orphanIds = localIds
-              .where((id) => !remoteIds.contains(id))
-              .toList();
+          final orphanIds =
+              localIds.where((id) => !remoteIds.contains(id)).toList();
           if (orphanIds.isNotEmpty) {
             AppLogger.info(
               'Bounded remote snapshot missing ${orphanIds.length} local transaction IDs. '
@@ -335,8 +351,8 @@ class TransactionProvider extends ChangeNotifier {
 
           // Load local authoritative merged list to populate UI
           _transactions = await _repository.getAllTransactions().catchError(
-            (_) => <TransactionRecord>[],
-          );
+                (_) => <TransactionRecord>[],
+              );
           if (!_firestoreSync.currentSession.matches(expectedSession)) return;
 
           _invalidateAggregates();
@@ -349,7 +365,8 @@ class TransactionProvider extends ChangeNotifier {
         },
         onError: (Object e) {
           if (!_firestoreSync.currentSession.matches(expectedSession)) return;
-          AppLogger.error('Firestore stream error', error: e, label: 'Firestore');
+          AppLogger.error('Firestore stream error',
+              error: e, label: 'Firestore');
           _syncStatus = SyncStatus.error;
           _syncError = e.toString();
           notifyListeners();
@@ -357,19 +374,24 @@ class TransactionProvider extends ChangeNotifier {
       );
 
       // Subscribe to remote deletion tombstones for cross-device sync
-      AppLogger.info('Subscribed to tombstonesStream for active user', label: 'Sync');
+      AppLogger.info('Subscribed to tombstonesStream for active user',
+          label: 'Sync');
       _tombstoneSubscription = _firestoreSync.tombstonesStream().listen(
         (tombstones) async {
           if (!_firestoreSync.currentSession.matches(expectedSession)) {
-            AppLogger.debug('Discarding stale tombstone snapshot (session mismatch)', label: 'Sync');
+            AppLogger.debug(
+                'Discarding stale tombstone snapshot (session mismatch)',
+                label: 'Sync');
             return;
           }
-          AppLogger.debug('Tombstones event received (${tombstones.length} items)', label: 'Sync');
+          AppLogger.debug(
+              'Tombstones event received (${tombstones.length} items)',
+              label: 'Sync');
           if (tombstones.isEmpty) return;
 
           final localAll = await _repository.getAllTransactions().catchError(
-            (_) => <TransactionRecord>[],
-          );
+                (_) => <TransactionRecord>[],
+              );
           if (!_firestoreSync.currentSession.matches(expectedSession)) return;
           final localMap = {for (final t in localAll) t.id: t};
 
@@ -392,10 +414,15 @@ class TransactionProvider extends ChangeNotifier {
 
             final localTxn = localMap[tId];
             if (localTxn != null) {
-              AppLogger.info('Tombstone received for transaction. Deleting local row (Delete-Wins policy).', label: 'Sync');
+              AppLogger.info(
+                  'Tombstone received for transaction. Deleting local row (Delete-Wins policy).',
+                  label: 'Sync');
               await _repository.deleteTransaction(tId).catchError(
-                (e) => AppLogger.error('Failed to delete local row for tombstone', error: e, label: 'Sync'),
-              );
+                    (e) => AppLogger.error(
+                        'Failed to delete local row for tombstone',
+                        error: e,
+                        label: 'Sync'),
+                  );
               changed = true;
             }
           }
@@ -404,8 +431,8 @@ class TransactionProvider extends ChangeNotifier {
 
           if (changed) {
             _transactions = await _repository.getAllTransactions().catchError(
-              (_) => <TransactionRecord>[],
-            );
+                  (_) => <TransactionRecord>[],
+                );
             if (!_firestoreSync.currentSession.matches(expectedSession)) return;
             _invalidateAggregates();
             _applyFiltersAndSort();
@@ -414,7 +441,8 @@ class TransactionProvider extends ChangeNotifier {
         },
         onError: (Object e) {
           if (!_firestoreSync.currentSession.matches(expectedSession)) return;
-          AppLogger.error('Firestore tombstone stream error', error: e, label: 'Firestore');
+          AppLogger.error('Firestore tombstone stream error',
+              error: e, label: 'Firestore');
         },
       );
     }
@@ -463,21 +491,25 @@ class TransactionProvider extends ChangeNotifier {
 
     // Persist locally (skip on web — SQLite unavailable)
     if (!kIsWeb) {
-      await _repository
-          .insertTransaction(transaction)
-          .catchError((Object e) => AppLogger.error('SQLite insert failed', error: e, label: 'DB'));
+      await _repository.insertTransaction(transaction).catchError((Object e) =>
+          AppLogger.error('SQLite insert failed', error: e, label: 'DB'));
     }
 
     // Sync to Firestore
     if (!kIsWeb) {
-      final currentUserId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : 'guest_user';
-      await _repository.enqueueSyncAction(
-        const Uuid().v4(),
-        transaction.id,
-        'create',
-        jsonEncode(transaction.toMap()),
-        currentUserId,
-      ).catchError((Object e) => AppLogger.error('Sync queue enqueue failed', error: e, label: 'SyncQueue'));
+      final currentUserId = _firestoreSync.isAuthenticated
+          ? _firestoreSync.currentUserId
+          : 'guest_user';
+      await _repository
+          .enqueueSyncAction(
+            const Uuid().v4(),
+            transaction.id,
+            'create',
+            jsonEncode(transaction.toMap()),
+            currentUserId,
+          )
+          .catchError((Object e) => AppLogger.error('Sync queue enqueue failed',
+              error: e, label: 'SyncQueue'));
 
       triggerSyncQueue();
     } else {
@@ -486,15 +518,17 @@ class TransactionProvider extends ChangeNotifier {
           .upsertTransaction(transaction)
           .then((_) => _setSyncStatus(SyncStatus.synced))
           .catchError((Object e) {
-            AppLogger.error('upsert failed', error: e, label: 'Sync');
-            _setSyncStatus(SyncStatus.error, error: e.toString());
-          });
+        AppLogger.error('upsert failed', error: e, label: 'Sync');
+        _setSyncStatus(SyncStatus.error, error: e.toString());
+      });
     }
 
-    unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
+    unawaited(AlertEvaluationCoordinator()
+        .onTransactionsChanged(
       _transactions,
       now: transaction.date,
-    ).catchError((Object e, StackTrace st) {
+    )
+        .catchError((Object e, StackTrace st) {
       AppLogger.error('Alert evaluation failed in addTransaction',
           error: e, stack: st, label: 'AlertCoordinator');
     }));
@@ -515,21 +549,25 @@ class TransactionProvider extends ChangeNotifier {
     }
 
     if (!kIsWeb) {
-      await _repository
-          .updateTransaction(updatedTxn)
-          .catchError((Object e) => AppLogger.error('SQLite update failed', error: e, label: 'DB'));
+      await _repository.updateTransaction(updatedTxn).catchError((Object e) =>
+          AppLogger.error('SQLite update failed', error: e, label: 'DB'));
     }
 
     // Sync to Firestore
     if (!kIsWeb) {
-      final currentUserId = _firestoreSync.isAuthenticated ? _firestoreSync.currentUserId : 'guest_user';
-      await _repository.enqueueSyncAction(
-        const Uuid().v4(),
-        updatedTxn.id,
-        'update',
-        jsonEncode(updatedTxn.toMap()),
-        currentUserId,
-      ).catchError((Object e) => AppLogger.error('Sync queue enqueue failed', error: e, label: 'SyncQueue'));
+      final currentUserId = _firestoreSync.isAuthenticated
+          ? _firestoreSync.currentUserId
+          : 'guest_user';
+      await _repository
+          .enqueueSyncAction(
+            const Uuid().v4(),
+            updatedTxn.id,
+            'update',
+            jsonEncode(updatedTxn.toMap()),
+            currentUserId,
+          )
+          .catchError((Object e) => AppLogger.error('Sync queue enqueue failed',
+              error: e, label: 'SyncQueue'));
 
       triggerSyncQueue();
     } else {
@@ -538,15 +576,17 @@ class TransactionProvider extends ChangeNotifier {
           .upsertTransaction(updatedTxn)
           .then((_) => _setSyncStatus(SyncStatus.synced))
           .catchError((Object e) {
-            AppLogger.error('update failed', error: e, label: 'Sync');
-            _setSyncStatus(SyncStatus.error, error: e.toString());
-          });
+        AppLogger.error('update failed', error: e, label: 'Sync');
+        _setSyncStatus(SyncStatus.error, error: e.toString());
+      });
     }
 
-    unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
+    unawaited(AlertEvaluationCoordinator()
+        .onTransactionsChanged(
       _transactions,
       now: updatedTxn.date,
-    ).catchError((Object e, StackTrace st) {
+    )
+        .catchError((Object e, StackTrace st) {
       AppLogger.error('Alert evaluation failed in updateTransaction',
           error: e, stack: st, label: 'AlertCoordinator');
     }));
@@ -562,9 +602,8 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
 
     if (!kIsWeb) {
-      await _repository
-          .deleteTransaction(id)
-          .catchError((Object e) => AppLogger.error('SQLite delete failed', error: e, label: 'DB'));
+      await _repository.deleteTransaction(id).catchError((Object e) =>
+          AppLogger.error('SQLite delete failed', error: e, label: 'DB'));
     }
 
     // Sync to Firestore
@@ -578,19 +617,26 @@ class TransactionProvider extends ChangeNotifier {
       );
 
       if (hasPendingCreate) {
-        AppLogger.debug('Compacting: removing pending create/update for deleted transaction', label: 'SyncQueue');
+        AppLogger.debug(
+            'Compacting: removing pending create/update for deleted transaction',
+            label: 'SyncQueue');
         final actionsToRemove = pending.where((x) => x['transactionId'] == id);
         for (final act in actionsToRemove) {
           await _repository.deleteSyncAction(act['id'] as String);
         }
       } else {
-        await _repository.enqueueSyncAction(
-          const Uuid().v4(),
-          id,
-          'delete',
-          null,
-          currentUserId,
-        ).catchError((Object e) => AppLogger.error('Sync queue enqueue failed', error: e, label: 'SyncQueue'));
+        await _repository
+            .enqueueSyncAction(
+              const Uuid().v4(),
+              id,
+              'delete',
+              null,
+              currentUserId,
+            )
+            .catchError((Object e) => AppLogger.error(
+                'Sync queue enqueue failed',
+                error: e,
+                label: 'SyncQueue'));
 
         triggerSyncQueue();
       }
@@ -600,14 +646,16 @@ class TransactionProvider extends ChangeNotifier {
           .deleteTransaction(id)
           .then((_) => _setSyncStatus(SyncStatus.synced))
           .catchError((Object e) {
-            AppLogger.error('delete failed', error: e, label: 'Sync');
-            _setSyncStatus(SyncStatus.error, error: e.toString());
-          });
+        AppLogger.error('delete failed', error: e, label: 'Sync');
+        _setSyncStatus(SyncStatus.error, error: e.toString());
+      });
     }
 
-    unawaited(AlertEvaluationCoordinator().onTransactionsChanged(
+    unawaited(AlertEvaluationCoordinator()
+        .onTransactionsChanged(
       _transactions,
-    ).catchError((Object e, StackTrace st) {
+    )
+        .catchError((Object e, StackTrace st) {
       AppLogger.error('Alert evaluation failed in deleteTransaction',
           error: e, stack: st, label: 'AlertCoordinator');
     }));
@@ -618,13 +666,11 @@ class TransactionProvider extends ChangeNotifier {
     if (status == SyncStatus.synced) {
       _lastSyncAt = DateTime.now();
       _syncError = null;
-      SharedPreferences.getInstance()
-          .then((prefs) {
-            prefs.setString('lastSyncAt', _lastSyncAt!.toIso8601String());
-          })
-          .catchError((Object e) {
-            debugPrint('[Sync] Failed to save lastSyncTime: $e');
-          });
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('lastSyncAt', _lastSyncAt!.toIso8601String());
+      }).catchError((Object e) {
+        debugPrint('[Sync] Failed to save lastSyncTime: $e');
+      });
       SharedPreferences.getInstance().then((prefs) {
         prefs.setString('lastSyncAt', _lastSyncAt!.toIso8601String());
       }).catchError((Object e) {
@@ -670,9 +716,8 @@ class TransactionProvider extends ChangeNotifier {
     _filterMinAmount = minAmount;
     _filterMaxAmount = maxAmount;
     _filterType = type != null ? TransactionType.fromJson(type) : null;
-    _filterPaymentMethod = paymentMethod != null
-        ? PaymentMethod.fromJson(paymentMethod)
-        : null;
+    _filterPaymentMethod =
+        paymentMethod != null ? PaymentMethod.fromJson(paymentMethod) : null;
     _applyFiltersAndSort();
     notifyListeners();
   }
@@ -707,8 +752,7 @@ class TransactionProvider extends ChangeNotifier {
   void _applyFiltersAndSort() {
     final bool hasSearch = _searchQuery.isNotEmpty;
     final String? query = hasSearch ? _searchQuery.toLowerCase() : null;
-    final bool hasAnyFilter =
-        hasSearch ||
+    final bool hasAnyFilter = hasSearch ||
         _filterCategoryId != null ||
         _filterStartDate != null ||
         _filterEndDate != null ||
@@ -794,7 +838,8 @@ class TransactionProvider extends ChangeNotifier {
       _setSyncStatus(SyncStatus.syncing);
 
       final remoteTransactions = await _firestoreSync.fetchAllTransactions();
-      AppLogger.info('Fetched ${remoteTransactions.length} remote transactions', label: 'Sync');
+      AppLogger.info('Fetched ${remoteTransactions.length} remote transactions',
+          label: 'Sync');
       if (remoteTransactions.isEmpty) {
         _setSyncStatus(SyncStatus.synced);
         return;
@@ -812,8 +857,8 @@ class TransactionProvider extends ChangeNotifier {
 
       // Mobile/desktop: merge into SQLite
       final localAll = await _repository.getAllTransactions().catchError(
-        (_) => <TransactionRecord>[],
-      );
+            (_) => <TransactionRecord>[],
+          );
       final localMap = {for (final t in localAll) t.id: t};
 
       final txnsToUpsert = <TransactionRecord>[];
@@ -837,17 +882,19 @@ class TransactionProvider extends ChangeNotifier {
         debugPrint(
           '[Sync] Restored/updated ${txnsToUpsert.length} transactions from Firestore',
         );
-        AppLogger.info('Restored/updated ${txnsToUpsert.length} transactions from Firestore', label: 'Sync');
+        AppLogger.info(
+            'Restored/updated ${txnsToUpsert.length} transactions from Firestore',
+            label: 'Sync');
       } else {
-        AppLogger.debug('All remote transactions already up-to-date locally', label: 'Sync');
+        AppLogger.debug('All remote transactions already up-to-date locally',
+            label: 'Sync');
       }
 
       // Defensive logging for skipped deletes of local records not in bounded snapshot
       final remoteIds = remoteTransactions.map((t) => t.id).toSet();
       final localIds = localAll.map((t) => t.id).toSet();
-      final orphanIds = localIds
-          .where((id) => !remoteIds.contains(id))
-          .toList();
+      final orphanIds =
+          localIds.where((id) => !remoteIds.contains(id)).toList();
       if (orphanIds.isNotEmpty) {
         AppLogger.info(
           'Bounded remote snapshot missing ${orphanIds.length} local transaction IDs. Preserving local rows to prevent data loss.',
@@ -857,8 +904,8 @@ class TransactionProvider extends ChangeNotifier {
 
       // Load local authoritative merged list to populate UI
       _transactions = await _repository.getAllTransactions().catchError(
-        (_) => <TransactionRecord>[],
-      );
+            (_) => <TransactionRecord>[],
+          );
       _invalidateAggregates();
       _applyFiltersAndSort();
       notifyListeners();
@@ -924,8 +971,9 @@ class TransactionProvider extends ChangeNotifier {
     // Wipe SQLite so the next user doesn't see this user's data.
     if (!kIsWeb) {
       await _repository.deleteAllTransactions().catchError(
-        (Object e) => AppLogger.error('SQLite clear failed', error: e, label: 'DB'),
-      );
+            (Object e) =>
+                AppLogger.error('SQLite clear failed', error: e, label: 'DB'),
+          );
     }
   }
 
@@ -937,15 +985,18 @@ class TransactionProvider extends ChangeNotifier {
   Future<void> triggerSyncQueue({bool force = false}) async {
     if (kIsWeb) return;
     if (AccountDeletionService.isDeletionInProgress) {
-      AppLogger.warn('Skip trigger — account deletion in progress', label: 'SyncQueue');
+      AppLogger.warn('Skip trigger — account deletion in progress',
+          label: 'SyncQueue');
       return;
     }
     if (!_firestoreSync.isAuthenticated) {
-      AppLogger.debug('Skip trigger — user not authenticated', label: 'SyncQueue');
+      AppLogger.debug('Skip trigger — user not authenticated',
+          label: 'SyncQueue');
       return;
     }
     if (_isProcessingSyncQueue) {
-      AppLogger.debug('Already processing — scheduling next pass', label: 'SyncQueue');
+      AppLogger.debug('Already processing — scheduling next pass',
+          label: 'SyncQueue');
       _syncQueueNeedsProcessing = true;
       return;
     }
@@ -962,7 +1013,8 @@ class TransactionProvider extends ChangeNotifier {
 
       while (true) {
         if (!_firestoreSync.currentSession.matches(expectedSession)) {
-          AppLogger.debug('Aborting sync queue pass due to session switch', label: 'SyncQueue');
+          AppLogger.debug('Aborting sync queue pass due to session switch',
+              label: 'SyncQueue');
           return;
         }
 
@@ -976,7 +1028,9 @@ class TransactionProvider extends ChangeNotifier {
           break;
         }
 
-        AppLogger.info('Found ${pendingActions.length} pending actions to process', label: 'SyncQueue');
+        AppLogger.info(
+            'Found ${pendingActions.length} pending actions to process',
+            label: 'SyncQueue');
         bool processedAny = false;
 
         for (final action in pendingActions) {
@@ -992,11 +1046,11 @@ class TransactionProvider extends ChangeNotifier {
           // Exponential backoff check: skip if backoff duration has not elapsed yet
           if (!force && retryCount > 0) {
             final now = DateTime.now().millisecondsSinceEpoch;
-            final backoffMs =
-                (1 << retryCount.clamp(0, 10)) *
+            final backoffMs = (1 << retryCount.clamp(0, 10)) *
                 5000; // 5s, 10s, 20s, 40s... capped at ~5120s (~85m)
             if (now - lastAttemptAt < backoffMs) {
-              AppLogger.debug('Skipping action due to backoff window', label: 'SyncQueue');
+              AppLogger.debug('Skipping action due to backoff window',
+                  label: 'SyncQueue');
               continue;
             }
           }
@@ -1039,9 +1093,11 @@ class TransactionProvider extends ChangeNotifier {
 
             // Success: delete action from queue
             await _repository.deleteSyncAction(actionId);
-            AppLogger.info('Action ($act) synced successfully', label: 'SyncQueue');
+            AppLogger.info('Action ($act) synced successfully',
+                label: 'SyncQueue');
           } catch (e) {
-            AppLogger.error('Action ($act) sync failed', error: e, label: 'SyncQueue');
+            AppLogger.error('Action ($act) sync failed',
+                error: e, label: 'SyncQueue');
             await _repository.incrementSyncRetry(actionId, e.toString());
             _setSyncStatus(SyncStatus.error, error: e.toString());
             // Stop processing subsequent actions in the queue to observe order and allow backoff
@@ -1056,7 +1112,8 @@ class TransactionProvider extends ChangeNotifier {
         }
       }
     } catch (e) {
-      AppLogger.error('Unexpected error in triggerSyncQueue', error: e, label: 'SyncQueue');
+      AppLogger.error('Unexpected error in triggerSyncQueue',
+          error: e, label: 'SyncQueue');
       _setSyncStatus(SyncStatus.error, error: e.toString());
     } finally {
       _isProcessingSyncQueue = false;

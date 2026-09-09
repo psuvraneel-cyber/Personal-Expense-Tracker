@@ -30,15 +30,17 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
   }
 
   void _checkInitialObservation() {
-    if (_checkedInitial || widget.initialObservationId == null || !mounted) return;
+    if (_checkedInitial || widget.initialObservationId == null || !mounted)
+      return;
     final provider = context.read<SmsTransactionProvider>();
     if (provider.isLoading) return;
 
     _checkedInitial = true;
-    final target = provider.uncertainTransactions.cast<SmsTransaction?>().firstWhere(
-      (t) => t?.id == widget.initialObservationId,
-      orElse: () => null,
-    );
+    final target =
+        provider.uncertainTransactions.cast<SmsTransaction?>().firstWhere(
+              (t) => t?.id == widget.initialObservationId,
+              orElse: () => null,
+            );
 
     if (target != null) {
       _showEditDialog(context, target, provider);
@@ -76,8 +78,11 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
       ),
       body: Consumer<SmsTransactionProvider>(
         builder: (context, provider, _) {
-          if (!provider.isLoading && !_checkedInitial && widget.initialObservationId != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => _checkInitialObservation());
+          if (!provider.isLoading &&
+              !_checkedInitial &&
+              widget.initialObservationId != null) {
+            WidgetsBinding.instance
+                .addPostFrameCallback((_) => _checkInitialObservation());
           }
 
           final uncertain = provider.uncertainTransactions;
@@ -223,14 +228,17 @@ Future<void> _showEditDialog(
                   const SizedBox(height: 12),
                   TextField(
                     controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(
                       labelText: 'Amount (₹)',
                       prefixIcon: Icon(Icons.currency_rupee_rounded),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Transaction Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  const Text('Transaction Type',
+                      style:
+                          TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -248,19 +256,25 @@ Future<void> _showEditDialog(
                         selected: selectedType == 'credit',
                         selectedColor: AppTheme.incomeGreen.withAlpha(50),
                         onSelected: (val) {
-                          if (val) setDialogState(() => selectedType = 'credit');
+                          if (val)
+                            setDialogState(() => selectedType = 'credit');
                         },
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
                   if (categories.isNotEmpty) ...[
-                    const Text('Category', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const Text('Category',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      initialValue: categories.any((c) => c.name == selectedCategory)
-                          ? selectedCategory
-                          : (categories.isNotEmpty ? categories.first.name : null),
+                      initialValue:
+                          categories.any((c) => c.name == selectedCategory)
+                              ? selectedCategory
+                              : (categories.isNotEmpty
+                                  ? categories.first.name
+                                  : null),
                       items: categories.map((c) {
                         return DropdownMenuItem(
                           value: c.name,

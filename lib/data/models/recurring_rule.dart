@@ -155,8 +155,7 @@ class RecurringRule {
       nextOccurrenceDate:
           (data['nextOccurrenceDate'] as Timestamp?)?.toDate() ??
               DateTime.now(),
-      lastGeneratedDate:
-          (data['lastGeneratedDate'] as Timestamp?)?.toDate(),
+      lastGeneratedDate: (data['lastGeneratedDate'] as Timestamp?)?.toDate(),
       isActive: data['isActive'] as bool? ?? true,
       merchantName: data['merchantName'] as String?,
       taxCategory: data['taxCategory'] as String?,

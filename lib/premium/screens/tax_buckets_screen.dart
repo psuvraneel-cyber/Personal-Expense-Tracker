@@ -221,8 +221,8 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                     Text(
                       'Deduction Buckets',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                     const Spacer(),
                     if (totals.isEmpty)
@@ -255,9 +255,8 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   final sectionId = entry.key;
                   final limit = entry.value;
                   final claimed = totals[sectionId] ?? 0.0;
-                  final progress = limit > 0
-                      ? (claimed / limit).clamp(0.0, 1.0)
-                      : 0.0;
+                  final progress =
+                      limit > 0 ? (claimed / limit).clamp(0.0, 1.0) : 0.0;
                   final color =
                       _sectionColors[sectionId] ?? AppTheme.accentPurple;
 
@@ -342,9 +341,8 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     NumberFormat formatter,
     bool isDark,
   ) {
-    final overallProgress = totalLimit > 0
-        ? (total / totalLimit).clamp(0.0, 1.0)
-        : 0.0;
+    final overallProgress =
+        totalLimit > 0 ? (total / totalLimit).clamp(0.0, 1.0) : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -506,8 +504,8 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
           color: isMaxed
               ? AppTheme.incomeGreen.withAlpha(isDark ? 55 : 35)
               : (isDark
-                    ? Colors.white.withAlpha(10)
-                    : Colors.black.withAlpha(7)),
+                  ? Colors.white.withAlpha(10)
+                  : Colors.black.withAlpha(7)),
         ),
         boxShadow: isMaxed
             ? [
@@ -564,7 +562,9 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                         Expanded(
                           child: Text(
                             name,
-                            style: Theme.of(context).textTheme.titleSmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),

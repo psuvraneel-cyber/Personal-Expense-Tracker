@@ -7,7 +7,9 @@ void main() {
   final referenceTime = DateTime(2026, 7, 29, 10, 0);
 
   group('AlertEvaluator.evaluateCashflowRisk', () {
-    test('returns cashflow alert when projected 30-day balance is negative/zero with sufficient data', () {
+    test(
+        'returns cashflow alert when projected 30-day balance is negative/zero with sufficient data',
+        () {
       // 10 days of heavy expense transactions with 0 income
       final transactions = List.generate(
         10,

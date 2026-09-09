@@ -302,9 +302,9 @@ class AlertRepository {
     DateTime? retentionThreshold,
   }) async {
     final db = await _db;
-    final cutoff = (retentionThreshold ??
-            (now ?? DateTime.now()).subtract(retention))
-        .toIso8601String();
+    final cutoff =
+        (retentionThreshold ?? (now ?? DateTime.now()).subtract(retention))
+            .toIso8601String();
     final count = await db.delete(
       'alerts',
       where: '(isDismissed = 1 OR isRead = 1) AND createdAt < ?',

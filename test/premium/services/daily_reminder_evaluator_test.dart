@@ -8,7 +8,8 @@ void main() {
       expect(DailyReminderEvaluator.formatDateKey(dt), '2026-07-29');
     });
 
-    test('shouldFireReminder returns false before configured reminder hour', () {
+    test('shouldFireReminder returns false before configured reminder hour',
+        () {
       final now = DateTime(2026, 7, 29, 19, 59); // 7:59 PM
       final result = DailyReminderEvaluator.shouldFireReminder(
         now: now,
@@ -19,7 +20,9 @@ void main() {
       expect(result, isFalse);
     });
 
-    test('shouldFireReminder returns true at or after reminder hour when no txns and no prior alert today', () {
+    test(
+        'shouldFireReminder returns true at or after reminder hour when no txns and no prior alert today',
+        () {
       final now = DateTime(2026, 7, 29, 20, 0); // 8:00 PM
       final result = DailyReminderEvaluator.shouldFireReminder(
         now: now,
@@ -30,7 +33,9 @@ void main() {
       expect(result, isTrue);
     });
 
-    test('shouldFireReminder implements smart suppression (returns false if transactions exist today)', () {
+    test(
+        'shouldFireReminder implements smart suppression (returns false if transactions exist today)',
+        () {
       final now = DateTime(2026, 7, 29, 20, 30); // 8:30 PM
       final result = DailyReminderEvaluator.shouldFireReminder(
         now: now,
@@ -41,7 +46,9 @@ void main() {
       expect(result, isFalse);
     });
 
-    test('shouldFireReminder returns false if watermark matches today (already fired today)', () {
+    test(
+        'shouldFireReminder returns false if watermark matches today (already fired today)',
+        () {
       final now = DateTime(2026, 7, 29, 21, 0); // 9:00 PM
       final result = DailyReminderEvaluator.shouldFireReminder(
         now: now,
@@ -52,7 +59,8 @@ void main() {
       expect(result, isFalse);
     });
 
-    test('shouldFireReminder returns true on new day after midnight crossing', () {
+    test('shouldFireReminder returns true on new day after midnight crossing',
+        () {
       final nowNewDay = DateTime(2026, 7, 30, 20, 5); // Next day 8:05 PM
       final result = DailyReminderEvaluator.shouldFireReminder(
         now: nowNewDay,

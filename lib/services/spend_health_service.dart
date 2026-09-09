@@ -119,9 +119,9 @@ class SpendHealthService {
     // ── Composite (weighted) ──────────────────────────────────────────
     const weights = [0.30, 0.25, 0.20, 0.25];
     final composite = dims.asMap().entries.fold(
-      0.0,
-      (sum, e) => sum + e.value.score * weights[e.key],
-    );
+          0.0,
+          (sum, e) => sum + e.value.score * weights[e.key],
+        );
     final total = composite.round().clamp(0, 100);
     final grade = _grade(total);
 
@@ -323,9 +323,8 @@ class SpendHealthService {
     List<TransactionRecord> txns,
     List<String> insights,
   ) {
-    final expenses = txns
-        .where((t) => t.type == TransactionType.expense)
-        .toList();
+    final expenses =
+        txns.where((t) => t.type == TransactionType.expense).toList();
     if (expenses.isEmpty) {
       return const HealthDimension(
         label: 'Spend Discipline',

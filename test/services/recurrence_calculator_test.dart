@@ -36,7 +36,8 @@ void main() {
         expect(next, DateTime(2027, 1, 1, 23, 59, 59));
       });
 
-      test('Leap year transition (28 Feb 2028 -> 29 Feb 2028 -> 1 Mar 2028)', () {
+      test('Leap year transition (28 Feb 2028 -> 29 Feb 2028 -> 1 Mar 2028)',
+          () {
         final anchor = DateTime(2028, 2, 28, 8, 30);
         final feb29 = RecurrenceCalculator.computeNextOccurrence(
           anchorDate: anchor,
@@ -103,7 +104,9 @@ void main() {
         expect(feb, DateTime(2026, 2, 15, 9, 0));
       });
 
-      test('31st of month clamping: Jan 31 -> Feb 28 -> Mar 31 -> Apr 30 -> May 31 (Zero degradation)', () {
+      test(
+          '31st of month clamping: Jan 31 -> Feb 28 -> Mar 31 -> Apr 30 -> May 31 (Zero degradation)',
+          () {
         final anchor = DateTime(2026, 1, 31, 10, 30);
 
         final feb = RecurrenceCalculator.computeNextOccurrence(
@@ -176,7 +179,9 @@ void main() {
         expect(next, DateTime(2027, 8, 20, 10, 0));
       });
 
-      test('Leap day yearly recurrence: 29 Feb 2028 -> 28 Feb 2029 -> ... -> 29 Feb 2032', () {
+      test(
+          'Leap day yearly recurrence: 29 Feb 2028 -> 28 Feb 2029 -> ... -> 29 Feb 2032',
+          () {
         final anchor = DateTime(2028, 2, 29, 11, 15);
 
         final y2029 = RecurrenceCalculator.computeNextOccurrence(
@@ -271,7 +276,9 @@ void main() {
         expect(missed, isEmpty);
       });
 
-      test('Returns single due occurrence when now is at or after nextOccurrenceDate', () {
+      test(
+          'Returns single due occurrence when now is at or after nextOccurrenceDate',
+          () {
         final rule = RecurringRule(
           id: 'rule_1',
           amount: 50000,
@@ -291,7 +298,9 @@ void main() {
         expect(missed, [DateTime(2026, 9, 20, 10, 0)]);
       });
 
-      test('Returns multiple missed occurrences when device was off for 3 months', () {
+      test(
+          'Returns multiple missed occurrences when device was off for 3 months',
+          () {
         final rule = RecurringRule(
           id: 'rule_salary',
           amount: 50000,

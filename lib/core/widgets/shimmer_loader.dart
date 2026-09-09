@@ -21,21 +21,16 @@ class ShimmerLoader extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(borderRadius),
-            color: isDark
-                ? Colors.white.withAlpha(15)
-                : Colors.black.withAlpha(10),
-          ),
-        )
-        .animate(onPlay: (c) => c.repeat())
-        .shimmer(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        color: isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(10),
+      ),
+    ).animate(onPlay: (c) => c.repeat()).shimmer(
           duration: const Duration(milliseconds: 1200),
-          color: isDark
-              ? Colors.white.withAlpha(20)
-              : Colors.black.withAlpha(15),
+          color:
+              isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(15),
         );
   }
 }

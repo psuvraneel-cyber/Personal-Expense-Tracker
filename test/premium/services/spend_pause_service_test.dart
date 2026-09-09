@@ -16,7 +16,9 @@ void main() {
       expect(state.blockedCategories, isEmpty);
     });
 
-    test('persists and restores active pause with custom duration and categories', () async {
+    test(
+        'persists and restores active pause with custom duration and categories',
+        () async {
       final customDate = DateTime.now().add(const Duration(days: 5));
       final pause = SpendPause(
         enabled: true,
@@ -30,7 +32,8 @@ void main() {
       expect(restored.enabled, isTrue);
       expect(restored.isActive, isTrue);
       expect(restored.until, isNotNull);
-      expect(restored.blockedCategories, containsAll(['Shopping', 'Entertainment']));
+      expect(restored.blockedCategories,
+          containsAll(['Shopping', 'Entertainment']));
     });
 
     test('auto-expires past pause date and returns disabled', () async {

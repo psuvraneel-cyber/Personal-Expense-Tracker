@@ -35,13 +35,16 @@ void main() {
     DatabaseHelper.setTestDatabase(null);
   });
 
-  group('INVESTMENT-GRADE RELIABILITY: Atomic Watermark & Persistence Tests', () {
+  group('INVESTMENT-GRADE RELIABILITY: Atomic Watermark & Persistence Tests',
+      () {
     test('1. Watermark starts empty and is null initially', () async {
       final wm = await repo.getWatermark('sms_watermark');
       expect(wm, isNull);
     });
 
-    test('2. Atomic Commit: Transactions + Watermark commit together on success', () async {
+    test(
+        '2. Atomic Commit: Transactions + Watermark commit together on success',
+        () async {
       final now = DateTime.now();
       final txn1 = SmsTransaction(
         id: 'atomic_1',
@@ -75,7 +78,9 @@ void main() {
       expect(recWm, equals(watermarkTimestamp));
     });
 
-    test('3. Atomic Rollback: Exception before commit rolls back BOTH rows AND watermark', () async {
+    test(
+        '3. Atomic Rollback: Exception before commit rolls back BOTH rows AND watermark',
+        () async {
       final initialWm = 1600000000000;
       await repo.setWatermark('sms_watermark', initialWm);
 
@@ -118,7 +123,9 @@ void main() {
       expect(currentWm, equals(initialWm));
     });
 
-    test('4. Recovery after crash: Subsequent scan succeeds from un-advanced watermark', () async {
+    test(
+        '4. Recovery after crash: Subsequent scan succeeds from un-advanced watermark',
+        () async {
       final initialWm = 1600000000000;
       await repo.setWatermark('sms_watermark', initialWm);
 
@@ -158,7 +165,9 @@ void main() {
       expect(await repo.getWatermark('sms_watermark'), equals(newWm));
     });
 
-    test('5. Duplicate Scan Idempotency: Re-scanning committed batch does not duplicate rows or corrupt watermark', () async {
+    test(
+        '5. Duplicate Scan Idempotency: Re-scanning committed batch does not duplicate rows or corrupt watermark',
+        () async {
       final txn = SmsTransaction(
         id: 'dup_1',
         amount: 99.0,
@@ -192,7 +201,8 @@ void main() {
       expect(await repo.getWatermark('sms_watermark'), equals(wm));
     });
 
-    test('6. MASSIVE STRESS TEST: 1,000 Interrupted Scans & Recovery Cycles', () async {
+    test('6. MASSIVE STRESS TEST: 1,000 Interrupted Scans & Recovery Cycles',
+        () async {
       int totalCommittedTxns = 0;
       int currentWatermark = 1000;
 
@@ -205,7 +215,7 @@ void main() {
           transactionType: 'debit',
           timestamp: DateTime.fromMillisecondsSinceEpoch(1000 + i * 1000),
           smsSender: 'TESTBK',
-        rawSmsBody: 'Rs ${i * 10} paid to Merchant_$i',
+          rawSmsBody: 'Rs ${i * 10} paid to Merchant_$i',
           smsHash: 'hash_stress_$i',
         );
 
@@ -231,7 +241,8 @@ void main() {
 
           // Assert watermark DID NOT advance on crash
           final actualWm = await repo.getWatermark('sms_watermark');
-          expect(actualWm, equals(currentWatermark == 1000 ? null : currentWatermark));
+          expect(actualWm,
+              equals(currentWatermark == 1000 ? null : currentWatermark));
         } else {
           // Clean commit
           final inserted = await repo.insertBatchWithWatermark(
@@ -250,7 +261,8 @@ void main() {
       // Final DB assertions
       final dbCount = await repo.getCount();
       expect(dbCount, equals(totalCommittedTxns));
-      expect(await repo.getWatermark('sms_watermark'), equals(currentWatermark));
+      expect(
+          await repo.getWatermark('sms_watermark'), equals(currentWatermark));
     });
   });
 }

@@ -233,7 +233,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   SizedBox(height: 2),
                   Text(
                     'No active anomalies or budget overruns detected.',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style:
+                        TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                   ),
                 ],
               ),
@@ -243,7 +244,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
       );
     }
 
-    final bannerColor = hasCritical ? AppTheme.expenseRed : AppTheme.warningYellow;
+    final bannerColor =
+        hasCritical ? AppTheme.expenseRed : AppTheme.warningYellow;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -333,7 +335,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 if (provider.unreadCount > 0) ...[
                   const SizedBox(width: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                     decoration: BoxDecoration(
                       color: AppTheme.expenseRed,
                       borderRadius: BorderRadius.circular(10),
@@ -399,7 +402,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
     AlertProvider provider,
   ) {
     return Dismissible(
-      key: ValueKey('${alert.id}_${alert.updatedAt?.millisecondsSinceEpoch ?? alert.createdAt.millisecondsSinceEpoch}'),
+      key: ValueKey(
+          '${alert.id}_${alert.updatedAt?.millisecondsSinceEpoch ?? alert.createdAt.millisecondsSinceEpoch}'),
       direction: DismissDirection.endToStart,
       background: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -562,7 +566,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 ),
 
                 // Financial Progress Indicator if budget
-                if (alert.type == AppAlertType.budget && alert.ratio != null) ...[
+                if (alert.type == AppAlertType.budget &&
+                    alert.ratio != null) ...[
                   const SizedBox(height: 10),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
@@ -764,8 +769,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 
   Widget _buildEmpty(bool isDark, AlertProvider provider) {
-    final hasFilters =
-        provider.filterType != null || provider.filterUnreadOnly;
+    final hasFilters = provider.filterType != null || provider.filterUnreadOnly;
 
     return Center(
       child: Padding(
@@ -814,47 +818,48 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 }
 
-({IconData icon, Color color, String label}) _alertTypeConfig(AppAlertType type) {
+({IconData icon, Color color, String label}) _alertTypeConfig(
+    AppAlertType type) {
   return switch (type) {
     AppAlertType.budget => (
-      icon: Icons.account_balance_wallet_rounded,
-      color: AppTheme.expenseRed,
-      label: 'Budget',
-    ),
+        icon: Icons.account_balance_wallet_rounded,
+        color: AppTheme.expenseRed,
+        label: 'Budget',
+      ),
     AppAlertType.anomaly => (
-      icon: Icons.trending_up_rounded,
-      color: AppTheme.warningYellow,
-      label: 'Anomaly',
-    ),
+        icon: Icons.trending_up_rounded,
+        color: AppTheme.warningYellow,
+        label: 'Anomaly',
+      ),
     AppAlertType.largeTransaction => (
-      icon: Icons.priority_high_rounded,
-      color: AppTheme.warningYellow,
-      label: 'Large Txn',
-    ),
+        icon: Icons.priority_high_rounded,
+        color: AppTheme.warningYellow,
+        label: 'Large Txn',
+      ),
     AppAlertType.duplicateTransaction => (
-      icon: Icons.copy_rounded,
-      color: AppTheme.expenseRed,
-      label: 'Duplicate',
-    ),
+        icon: Icons.copy_rounded,
+        color: AppTheme.expenseRed,
+        label: 'Duplicate',
+      ),
     AppAlertType.bill => (
-      icon: Icons.receipt_long_rounded,
-      color: AppTheme.accentTeal,
-      label: 'Bill',
-    ),
+        icon: Icons.receipt_long_rounded,
+        color: AppTheme.accentTeal,
+        label: 'Bill',
+      ),
     AppAlertType.cashflow => (
-      icon: Icons.waterfall_chart_rounded,
-      color: AppTheme.accentPurple,
-      label: 'Cashflow',
-    ),
+        icon: Icons.waterfall_chart_rounded,
+        color: AppTheme.accentPurple,
+        label: 'Cashflow',
+      ),
     AppAlertType.goal => (
-      icon: Icons.emoji_events_rounded,
-      color: AppTheme.incomeGreen,
-      label: 'Goal',
-    ),
+        icon: Icons.emoji_events_rounded,
+        color: AppTheme.incomeGreen,
+        label: 'Goal',
+      ),
     AppAlertType.system => (
-      icon: Icons.info_rounded,
-      color: AppTheme.accentPurple,
-      label: 'System',
-    ),
+        icon: Icons.info_rounded,
+        color: AppTheme.accentPurple,
+        label: 'System',
+      ),
   };
 }

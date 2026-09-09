@@ -48,7 +48,8 @@ void main() {
   });
 
   group('WeeklyPlannerProvider Tests', () {
-    test('setLimit persists to repository and updates in-memory state', () async {
+    test('setLimit persists to repository and updates in-memory state',
+        () async {
       await provider.setLimit(
         categoryId: 'cat-groceries',
         categoryName: 'Groceries',
@@ -84,7 +85,9 @@ void main() {
       expect(await repository.getLimit('cat-dining'), isNull);
     });
 
-    test('refreshFromTransactions computes spend correctly and updates entry status', () async {
+    test(
+        'refreshFromTransactions computes spend correctly and updates entry status',
+        () async {
       await provider.setLimit(
         categoryId: 'cat-shopping',
         categoryName: 'Shopping',
@@ -111,7 +114,8 @@ void main() {
           id: 't3',
           amount: 5000,
           date: now,
-          type: TransactionType.income, // Income should not be counted as expense
+          type:
+              TransactionType.income, // Income should not be counted as expense
           categoryId: 'cat-shopping',
         ),
       ];
@@ -127,7 +131,8 @@ void main() {
       expect(provider.totalWeekSpent, 2300.0);
     });
 
-    test('robust fingerprinting recomputes on modified list with same length', () async {
+    test('robust fingerprinting recomputes on modified list with same length',
+        () async {
       await provider.setLimit(
         categoryId: 'cat-tech',
         categoryName: 'Tech',
@@ -177,7 +182,9 @@ void main() {
       expect((await repository.getAll()).isEmpty, isTrue);
     });
 
-    test('commutative transaction fingerprint ignores list ordering but invalidates on any mutation', () async {
+    test(
+        'commutative transaction fingerprint ignores list ordering but invalidates on any mutation',
+        () async {
       await provider.setLimit(
         categoryId: 'cat-books',
         categoryName: 'Books',
@@ -231,7 +238,8 @@ void main() {
       expect(provider.entries.first.weeklySpent, 900.0);
     });
 
-    test('load resolves one-off limit over recurring limit for current week', () async {
+    test('load resolves one-off limit over recurring limit for current week',
+        () async {
       final now = DateTime.now();
       final monday = DateTime(now.year, now.month, now.day)
           .subtract(Duration(days: (now.weekday - 1) % 7));

@@ -29,13 +29,15 @@ void main() {
         targetDate: null,
         emoji: null,
       );
-      expect(copied.targetDate, isNull, reason: 'Explicit null should clear targetDate');
+      expect(copied.targetDate, isNull,
+          reason: 'Explicit null should clear targetDate');
       expect(copied.emoji, isNull, reason: 'Explicit null should clear emoji');
       expect(copied.name, original.name);
       expect(copied.targetAmount, original.targetAmount);
     });
 
-    test('parameter provided with non-null value -> replaces existing value', () {
+    test('parameter provided with non-null value -> replaces existing value',
+        () {
       final newDate = DateTime(2027, 6, 30);
       final copied = original.copyWith(
         targetDate: newDate,
@@ -67,7 +69,9 @@ void main() {
       expect(goal.activeReserveAmount, 0.0);
     });
 
-    test('active goal contributes currentAmount when currentAmount <= targetAmount', () {
+    test(
+        'active goal contributes currentAmount when currentAmount <= targetAmount',
+        () {
       final goal = SavingGoal(
         id: 'active-goal',
         name: 'Active Goal',
@@ -79,7 +83,8 @@ void main() {
       expect(goal.activeReserveAmount, 4500.0);
     });
 
-    test('overfunded goal is capped at targetAmount for reserve calculation', () {
+    test('overfunded goal is capped at targetAmount for reserve calculation',
+        () {
       final goal = SavingGoal(
         id: 'overfunded-goal',
         name: 'Overfunded Goal',
@@ -106,7 +111,8 @@ void main() {
   });
 
   group('SavingGoal serialization', () {
-    test('toMap and fromMap preserve all fields including updatedAt and status', () {
+    test('toMap and fromMap preserve all fields including updatedAt and status',
+        () {
       final goal = SavingGoal(
         id: 'goal-full',
         name: 'MacBook Pro',

@@ -18,7 +18,8 @@ void main() {
         ),
       ];
 
-      final alerts = AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
+      final alerts =
+          AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
       expect(alerts, isEmpty);
     });
 
@@ -32,7 +33,8 @@ void main() {
         ),
       ];
 
-      final alerts = AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
+      final alerts =
+          AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
       expect(alerts.length, 1);
       final a = alerts.first;
       expect(a.stage, AppAlertStage.warning);
@@ -41,7 +43,8 @@ void main() {
       expect(a.title, 'Weekly limit warning');
     });
 
-    test('spending between 90% and 99% produces critical warning stage alert', () {
+    test('spending between 90% and 99% produces critical warning stage alert',
+        () {
       final entries = [
         WeeklyPlannerEntry(
           categoryId: 'cat-dining',
@@ -51,7 +54,8 @@ void main() {
         ),
       ];
 
-      final alerts = AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
+      final alerts =
+          AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
       expect(alerts.length, 1);
       final a = alerts.first;
       expect(a.stage, AppAlertStage.critical);
@@ -70,7 +74,8 @@ void main() {
         ),
       ];
 
-      final alerts = AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
+      final alerts =
+          AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
       expect(alerts.length, 1);
       final a = alerts.first;
       expect(a.stage, AppAlertStage.exceeded);
@@ -89,8 +94,10 @@ void main() {
         ),
       ];
 
-      final run1 = AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
-      final run2 = AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
+      final run1 =
+          AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
+      final run2 =
+          AlertEvaluator.evaluateWeeklyLimits(entries: entries, now: now);
 
       expect(run1.first.alertKey, run2.first.alertKey);
     });

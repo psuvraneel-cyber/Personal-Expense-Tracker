@@ -66,8 +66,8 @@ class CategoryProgressBarNew extends StatelessWidget {
                     color: isOver
                         ? PETColors.alert
                         : (isDark
-                              ? AppTheme.textPrimary
-                              : AppTheme.textPrimaryLight),
+                            ? AppTheme.textPrimary
+                            : AppTheme.textPrimaryLight),
                   ),
                 ),
                 if (budget > 0) ...[

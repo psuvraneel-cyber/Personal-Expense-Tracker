@@ -14,7 +14,8 @@ SmsTransaction _createSms({
   required double amount,
   required DateTime timestamp,
 }) {
-  final body = 'Debited Rs.$amount at $merchantName on ${timestamp.toIso8601String()}';
+  final body =
+      'Debited Rs.$amount at $merchantName on ${timestamp.toIso8601String()}';
   return SmsTransaction(
     id: id,
     amount: amount,
@@ -110,7 +111,8 @@ void main() {
   });
 
   group('RecurringProvider Full Lifecycle Tests', () {
-    test('addManual creates confirmed commitment and schedules reminder', () async {
+    test('addManual creates confirmed commitment and schedules reminder',
+        () async {
       final provider = RecurringProvider();
       await provider.addManual(
         merchantName: 'Netflix',
@@ -132,7 +134,8 @@ void main() {
       expect(bill.isAutopay, isTrue);
     });
 
-    test('markAsPaid records immutable history and advances next due date', () async {
+    test('markAsPaid records immutable history and advances next due date',
+        () async {
       final provider = RecurringProvider();
       await provider.addManual(
         merchantName: 'Spotify',
@@ -179,7 +182,9 @@ void main() {
       expect(snoozed.nextDueAt.day, equals(1));
     });
 
-    test('cancelBill transitions commitment to cancelled while retaining history', () async {
+    test(
+        'cancelBill transitions commitment to cancelled while retaining history',
+        () async {
       final provider = RecurringProvider();
       await provider.addManual(
         merchantName: 'Gym Membership',
@@ -195,7 +200,8 @@ void main() {
 
       expect(provider.confirmedBills, isEmpty);
       expect(provider.cancelledBills.length, equals(1));
-      expect(provider.cancelledBills.first.status, equals(RecurringStatus.cancelled));
+      expect(provider.cancelledBills.first.status,
+          equals(RecurringStatus.cancelled));
 
       // History is preserved
       final history = await provider.getHistory(billId);
@@ -225,7 +231,9 @@ void main() {
       expect(history, isEmpty);
     });
 
-    test('refreshFromSms merges detected candidates without altering confirmed commitments', () async {
+    test(
+        'refreshFromSms merges detected candidates without altering confirmed commitments',
+        () async {
       final provider = RecurringProvider();
 
       // 1. User has an existing confirmed bill
@@ -273,7 +281,8 @@ void main() {
       // Disney Hotstar is placed in detectedBills
       expect(provider.detectedBills.length, equals(1));
       expect(provider.detectedBills.first.merchantName, contains('Hotstar'));
-      expect(provider.detectedBills.first.status, equals(RecurringStatus.detected));
+      expect(provider.detectedBills.first.status,
+          equals(RecurringStatus.detected));
 
       // User confirms Hotstar
       final hotstarId = provider.detectedBills.first.id;

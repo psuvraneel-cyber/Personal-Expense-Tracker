@@ -69,20 +69,20 @@ class UserFeedback {
   });
 
   Map<String, dynamic> toMap() => {
-    'smsHash': smsHash,
-    'action': action.name,
-    'createdAt': createdAt.toIso8601String(),
-    'confirmedAmount': confirmedAmount,
-  };
+        'smsHash': smsHash,
+        'action': action.name,
+        'createdAt': createdAt.toIso8601String(),
+        'confirmedAmount': confirmedAmount,
+      };
 
   factory UserFeedback.fromMap(Map<String, dynamic> map) => UserFeedback(
-    smsHash: map['smsHash'] as String,
-    action: UserFeedbackAction.values.firstWhere(
-      (a) => a.name == map['action'],
-    ),
-    createdAt: DateTime.parse(map['createdAt'] as String),
-    confirmedAmount: (map['confirmedAmount'] as num?)?.toDouble(),
-  );
+        smsHash: map['smsHash'] as String,
+        action: UserFeedbackAction.values.firstWhere(
+          (a) => a.name == map['action'],
+        ),
+        createdAt: DateTime.parse(map['createdAt'] as String),
+        confirmedAmount: (map['confirmedAmount'] as num?)?.toDouble(),
+      );
 }
 
 /// Anonymized telemetry record (no PII).
@@ -108,15 +108,15 @@ class TelemetryRecord {
   });
 
   Map<String, dynamic> toJson() => {
-    'format_hash': formatHash,
-    'sender_prefix': senderPrefix,
-    'rejection_reason': rejectionReason,
-    'has_amount': hasAmount,
-    'has_intent': hasIntent,
-    'has_ref': hasRef,
-    'score': score,
-    'user_action': userAction,
-  };
+        'format_hash': formatHash,
+        'sender_prefix': senderPrefix,
+        'rejection_reason': rejectionReason,
+        'has_amount': hasAmount,
+        'has_intent': hasIntent,
+        'has_ref': hasRef,
+        'score': score,
+        'user_action': userAction,
+      };
 }
 
 /// In-memory feedback store with persistence hooks.

@@ -9,8 +9,7 @@ import 'package:pet/services/secure_storage_service.dart';
 
 // Conditional import: on web this resolves to a stub; on mobile/desktop it
 // resolves to the real dart:io Platform.
-import 'platform_stub.dart'
-    if (dart.library.io) 'platform_native.dart'
+import 'platform_stub.dart' if (dart.library.io) 'platform_native.dart'
     as platform;
 
 /// Centralized Firebase authentication service wrapping FirebaseAuth.
@@ -149,9 +148,8 @@ class FirebaseAuthService {
       );
     }
     try {
-      final result = kIsWeb
-          ? await _signInWithPopup()
-          : await _signInWithGoogleMobile();
+      final result =
+          kIsWeb ? await _signInWithPopup() : await _signInWithGoogleMobile();
 
       if (result != null) {
         _isLocalGuest = false;

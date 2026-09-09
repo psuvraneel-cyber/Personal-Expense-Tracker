@@ -24,7 +24,8 @@ class LinkedAccountRepository {
   }
 
   /// Conservative matching against existing linked accounts using bank identity and account tail.
-  Future<LinkedAccount?> findByBankAndTail(String bankName, String? tail) async {
+  Future<LinkedAccount?> findByBankAndTail(
+      String bankName, String? tail) async {
     final all = await getAll();
     if (all.isEmpty) return null;
 
@@ -36,14 +37,18 @@ class LinkedAccountRepository {
 
       final matchesBank = acctNameLower.contains(cleanBank) ||
           cleanBank.contains(acctNameLower) ||
-          (acctBankLower.isNotEmpty && (acctBankLower.contains(cleanBank) || cleanBank.contains(acctBankLower)));
+          (acctBankLower.isNotEmpty &&
+              (acctBankLower.contains(cleanBank) ||
+                  cleanBank.contains(acctBankLower)));
 
       if (!matchesBank) continue;
 
       // If tail is provided, ensure tail matches or account has no tail recorded yet
       if (tail != null && tail.isNotEmpty) {
         if (acct.accountTail != null && acct.accountTail!.isNotEmpty) {
-          if (acct.accountTail == tail || acct.accountTail!.endsWith(tail) || tail.endsWith(acct.accountTail!)) {
+          if (acct.accountTail == tail ||
+              acct.accountTail!.endsWith(tail) ||
+              tail.endsWith(acct.accountTail!)) {
             return acct;
           }
         } else {
@@ -60,7 +65,8 @@ class LinkedAccountRepository {
   }
 
   /// Observational balance update.
-  Future<void> updateObservedBalance(String id, double balance, DateTime observedAt) async {
+  Future<void> updateObservedBalance(
+      String id, double balance, DateTime observedAt) async {
     final db = await _dbHelper.database;
     await db.update(
       'linked_accounts',

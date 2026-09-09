@@ -125,14 +125,16 @@ void main() {
             'transactions',
             where: 'id = ?',
             whereArgs: ['txn_null_updated'],
-          )).first;
+          ))
+              .first;
           expect(txnNull['updatedAt'], '2026-07-01T10:00:00Z');
 
           final txnEmpty = (await dbUpgrade.query(
             'transactions',
             where: 'id = ?',
             whereArgs: ['txn_empty_updated'],
-          )).first;
+          ))
+              .first;
           expect(txnEmpty['updatedAt'], '2026-07-02T10:00:00Z');
 
           // Verify that valid updatedAt was NOT modified
@@ -140,7 +142,8 @@ void main() {
             'transactions',
             where: 'id = ?',
             whereArgs: ['txn_valid_updated'],
-          )).first;
+          ))
+              .first;
           expect(txnValid['updatedAt'], '2026-07-04T12:00:00Z');
 
           await dbUpgrade.close();
@@ -266,8 +269,7 @@ void main() {
                     },
                   );
 
-                  final int createdAtMillis =
-                      existingCreatedAt ??
+                  final int createdAtMillis = existingCreatedAt ??
                       (DateTime.tryParse(
                             timestampStr,
                           )?.millisecondsSinceEpoch ??
@@ -343,7 +345,8 @@ void main() {
       },
     );
 
-    test('Migration from version 13 to 14 creates system_watermarks table', () async {
+    test('Migration from version 13 to 14 creates system_watermarks table',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'migration_v14_test.db');
 
@@ -460,9 +463,9 @@ void main() {
           await expectLater(
             helper.onUpgradeForTesting(db, 1, 6),
             completes,
-            reason: 'Re-running migrations must be idempotent without throwing duplicate column error',
+            reason:
+                'Re-running migrations must be idempotent without throwing duplicate column error',
           );
-
         } finally {
           try {
             await db?.close();
@@ -477,4 +480,3 @@ void main() {
     );
   });
 }
-

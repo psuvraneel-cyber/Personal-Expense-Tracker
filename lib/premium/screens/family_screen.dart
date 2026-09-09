@@ -97,7 +97,8 @@ class FamilyScreen extends StatelessWidget {
                   )
                 else
                   ...provider.members.map((member) {
-                    final hasLimit = member.monthlyLimit != null && member.monthlyLimit! > 0;
+                    final hasLimit =
+                        member.monthlyLimit != null && member.monthlyLimit! > 0;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
@@ -113,7 +114,9 @@ class FamilyScreen extends StatelessWidget {
                         leading: CircleAvatar(
                           backgroundColor: AppTheme.accentPurple.withAlpha(35),
                           child: Text(
-                            member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
+                            member.name.isNotEmpty
+                                ? member.name[0].toUpperCase()
+                                : '?',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               color: AppTheme.accentPurple,
@@ -130,11 +133,14 @@ class FamilyScreen extends StatelessWidget {
                               : 'Household member',
                           style: TextStyle(
                             fontSize: 12,
-                            color: hasLimit ? AppTheme.accentTeal : AppTheme.textTertiary,
+                            color: hasLimit
+                                ? AppTheme.accentTeal
+                                : AppTheme.textTertiary,
                           ),
                         ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.expenseRed),
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              color: AppTheme.expenseRed),
                           onPressed: () => provider.removeMember(member.id),
                           tooltip: 'Remove',
                         ),
@@ -191,9 +197,9 @@ class FamilyScreen extends StatelessWidget {
                 if (name.isEmpty) return;
                 final limit = double.tryParse(limitController.text.trim());
                 context.read<FamilyProvider>().addMember(
-                  name: name,
-                  monthlyLimit: (limit != null && limit > 0) ? limit : null,
-                );
+                      name: name,
+                      monthlyLimit: (limit != null && limit > 0) ? limit : null,
+                    );
                 Navigator.pop(ctx);
               },
               child: const Text('Add'),

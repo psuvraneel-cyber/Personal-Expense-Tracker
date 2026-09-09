@@ -9,11 +9,11 @@ class RateLimitResult {
   final Duration? burstDelay;
 
   const RateLimitResult.allowed({this.burstDelay})
-    : allowed = true,
-      reason = null;
+      : allowed = true,
+        reason = null;
   const RateLimitResult.denied(this.reason)
-    : allowed = false,
-      burstDelay = null;
+      : allowed = false,
+        burstDelay = null;
 }
 
 /// In-process rate limiter implementing:

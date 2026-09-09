@@ -39,10 +39,12 @@ class MockWeeklyPlannerSyncService implements FirestoreSyncService {
   int get sessionGeneration => _generation;
 
   @override
-  AccountSession get currentSession => AccountSession(uid: _uid, generation: _generation);
+  AccountSession get currentSession =>
+      AccountSession(uid: _uid, generation: _generation);
 
   @override
-  Stream<List<WeeklyLimit>> weeklyLimitsStream() => weeklyLimitsController.stream;
+  Stream<List<WeeklyLimit>> weeklyLimitsStream() =>
+      weeklyLimitsController.stream;
 
   @override
   Future<void> upsertWeeklyLimit(WeeklyLimit limit) async {
@@ -81,7 +83,8 @@ void main() {
     );
     repository = WeeklyPlannerRepository(database: db);
     fakeSync = MockWeeklyPlannerSyncService();
-    provider = WeeklyPlannerProvider(repository: repository, firestoreSync: fakeSync);
+    provider =
+        WeeklyPlannerProvider(repository: repository, firestoreSync: fakeSync);
   });
 
   tearDown(() async {
@@ -90,7 +93,9 @@ void main() {
   });
 
   group('WeeklyPlanner Firestore Sync Parity & Session Guards', () {
-    test('mirrors setLimit and removeLimit mutations to cloud when authenticated', () async {
+    test(
+        'mirrors setLimit and removeLimit mutations to cloud when authenticated',
+        () async {
       fakeSync.setSession('user-A', 1);
 
       await provider.setLimit(
@@ -108,7 +113,8 @@ void main() {
       expect(fakeSync.deletedLimitIds, contains('groceries'));
     });
 
-    test('consumes incoming remote weekly limits and updates local state', () async {
+    test('consumes incoming remote weekly limits and updates local state',
+        () async {
       fakeSync.setSession('user-A', 1);
       await provider.load();
 
@@ -130,7 +136,8 @@ void main() {
       expect(provider.entries.first.weeklyLimit, 1200.0);
     });
 
-    test('ignores stream events received after session mismatch / switch', () async {
+    test('ignores stream events received after session mismatch / switch',
+        () async {
       fakeSync.setSession('user-A', 1);
       await provider.load();
 
@@ -154,7 +161,9 @@ void main() {
       expect(provider.entries, isEmpty);
     });
 
-    test('clearData unhooks remote stream so subsequent events do not resurrect entries', () async {
+    test(
+        'clearData unhooks remote stream so subsequent events do not resurrect entries',
+        () async {
       fakeSync.setSession('user-A', 1);
       await provider.load();
 

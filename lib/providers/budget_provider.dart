@@ -57,7 +57,8 @@ class BudgetProvider extends ChangeNotifier {
       // On web, budgets are populated via refreshSpentFromTransactions()
       // and setBudget() which writes directly to Firestore.
     } catch (e) {
-      AppLogger.error('Error loading budgets', error: e, label: 'BudgetProvider');
+      AppLogger.error('Error loading budgets',
+          error: e, label: 'BudgetProvider');
     }
 
     _isLoading = false;
@@ -80,10 +81,9 @@ class BudgetProvider extends ChangeNotifier {
     );
 
     if (!kIsWeb) {
-      await _budgetRepository
-          .insertOrUpdateBudget(budget)
-          .catchError(
-            (Object e) => AppLogger.error('SQLite budget insert failed', error: e, label: 'DB'),
+      await _budgetRepository.insertOrUpdateBudget(budget).catchError(
+            (Object e) => AppLogger.error('SQLite budget insert failed',
+                error: e, label: 'DB'),
           );
 
       // Update spent amount from SQLite
@@ -103,9 +103,8 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     // Mirror to Firestore in background.
-    _firestoreSync
-        .upsertBudget(budget)
-        .catchError((Object e) => AppLogger.error('budget upsert failed', error: e, label: 'Sync'));
+    _firestoreSync.upsertBudget(budget).catchError((Object e) =>
+        AppLogger.error('budget upsert failed', error: e, label: 'Sync'));
 
     unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
       budgets: {for (final b in _budgets) b.categoryId: b.amount},
@@ -132,7 +131,8 @@ class BudgetProvider extends ChangeNotifier {
       await _budgetRepository
           .deleteBudgetForCategory(categoryId, _currentMonth, _currentYear)
           .catchError(
-            (Object e) => AppLogger.error('SQLite budget delete failed', error: e, label: 'DB'),
+            (Object e) => AppLogger.error('SQLite budget delete failed',
+                error: e, label: 'DB'),
           );
     }
 
@@ -141,9 +141,8 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     if (budget.id.isNotEmpty) {
-      _firestoreSync
-          .deleteBudget(budget.id)
-          .catchError((Object e) => AppLogger.error('budget delete failed', error: e, label: 'Sync'));
+      _firestoreSync.deleteBudget(budget.id).catchError((Object e) =>
+          AppLogger.error('budget delete failed', error: e, label: 'Sync'));
     }
 
     unawaited(AlertEvaluationCoordinator().onBudgetsChanged(
@@ -160,9 +159,8 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   double getBudgetProgress(String categoryId) {
-    final budget = _budgets
-        .where((b) => b.categoryId == categoryId)
-        .firstOrNull;
+    final budget =
+        _budgets.where((b) => b.categoryId == categoryId).firstOrNull;
     if (budget == null || budget.amount == 0) return 0.0;
     final spent = _spentAmounts[categoryId] ?? 0.0;
     return (spent / budget.amount).clamp(0.0, 2.0);
@@ -206,11 +204,8 @@ class BudgetProvider extends ChangeNotifier {
       budgets: {for (final b in _budgets) b.categoryId: b.amount},
       spent: _spentAmounts,
     ).catchError((Object e, StackTrace st) {
-      AppLogger.error(
-          'Alert evaluation failed in refreshSpentFromTransactions',
-          error: e,
-          stack: st,
-          label: 'AlertCoordinator');
+      AppLogger.error('Alert evaluation failed in refreshSpentFromTransactions',
+          error: e, stack: st, label: 'AlertCoordinator');
     }));
   }
 
@@ -224,8 +219,9 @@ class BudgetProvider extends ChangeNotifier {
     // Wipe budgets from SQLite.
     if (!kIsWeb) {
       await _budgetRepository.deleteAllBudgets().catchError(
-        (Object e) => AppLogger.error('SQLite budget clear failed', error: e, label: 'DB'),
-      );
+            (Object e) => AppLogger.error('SQLite budget clear failed',
+                error: e, label: 'DB'),
+          );
     }
   }
 }

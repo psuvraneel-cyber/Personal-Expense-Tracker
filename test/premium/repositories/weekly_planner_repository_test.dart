@@ -133,7 +133,9 @@ void main() {
       expect((await repository.getAllActive()).isEmpty, isTrue);
     });
 
-    test('supports both recurring baseline and designated one-off for same category', () async {
+    test(
+        'supports both recurring baseline and designated one-off for same category',
+        () async {
       final now = DateTime(2026, 3, 9, 10, 0); // Monday of week
       final recurringRule = WeeklyLimit(
         id: 'rule-recurring-food',
@@ -164,18 +166,21 @@ void main() {
       expect(all.length, 2);
 
       // For that specific designated week, getEffectiveLimit returns the one-off rule (5000)
-      final effectiveThisWeek = await repository.getEffectiveLimit('cat-food', forDate: DateTime(2026, 3, 11));
+      final effectiveThisWeek = await repository.getEffectiveLimit('cat-food',
+          forDate: DateTime(2026, 3, 11));
       expect(effectiveThisWeek, isNotNull);
       expect(effectiveThisWeek!.id, 'rule-one-off-food-festive');
       expect(effectiveThisWeek.weeklyLimit, 5000.0);
       expect(effectiveThisWeek.recurrencePolicy, WeeklyRecurrencePolicy.oneOff);
 
       // For a different week, getEffectiveLimit falls back to the recurring baseline rule (2000)
-      final effectiveNextWeek = await repository.getEffectiveLimit('cat-food', forDate: DateTime(2026, 3, 18));
+      final effectiveNextWeek = await repository.getEffectiveLimit('cat-food',
+          forDate: DateTime(2026, 3, 18));
       expect(effectiveNextWeek, isNotNull);
       expect(effectiveNextWeek!.id, 'rule-recurring-food');
       expect(effectiveNextWeek.weeklyLimit, 2000.0);
-      expect(effectiveNextWeek.recurrencePolicy, WeeklyRecurrencePolicy.recurring);
+      expect(
+          effectiveNextWeek.recurrencePolicy, WeeklyRecurrencePolicy.recurring);
     });
 
     test('retrieves and deletes specific rules by rule id', () async {
@@ -200,7 +205,8 @@ void main() {
   });
 
   group('WeeklyPlannerRepository Legacy SharedPreferences Migration', () {
-    test('migrates legacy preferences into SQLite and sets completion flag', () async {
+    test('migrates legacy preferences into SQLite and sets completion flag',
+        () async {
       SharedPreferences.setMockInitialValues({
         'weekly_limit_cat-dining': 2000.0,
         'weekly_limit_cat-fuel': 1500.0,
@@ -211,7 +217,8 @@ void main() {
         'cat-fuel': 'Fuel',
       };
 
-      await repository.migrateFromSharedPreferences(categoryNames: categoryNames);
+      await repository.migrateFromSharedPreferences(
+          categoryNames: categoryNames);
 
       final active = await repository.getAllActive();
       expect(active.length, 2);
@@ -225,7 +232,8 @@ void main() {
       expect(fuel.categoryName, 'Fuel');
 
       // Subsequent migration invocation should be idempotent and not duplicate
-      await repository.migrateFromSharedPreferences(categoryNames: categoryNames);
+      await repository.migrateFromSharedPreferences(
+          categoryNames: categoryNames);
       expect((await repository.getAllActive()).length, 2);
     });
   });

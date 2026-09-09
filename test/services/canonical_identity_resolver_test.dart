@@ -78,12 +78,16 @@ void main() {
         timestamp: time2,
       );
 
-      expect(fp1, equals(fp2), reason: 'Reference IDs must match across SMS and notification');
+      expect(fp1, equals(fp2),
+          reason: 'Reference IDs must match across SMS and notification');
     });
 
-    test('CanonicalIdentityResolver matches account tail and amount within 15 min window', () {
+    test(
+        'CanonicalIdentityResolver matches account tail and amount within 15 min window',
+        () {
       final time1 = DateTime(2026, 9, 4, 10, 5);
-      final time2 = DateTime(2026, 9, 4, 10, 9); // 4 mins later (same 15 min bucket)
+      final time2 =
+          DateTime(2026, 9, 4, 10, 9); // 4 mins later (same 15 min bucket)
 
       final same = CanonicalIdentityResolver.areSameEvent(
         amount1: 500.0,
@@ -97,7 +101,9 @@ void main() {
       expect(same, isTrue);
     });
 
-    test('CanonicalIdentityResolver does not falsely match distinct transactions', () {
+    test(
+        'CanonicalIdentityResolver does not falsely match distinct transactions',
+        () {
       final time1 = DateTime(2026, 9, 4, 10, 0);
       final time2 = DateTime(2026, 9, 4, 10, 45); // 45 mins later
 
@@ -110,7 +116,9 @@ void main() {
         merchant2: 'Starbucks',
       );
 
-      expect(same, isFalse, reason: 'Transactions 45 mins apart should not be falsely merged without strong reference');
+      expect(same, isFalse,
+          reason:
+              'Transactions 45 mins apart should not be falsely merged without strong reference');
     });
   });
 }

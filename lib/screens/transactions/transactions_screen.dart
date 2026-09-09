@@ -167,7 +167,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                 ),
                                 child: Text(
                                   dateKey,
-                                  style: Theme.of(context).textTheme.bodySmall
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
                                       ?.copyWith(fontWeight: FontWeight.w600),
                                 ),
                               ),
@@ -272,9 +274,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           color: isDark ? AppTheme.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withAlpha(15)
-                : const Color(0xFFE2E8F0),
+            color:
+                isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
           ),
         ),
         child: const Icon(Icons.filter_list, size: 20),
@@ -299,9 +300,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               Icon(
                 Icons.calendar_today,
                 size: 16,
-                color: txnProvider.sortBy == 'date'
-                    ? AppTheme.accentPurple
-                    : null,
+                color:
+                    txnProvider.sortBy == 'date' ? AppTheme.accentPurple : null,
               ),
               const SizedBox(width: 8),
               Text(
@@ -368,9 +368,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           color: isDark ? AppTheme.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withAlpha(15)
-                : const Color(0xFFE2E8F0),
+            color:
+                isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
           ),
         ),
         child: const Icon(Icons.sort, size: 20),
@@ -397,9 +396,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             color: isDark ? AppTheme.cardDark : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isDark
-                  ? Colors.white.withAlpha(15)
-                  : const Color(0xFFE2E8F0),
+              color:
+                  isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
             ),
           ),
           child: const Icon(Icons.repeat, size: 20, color: AppTheme.accentTeal),
@@ -492,30 +490,28 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children:
-                        [
-                              'UPI',
-                              'Credit Card',
-                              'Debit Card',
-                              'Cash',
-                              'Bank Transfer',
-                              'Net Banking',
-                              'PayPal',
-                            ]
-                            .map(
-                              (method) => ChoiceChip(
-                                label: Text(method),
-                                selected: selectedPayment == method,
-                                onSelected: (_) {
-                                  setSheetState(() {
-                                    selectedPayment = selectedPayment == method
-                                        ? null
-                                        : method;
-                                  });
-                                },
-                              ),
-                            )
-                            .toList(),
+                    children: [
+                      'UPI',
+                      'Credit Card',
+                      'Debit Card',
+                      'Cash',
+                      'Bank Transfer',
+                      'Net Banking',
+                      'PayPal',
+                    ]
+                        .map(
+                          (method) => ChoiceChip(
+                            label: Text(method),
+                            selected: selectedPayment == method,
+                            onSelected: (_) {
+                              setSheetState(() {
+                                selectedPayment =
+                                    selectedPayment == method ? null : method;
+                              });
+                            },
+                          ),
+                        )
+                        .toList(),
                   ),
                   const SizedBox(height: 16),
 

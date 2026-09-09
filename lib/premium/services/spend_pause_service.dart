@@ -62,7 +62,8 @@ class SpendPauseService {
 
     // Auto-expire: if the pause time has passed, clear it and return disabled.
     if (isEnabled && until != null && DateTime.now().isAfter(until)) {
-      await setState(SpendPause(enabled: false), userId: userId, prefsInstance: prefs);
+      await setState(SpendPause(enabled: false),
+          userId: userId, prefsInstance: prefs);
       return SpendPause(enabled: false);
     }
 
@@ -119,4 +120,3 @@ class SpendPauseService {
     await prefs.remove(_kLegacyPauseCategories);
   }
 }
-

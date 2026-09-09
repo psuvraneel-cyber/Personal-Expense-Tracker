@@ -143,8 +143,8 @@ class _BudgetScreenState extends State<BudgetScreen> {
                                 value < 0.7
                                     ? AppTheme.incomeGreen
                                     : value < 0.9
-                                    ? AppTheme.warningYellow
-                                    : AppTheme.expenseRed,
+                                        ? AppTheme.warningYellow
+                                        : AppTheme.expenseRed,
                               ),
                             ),
                           );
@@ -322,9 +322,8 @@ class _BudgetScreenState extends State<BudgetScreen> {
     final expenseCategories = catProvider.expenseCategories;
 
     // Filter out categories that already have budgets
-    final existingBudgetCatIds = budgetProvider.budgets
-        .map((b) => b.categoryId)
-        .toSet();
+    final existingBudgetCatIds =
+        budgetProvider.budgets.map((b) => b.categoryId).toSet();
     final availableCategories = expenseCategories
         .where((c) => !existingBudgetCatIds.contains(c.id))
         .toList();
@@ -478,10 +477,10 @@ class _BudgetScreenState extends State<BudgetScreen> {
             Text(
               'No budgets set',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: isDark
-                    ? AppTheme.textSecondary
-                    : AppTheme.textSecondaryLight,
-              ),
+                    color: isDark
+                        ? AppTheme.textSecondary
+                        : AppTheme.textSecondaryLight,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(

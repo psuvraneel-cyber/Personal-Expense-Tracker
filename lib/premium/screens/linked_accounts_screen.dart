@@ -36,7 +36,8 @@ class LinkedAccountsScreen extends StatelessWidget {
                     color: const Color(0xFF3B82F6).withAlpha(isDark ? 30 : 18),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: const Color(0xFF3B82F6).withAlpha(isDark ? 60 : 40),
+                      color:
+                          const Color(0xFF3B82F6).withAlpha(isDark ? 60 : 40),
                     ),
                   ),
                   child: Row(
@@ -93,12 +94,15 @@ class LinkedAccountsScreen extends StatelessWidget {
                         ),
                       ),
                       child: ListTile(
-                        leading: const Icon(Icons.account_balance_rounded, color: AppTheme.accentTeal),
+                        leading: const Icon(Icons.account_balance_rounded,
+                            color: AppTheme.accentTeal),
                         title: Text(account.accountName),
                         subtitle: Text(account.accountType),
                         trailing: IconButton(
-                          icon: const Icon(Icons.link_off_rounded, color: AppTheme.expenseRed),
-                          onPressed: () => provider.disconnectAccount(account.id),
+                          icon: const Icon(Icons.link_off_rounded,
+                              color: AppTheme.expenseRed),
+                          onPressed: () =>
+                              provider.disconnectAccount(account.id),
                         ),
                       ),
                     );

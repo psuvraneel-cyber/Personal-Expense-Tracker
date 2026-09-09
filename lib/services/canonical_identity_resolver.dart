@@ -40,15 +40,18 @@ class CanonicalIdentityResolver {
 
     // 1. Strong reference ID (Highest confidence)
     if (referenceId != null && referenceId.trim().isNotEmpty) {
-      var cleanRef = referenceId.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      var cleanRef =
+          referenceId.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       // Strip common reference prefixes like 'upi', 'imps', 'rrn', 'ref', 'txn' when followed by digits
-      final prefixPattern = RegExp(r'^(?:upi|imps|rrn|ref|txn|neft|rtgs)(\d{6,})$');
+      final prefixPattern =
+          RegExp(r'^(?:upi|imps|rrn|ref|txn|neft|rtgs)(\d{6,})$');
       final match = prefixPattern.firstMatch(cleanRef);
       if (match != null) {
         cleanRef = match.group(1)!;
       }
       if (cleanRef.length >= 6) {
-        final dateKey = '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}';
+        final dateKey =
+            '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}';
         return 'ref:$cleanRef:$formattedAmount:$dateKey';
       }
     }
@@ -118,10 +121,14 @@ class CanonicalIdentityResolver {
     if ((amount1 - amount2).abs() > 0.01) return false;
 
     // 2. If both have reference IDs, compare directly
-    if (ref1 != null && ref2 != null && ref1.trim().isNotEmpty && ref2.trim().isNotEmpty) {
+    if (ref1 != null &&
+        ref2 != null &&
+        ref1.trim().isNotEmpty &&
+        ref2.trim().isNotEmpty) {
       var c1 = ref1.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       var c2 = ref2.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-      final prefixPattern = RegExp(r'^(?:upi|imps|rrn|ref|txn|neft|rtgs)(\d{6,})$');
+      final prefixPattern =
+          RegExp(r'^(?:upi|imps|rrn|ref|txn|neft|rtgs)(\d{6,})$');
       final m1 = prefixPattern.firstMatch(c1);
       if (m1 != null) c1 = m1.group(1)!;
       final m2 = prefixPattern.firstMatch(c2);
@@ -136,21 +143,33 @@ class CanonicalIdentityResolver {
     if (diff > windowDuration) return false;
 
     // 4. Account tail match
-    if (tail1 != null && tail2 != null && tail1.trim().isNotEmpty && tail2.trim().isNotEmpty) {
+    if (tail1 != null &&
+        tail2 != null &&
+        tail1.trim().isNotEmpty &&
+        tail2.trim().isNotEmpty) {
       final t1 = tail1.trim().replaceAll(RegExp(r'[^0-9]'), '');
       final t2 = tail2.trim().replaceAll(RegExp(r'[^0-9]'), '');
       if (t1 == t2 && t1.length >= 3) return true;
     }
 
     // 5. UPI ID match
-    if (upi1 != null && upi2 != null && upi1.trim().isNotEmpty && upi2.trim().isNotEmpty) {
+    if (upi1 != null &&
+        upi2 != null &&
+        upi1.trim().isNotEmpty &&
+        upi2.trim().isNotEmpty) {
       if (upi1.trim().toLowerCase() == upi2.trim().toLowerCase()) return true;
     }
 
     // 6. Merchant match with close timestamp (within 5 minutes)
     if (diff <= const Duration(minutes: 5)) {
-      final m1 = (merchant1 ?? '').trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-      final m2 = (merchant2 ?? '').trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final m1 = (merchant1 ?? '')
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final m2 = (merchant2 ?? '')
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]'), '');
       if (m1.isNotEmpty && m2.isNotEmpty && m1 == m2 && m1 != 'unknown') {
         return true;
       }

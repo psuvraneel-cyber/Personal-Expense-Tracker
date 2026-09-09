@@ -9,7 +9,8 @@ SmsTransaction _createSms({
   required double amount,
   required DateTime timestamp,
 }) {
-  final body = 'Debited Rs.$amount at $merchantName on ${timestamp.toIso8601String()}';
+  final body =
+      'Debited Rs.$amount at $merchantName on ${timestamp.toIso8601String()}';
   return SmsTransaction(
     id: id,
     amount: amount,
@@ -27,7 +28,8 @@ void main() {
   group('RecurringDetectionService Intelligence & Deduplication', () {
     test('normalizes merchant names conservatively', () {
       expect(
-        RecurringDetectionService.normalizeMerchantName('NETFLIX INDIA PVT LTD'),
+        RecurringDetectionService.normalizeMerchantName(
+            'NETFLIX INDIA PVT LTD'),
         equals('Netflix'),
       );
       expect(
@@ -35,11 +37,13 @@ void main() {
         equals('Spotify'),
       );
       expect(
-        RecurringDetectionService.normalizeMerchantName('UPI/BESCOM Electricity/41234'),
+        RecurringDetectionService.normalizeMerchantName(
+            'UPI/BESCOM Electricity/41234'),
         equals('Bescom Electricity 41234'),
       );
       expect(
-        RecurringDetectionService.normalizeMerchantName('Pay to Cult.fit India'),
+        RecurringDetectionService.normalizeMerchantName(
+            'Pay to Cult.fit India'),
         equals('Cult Fit'),
       );
       expect(
@@ -48,7 +52,9 @@ void main() {
       );
     });
 
-    test('detects monthly recurring subscription from 3 consistent transactions', () {
+    test(
+        'detects monthly recurring subscription from 3 consistent transactions',
+        () {
       final txns = <SmsTransaction>[
         _createSms(
           id: '1',
@@ -83,7 +89,8 @@ void main() {
       expect(detected.nextDueAt.day, equals(20));
     });
 
-    test('detects price hike when subscription amount increases from baseline', () {
+    test('detects price hike when subscription amount increases from baseline',
+        () {
       final txns = <SmsTransaction>[
         _createSms(
           id: '1',
@@ -113,10 +120,13 @@ void main() {
       expect(detected.previousAmount, equals(199.0));
       expect(detected.isPriceChanged, isTrue);
       expect(detected.priceDifference, equals(50.0));
-      expect(detected.detectionReason, contains('price change from ₹199 to ₹249'));
+      expect(
+          detected.detectionReason, contains('price change from ₹199 to ₹249'));
     });
 
-    test('rejects erratic variable spending (e.g. Swiggy food delivery) from recurring detection', () {
+    test(
+        'rejects erratic variable spending (e.g. Swiggy food delivery) from recurring detection',
+        () {
       final txns = <SmsTransaction>[
         _createSms(
           id: '1',

@@ -36,9 +36,9 @@ class NegativeFilterResult {
   final SenderTrust senderTrust;
 
   const NegativeFilterResult.pass({required this.senderTrust})
-    : rejected = false,
-      reason = null,
-      filterName = null;
+      : rejected = false,
+        reason = null,
+        filterName = null;
 
   const NegativeFilterResult.reject({
     required this.reason,

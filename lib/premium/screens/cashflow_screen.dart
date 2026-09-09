@@ -20,7 +20,8 @@ class CashflowScreen extends StatefulWidget {
 }
 
 class _CashflowScreenState extends State<CashflowScreen> {
-  final _fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final _fmt =
+      NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
   int _selectedHorizon = 30; // 14, 30, 60, 90
   String _timelineFilter = 'all'; // 'all', 'events', 'deficits'
@@ -29,7 +30,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
 
   // What-If Simulator state
   bool _showSimulator = false;
-  final TextEditingController _simulatorAmountController = TextEditingController();
+  final TextEditingController _simulatorAmountController =
+      TextEditingController();
   DateTime _simulatorDate = DateTime.now().add(const Duration(days: 1));
   double? _simulatedAmount;
   CashflowForecast? _simulatedForecast;
@@ -48,7 +50,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
     super.dispose();
   }
 
-  void _runSimulation(CashflowForecast baseForecast, double? amount, DateTime date) {
+  void _runSimulation(
+      CashflowForecast baseForecast, double? amount, DateTime date) {
     setState(() {
       _simulatedAmount = amount;
       _simulatorDate = date;
@@ -101,7 +104,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
           builder: (context, provider, recurringProvider, _) {
             double goalReserves = 0.0;
             try {
-              goalReserves = Provider.of<GoalProvider>(context).totalActiveGoalReserves;
+              goalReserves =
+                  Provider.of<GoalProvider>(context).totalActiveGoalReserves;
             } catch (_) {
               goalReserves = 0.0;
             }
@@ -118,13 +122,14 @@ class _CashflowScreenState extends State<CashflowScreen> {
             }
 
             // Keep simulated forecast in sync with horizon / transactions
-            final activeForecast = (_simulatedAmount != null && _simulatedAmount! > 0)
-                ? CashflowForecastService.simulateExpense(
-                    baseForecast,
-                    amount: _simulatedAmount!,
-                    date: _simulatorDate,
-                  )
-                : baseForecast;
+            final activeForecast =
+                (_simulatedAmount != null && _simulatedAmount! > 0)
+                    ? CashflowForecastService.simulateExpense(
+                        baseForecast,
+                        amount: _simulatedAmount!,
+                        date: _simulatorDate,
+                      )
+                    : baseForecast;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
@@ -198,7 +203,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
                 'Limited history: Projections are tentative. Add more transactions to improve forecast reliability.',
                 style: TextStyle(
                   fontSize: 12,
-                  color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+                  color: isDark
+                      ? AppTheme.textTertiary
+                      : AppTheme.textSecondaryLight,
                   height: 1.3,
                 ),
               ),
@@ -222,7 +229,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 11,
-              color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+              color:
+                  isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -283,9 +291,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
                 curve: Curves.easeInOut,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.accentPurple
-                      : Colors.transparent,
+                  color:
+                      isSelected ? AppTheme.accentPurple : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
@@ -296,7 +303,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     color: isSelected
                         ? Colors.white
-                        : (isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight),
+                        : (isDark
+                            ? AppTheme.textTertiary
+                            : AppTheme.textSecondaryLight),
                   ),
                 ),
               ),
@@ -329,7 +338,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: (isZero ? AppTheme.expenseRed : AppTheme.accentPurple).withAlpha(45),
+            color: (isZero ? AppTheme.expenseRed : AppTheme.accentPurple)
+                .withAlpha(45),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -359,7 +369,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     const SizedBox(width: 6),
                     InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: () => _showSafeToSpendExplanation(forecast, isDark),
+                      onTap: () =>
+                          _showSafeToSpendExplanation(forecast, isDark),
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
@@ -477,7 +488,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
               color: isDark ? AppTheme.cardDark : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(6),
+                color: isDark
+                    ? Colors.white.withAlpha(8)
+                    : Colors.black.withAlpha(6),
               ),
             ),
             child: Column(
@@ -523,7 +536,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
               color: isDark ? AppTheme.cardDark : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(6),
+                color: isDark
+                    ? Colors.white.withAlpha(8)
+                    : Colors.black.withAlpha(6),
               ),
             ),
             child: Column(
@@ -605,8 +620,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
               Text(
                 'Can I Afford This? (Simulator)',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const Spacer(),
               if (_simulatedAmount != null && _simulatedAmount! > 0)
@@ -634,8 +649,10 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     labelText: 'Simulate Purchase',
                     hintText: '25000',
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   onChanged: (val) {
                     final amt = double.tryParse(val.replaceAll(',', '').trim());
@@ -649,14 +666,16 @@ class _CashflowScreenState extends State<CashflowScreen> {
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () async {
                     final picked = await showDatePicker(
                       context: context,
                       initialDate: _simulatorDate,
                       firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(Duration(days: _selectedHorizon - 1)),
+                      lastDate: DateTime.now()
+                          .add(Duration(days: _selectedHorizon - 1)),
                     );
                     if (picked != null) {
                       _runSimulation(baseForecast, _simulatedAmount, picked);
@@ -665,10 +684,13 @@ class _CashflowScreenState extends State<CashflowScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Date', style: TextStyle(fontSize: 10, color: AppTheme.textTertiary)),
+                      const Text('Date',
+                          style: TextStyle(
+                              fontSize: 10, color: AppTheme.textTertiary)),
                       Text(
                         DateFormat('d MMM').format(_simulatorDate),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -683,11 +705,13 @@ class _CashflowScreenState extends State<CashflowScreen> {
             children: quickAmounts.map((amt) {
               final isSelected = _simulatedAmount == amt;
               return ChoiceChip(
-                label: Text('₹${_fmt.format(amt)}', style: const TextStyle(fontSize: 11)),
+                label: Text('₹${_fmt.format(amt)}',
+                    style: const TextStyle(fontSize: 11)),
                 selected: isSelected,
                 onSelected: (sel) {
                   final newAmt = sel ? amt : null;
-                  _simulatorAmountController.text = newAmt != null ? newAmt.toStringAsFixed(0) : '';
+                  _simulatorAmountController.text =
+                      newAmt != null ? newAmt.toStringAsFixed(0) : '';
                   _runSimulation(baseForecast, newAmt, _simulatorDate);
                 },
               );
@@ -715,11 +739,14 @@ class _CashflowScreenState extends State<CashflowScreen> {
 
     final String verdict;
     if (isDeficit) {
-      verdict = 'Deficit Risk: Would push projected balance to ${_fmt.format(sim.lowestProjectedBalance)} on ${DateFormat('d MMM').format(sim.lowestProjectedDate)}.';
+      verdict =
+          'Deficit Risk: Would push projected balance to ${_fmt.format(sim.lowestProjectedBalance)} on ${DateFormat('d MMM').format(sim.lowestProjectedDate)}.';
     } else if (isBufferBreach) {
-      verdict = 'Buffer Breach: Projected balance dips to ${_fmt.format(sim.lowestProjectedBalance)}, below your ${_fmt.format(sim.safetyBuffer)} safety buffer.';
+      verdict =
+          'Buffer Breach: Projected balance dips to ${_fmt.format(sim.lowestProjectedBalance)}, below your ${_fmt.format(sim.safetyBuffer)} safety buffer.';
     } else {
-      verdict = 'Likely Safe: Projected lowest balance remains healthy at ${_fmt.format(sim.lowestProjectedBalance)}.';
+      verdict =
+          'Likely Safe: Projected lowest balance remains healthy at ${_fmt.format(sim.lowestProjectedBalance)}.';
     }
 
     return Container(
@@ -735,7 +762,11 @@ class _CashflowScreenState extends State<CashflowScreen> {
           Row(
             children: [
               Icon(
-                isDeficit ? Icons.error_outline : (isBufferBreach ? Icons.warning_amber_rounded : Icons.check_circle_outline),
+                isDeficit
+                    ? Icons.error_outline
+                    : (isBufferBreach
+                        ? Icons.warning_amber_rounded
+                        : Icons.check_circle_outline),
                 size: 16,
                 color: bannerColor,
               ),
@@ -757,7 +788,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
             'Safe-to-spend changes from ${_fmt.format(base.safeToSpend)}/d → ${_fmt.format(sim.safeToSpend)}/d. No actual transaction created.',
             style: TextStyle(
               fontSize: 11,
-              color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+              color:
+                  isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
             ),
           ),
         ],
@@ -776,9 +808,10 @@ class _CashflowScreenState extends State<CashflowScreen> {
     final points = activeForecast.dailyPoints;
     if (points.isEmpty) return const SizedBox.shrink();
 
-    final scrubbedPoint = _scrubbedIndex != null && _scrubbedIndex! < points.length
-        ? points[_scrubbedIndex!]
-        : null;
+    final scrubbedPoint =
+        _scrubbedIndex != null && _scrubbedIndex! < points.length
+            ? points[_scrubbedIndex!]
+            : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -789,8 +822,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
             Text(
               '$_selectedHorizon-Day Projection',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             if (scrubbedPoint != null)
               Container(
@@ -813,7 +846,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
                 'Drag across to inspect',
                 style: TextStyle(
                   fontSize: 11,
-                  color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+                  color: isDark
+                      ? AppTheme.textTertiary
+                      : AppTheme.textSecondaryLight,
                 ),
               ),
           ],
@@ -826,15 +861,19 @@ class _CashflowScreenState extends State<CashflowScreen> {
             color: isDark ? AppTheme.cardDark : Colors.white,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(6),
+              color: isDark
+                  ? Colors.white.withAlpha(8)
+                  : Colors.black.withAlpha(6),
             ),
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onPanDown: (d) => _handleScrub(d.localPosition.dx, constraints.maxWidth, points.length, points),
-                onPanUpdate: (d) => _handleScrub(d.localPosition.dx, constraints.maxWidth, points.length, points),
+                onPanDown: (d) => _handleScrub(d.localPosition.dx,
+                    constraints.maxWidth, points.length, points),
+                onPanUpdate: (d) => _handleScrub(d.localPosition.dx,
+                    constraints.maxWidth, points.length, points),
                 onPanEnd: (_) => setState(() => _scrubbedIndex = null),
                 onPanCancel: () => setState(() => _scrubbedIndex = null),
                 child: CustomPaint(
@@ -855,15 +894,21 @@ class _CashflowScreenState extends State<CashflowScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Day 1 (${DateFormat('d MMM').format(points.first.date)})', style: const TextStyle(fontSize: 10, color: AppTheme.textTertiary)),
-            Text('End of Forecast (${DateFormat('d MMM').format(points.last.date)})', style: const TextStyle(fontSize: 10, color: AppTheme.textTertiary)),
+            Text('Day 1 (${DateFormat('d MMM').format(points.first.date)})',
+                style: const TextStyle(
+                    fontSize: 10, color: AppTheme.textTertiary)),
+            Text(
+                'End of Forecast (${DateFormat('d MMM').format(points.last.date)})',
+                style: const TextStyle(
+                    fontSize: 10, color: AppTheme.textTertiary)),
           ],
         ),
       ],
     );
   }
 
-  void _handleScrub(double dx, double width, int totalPoints, List<CashflowPoint> points) {
+  void _handleScrub(
+      double dx, double width, int totalPoints, List<CashflowPoint> points) {
     if (width <= 0 || totalPoints <= 0) return;
     final double rawIndex = (dx / width) * totalPoints;
     final int index = rawIndex.clamp(0.0, totalPoints - 1.0).toInt();
@@ -895,7 +940,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
         border: Border.all(
           color: isDeficit
               ? AppTheme.expenseRed.withAlpha(isDark ? 60 : 35)
-              : (isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(6)),
+              : (isDark
+                  ? Colors.white.withAlpha(8)
+                  : Colors.black.withAlpha(6)),
         ),
       ),
       child: Row(
@@ -903,7 +950,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: (isDeficit ? AppTheme.expenseRed : AppTheme.accentTeal).withAlpha(20),
+              color: (isDeficit ? AppTheme.expenseRed : AppTheme.accentTeal)
+                  .withAlpha(20),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -918,7 +966,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isDeficit ? 'Projected Deficit Trough' : 'Lowest Projected Balance',
+                  isDeficit
+                      ? 'Projected Deficit Trough'
+                      : 'Lowest Projected Balance',
                   style: const TextStyle(
                     fontSize: 11,
                     color: AppTheme.textTertiary,
@@ -931,16 +981,21 @@ class _CashflowScreenState extends State<CashflowScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: isDeficit ? AppTheme.expenseRed : (isDark ? Colors.white : Colors.black87),
+                    color: isDeficit
+                        ? AppTheme.expenseRed
+                        : (isDark ? Colors.white : Colors.black87),
                   ),
                 ),
-                if (forecast.troughDriver != null && forecast.troughDriver!.isNotEmpty) ...[
+                if (forecast.troughDriver != null &&
+                    forecast.troughDriver!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
                     'Key Driver: ${forecast.troughDriver}',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+                      color: isDark
+                          ? AppTheme.textTertiary
+                          : AppTheme.textSecondaryLight,
                     ),
                   ),
                 ],
@@ -965,8 +1020,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
             Text(
               'Daily Timeline ($_selectedHorizon Days)',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             Text(
               '${forecast.dailyPoints.length} days',
@@ -1006,7 +1061,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? AppTheme.accentPurple
-              : (isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(6)),
+              : (isDark
+                  ? Colors.white.withAlpha(8)
+                  : Colors.black.withAlpha(6)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
@@ -1014,7 +1071,11 @@ class _CashflowScreenState extends State<CashflowScreen> {
           style: TextStyle(
             fontSize: 10,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? Colors.white : (isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight),
+            color: isSelected
+                ? Colors.white
+                : (isDark
+                    ? AppTheme.textTertiary
+                    : AppTheme.textSecondaryLight),
           ),
         ),
       ),
@@ -1025,7 +1086,10 @@ class _CashflowScreenState extends State<CashflowScreen> {
     var points = forecast.dailyPoints;
 
     if (_timelineFilter == 'events') {
-      points = points.where((p) => p.isSalaryDeposit || p.isRecurringBillDue || p.eventTitle != null).toList();
+      points = points
+          .where((p) =>
+              p.isSalaryDeposit || p.isRecurringBillDue || p.eventTitle != null)
+          .toList();
     } else if (_timelineFilter == 'deficits') {
       points = points.where((p) => p.balance < 0).toList();
     }
@@ -1035,7 +1099,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
         padding: const EdgeInsets.all(24),
         alignment: Alignment.center,
         child: Text(
-          _timelineFilter == 'deficits' ? 'No projected deficit days! 🎉' : 'No matching events found.',
+          _timelineFilter == 'deficits'
+              ? 'No projected deficit days! 🎉'
+              : 'No matching events found.',
           style: const TextStyle(fontSize: 12, color: AppTheme.textTertiary),
         ),
       );
@@ -1057,7 +1123,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
             border: Border.all(
               color: isNegative
                   ? AppTheme.expenseRed.withAlpha(40)
-                  : (isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(6)),
+                  : (isDark
+                      ? Colors.white.withAlpha(8)
+                      : Colors.black.withAlpha(6)),
             ),
           ),
           child: Column(
@@ -1070,19 +1138,24 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     children: [
                       Text(
                         DateFormat('EEE, d MMM').format(p.date),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       if (isTrough) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
                           decoration: BoxDecoration(
                             color: AppTheme.expenseRed.withAlpha(30),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
                             'Trough',
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppTheme.expenseRed),
+                            style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.expenseRed),
                           ),
                         ),
                       ],
@@ -1093,27 +1166,40 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: isNegative ? AppTheme.expenseRed : AppTheme.incomeGreen,
+                      color: isNegative
+                          ? AppTheme.expenseRed
+                          : AppTheme.incomeGreen,
                     ),
                   ),
                 ],
               ),
-              if (p.eventTitle != null || p.isRecurringBillDue || p.isSalaryDeposit) ...[
+              if (p.eventTitle != null ||
+                  p.isRecurringBillDue ||
+                  p.isSalaryDeposit) ...[
                 const SizedBox(height: 6),
                 Row(
                   children: [
                     Icon(
-                      p.isSalaryDeposit ? Icons.arrow_downward : Icons.receipt_long,
+                      p.isSalaryDeposit
+                          ? Icons.arrow_downward
+                          : Icons.receipt_long,
                       size: 13,
-                      color: p.isSalaryDeposit ? AppTheme.incomeGreen : AppTheme.accentTeal,
+                      color: p.isSalaryDeposit
+                          ? AppTheme.incomeGreen
+                          : AppTheme.accentTeal,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      p.eventTitle ?? (p.isSalaryDeposit ? 'Salary Deposit' : 'Upcoming Bill'),
+                      p.eventTitle ??
+                          (p.isSalaryDeposit
+                              ? 'Salary Deposit'
+                              : 'Upcoming Bill'),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+                        color: isDark
+                            ? AppTheme.textTertiary
+                            : AppTheme.textSecondaryLight,
                       ),
                     ),
                   ],
@@ -1158,8 +1244,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
                 Text(
                   'Safe-to-Spend Math Deconstruction',
                   style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1167,7 +1253,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
                   'while guaranteeing your projected liquidity never breaches your ${_fmt.format(forecast.safetyBuffer)} safety buffer.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+                    color: isDark
+                        ? AppTheme.textTertiary
+                        : AppTheme.textSecondaryLight,
                     height: 1.4,
                   ),
                 ),
@@ -1175,7 +1263,8 @@ class _CashflowScreenState extends State<CashflowScreen> {
                 _buildMathRow(
                   'Projected Lowest Balance',
                   _fmt.format(forecast.lowestProjectedBalance),
-                  isPositive: forecast.lowestProjectedBalance >= forecast.safetyBuffer,
+                  isPositive:
+                      forecast.lowestProjectedBalance >= forecast.safetyBuffer,
                   isNegative: forecast.lowestProjectedBalance < 0,
                 ),
                 _buildMathRow(
@@ -1215,7 +1304,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isDark ? Colors.white.withAlpha(12) : Colors.black.withAlpha(8),
+                      color: isDark
+                          ? Colors.white.withAlpha(12)
+                          : Colors.black.withAlpha(8),
                     ),
                   ),
                   child: Column(
@@ -1223,14 +1314,20 @@ class _CashflowScreenState extends State<CashflowScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.info_outline, size: 14, color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight),
+                          Icon(Icons.info_outline,
+                              size: 14,
+                              color: isDark
+                                  ? AppTheme.textTertiary
+                                  : AppTheme.textSecondaryLight),
                           const SizedBox(width: 6),
                           Text(
                             'Path-Dependent Headroom',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white70 : AppTheme.textPrimaryLight,
+                              color: isDark
+                                  ? Colors.white70
+                                  : AppTheme.textPrimaryLight,
                             ),
                           ),
                         ],
@@ -1240,7 +1337,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
                         'Safe-to-Spend protects your account on its lowest projected day (trough: ${_fmt.format(forecast.lowestProjectedBalance)}), rather than a simple sum of overall inflows and outflows. This ensures your balance never breaches your safety buffer on any day.',
                         style: TextStyle(
                           fontSize: 11,
-                          color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+                          color: isDark
+                              ? AppTheme.textTertiary
+                              : AppTheme.textSecondaryLight,
                           height: 1.3,
                         ),
                       ),
@@ -1299,11 +1398,16 @@ class _CashflowScreenState extends State<CashflowScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, size: 48, color: AppTheme.expenseRed),
+            const Icon(Icons.error_outline_rounded,
+                size: 48, color: AppTheme.expenseRed),
             const SizedBox(height: 12),
-            const Text('Could not calculate forecast', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Could not calculate forecast',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text(errorMsg, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: AppTheme.textTertiary)),
+            Text(errorMsg,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 12, color: AppTheme.textTertiary)),
           ],
         ),
       ),
@@ -1334,8 +1438,10 @@ class _SplineChartPainter extends CustomPainter {
     if (basePoints.isEmpty) return;
 
     final n = basePoints.length;
-    double minVal = basePoints.fold(double.infinity, (m, p) => min(m, p.balance));
-    double maxVal = basePoints.fold(-double.infinity, (m, p) => max(m, p.balance));
+    double minVal =
+        basePoints.fold(double.infinity, (m, p) => min(m, p.balance));
+    double maxVal =
+        basePoints.fold(-double.infinity, (m, p) => max(m, p.balance));
 
     if (scenarioPoints != null && scenarioPoints!.isNotEmpty) {
       for (final p in scenarioPoints!) {
@@ -1373,7 +1479,8 @@ class _SplineChartPainter extends CustomPainter {
     final bufferLinePaint = Paint()
       ..color = AppTheme.warningYellow.withAlpha(isDark ? 80 : 60)
       ..strokeWidth = 0.8;
-    canvas.drawLine(Offset(0, bufferY), Offset(size.width, bufferY), bufferLinePaint);
+    canvas.drawLine(
+        Offset(0, bufferY), Offset(size.width, bufferY), bufferLinePaint);
 
     // 3. Build Base Spline Path
     final Path basePath = Path();
@@ -1438,7 +1545,8 @@ class _SplineChartPainter extends CustomPainter {
       final List<Offset> simCoords = [];
       for (int i = 0; i < scenarioPoints!.length; i++) {
         final x = i * stepX;
-        final y = getY(scenarioPoints![i].scenarioBalance ?? scenarioPoints![i].balance);
+        final y = getY(
+            scenarioPoints![i].scenarioBalance ?? scenarioPoints![i].balance);
         simCoords.add(Offset(x, y));
       }
 
@@ -1470,7 +1578,8 @@ class _SplineChartPainter extends CustomPainter {
       if (pt.isRecurringBillDue || pt.isSalaryDeposit) {
         final coord = baseCoords[i];
         final dotPaint = Paint()
-          ..color = pt.isSalaryDeposit ? AppTheme.incomeGreen : AppTheme.expenseRed
+          ..color =
+              pt.isSalaryDeposit ? AppTheme.incomeGreen : AppTheme.expenseRed
           ..style = PaintingStyle.fill;
         canvas.drawCircle(coord, 3.5, dotPaint);
       }

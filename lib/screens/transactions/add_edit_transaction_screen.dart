@@ -132,10 +132,10 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                   controller: _amountController,
                   keyboardType: TextInputType.number,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: _type == TransactionType.expense
-                        ? AppTheme.expenseRed
-                        : AppTheme.incomeGreen,
-                  ),
+                        color: _type == TransactionType.expense
+                            ? AppTheme.expenseRed
+                            : AppTheme.incomeGreen,
+                      ),
                   decoration: InputDecoration(
                     prefixText: '₹ ',
                     prefixStyle: TextStyle(
@@ -200,10 +200,9 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  initialValue:
-                      TaxCategoryService.defaults.any(
-                        (e) => e.id == _taxCategory,
-                      )
+                  initialValue: TaxCategoryService.defaults.any(
+                    (e) => e.id == _taxCategory,
+                  )
                       ? _taxCategory
                       : null,
                   decoration: const InputDecoration(
@@ -278,15 +277,20 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                           }).toList(),
                         ),
                       ],
-                      if (_isEditing && widget.transaction?.recurringRuleId != null) ...[
+                      if (_isEditing &&
+                          widget.transaction?.recurringRuleId != null) ...[
                         const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isDark ? AppTheme.surfaceDark : const Color(0xFFF8FAFC),
+                            color: isDark
+                                ? AppTheme.surfaceDark
+                                : const Color(0xFFF8FAFC),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
+                              color: isDark
+                                  ? Colors.white.withAlpha(15)
+                                  : const Color(0xFFE2E8F0),
                             ),
                           ),
                           child: Column(
@@ -294,7 +298,10 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                             children: [
                               Text(
                                 'Apply changes to:',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
                               ),
@@ -303,19 +310,26 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                                 children: [
                                   Expanded(
                                     child: ChoiceChip(
-                                      label: const Text('This occurrence only', style: TextStyle(fontSize: 12)),
+                                      label: const Text('This occurrence only',
+                                          style: TextStyle(fontSize: 12)),
                                       selected: !_updateFutureRecurrences,
-                                      onSelected: (_) => setState(() => _updateFutureRecurrences = false),
-                                      selectedColor: AppTheme.accentTeal.withAlpha(50),
+                                      onSelected: (_) => setState(() =>
+                                          _updateFutureRecurrences = false),
+                                      selectedColor:
+                                          AppTheme.accentTeal.withAlpha(50),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: ChoiceChip(
-                                      label: const Text('All future recurrences', style: TextStyle(fontSize: 12)),
+                                      label: const Text(
+                                          'All future recurrences',
+                                          style: TextStyle(fontSize: 12)),
                                       selected: _updateFutureRecurrences,
-                                      onSelected: (_) => setState(() => _updateFutureRecurrences = true),
-                                      selectedColor: AppTheme.accentTeal.withAlpha(50),
+                                      onSelected: (_) => setState(() =>
+                                          _updateFutureRecurrences = true),
+                                      selectedColor:
+                                          AppTheme.accentTeal.withAlpha(50),
                                     ),
                                   ),
                                 ],
@@ -341,11 +355,10 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                       borderRadius: BorderRadius.circular(Spacing.chipRadius),
                       boxShadow: [
                         BoxShadow(
-                          color:
-                              (_type == TransactionType.expense
-                                      ? ColorTokens.expense
-                                      : ColorTokens.income)
-                                  .withAlpha(60),
+                          color: (_type == TransactionType.expense
+                                  ? ColorTokens.expense
+                                  : ColorTokens.income)
+                              .withAlpha(60),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
@@ -407,8 +420,8 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                       color: _type == TransactionType.expense
                           ? Colors.white
                           : (isDark
-                                ? AppTheme.textSecondary
-                                : AppTheme.textSecondaryLight),
+                              ? AppTheme.textSecondary
+                              : AppTheme.textSecondaryLight),
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
                     ),
@@ -439,8 +452,8 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                       color: _type == TransactionType.income
                           ? Colors.white
                           : (isDark
-                                ? AppTheme.textSecondary
-                                : AppTheme.textSecondaryLight),
+                              ? AppTheme.textSecondary
+                              : AppTheme.textSecondaryLight),
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
                     ),
@@ -496,8 +509,8 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                 color: isSelected
                     ? AppTheme.accentPurple
                     : (isDark
-                          ? Colors.white.withAlpha(15)
-                          : const Color(0xFFE2E8F0)),
+                        ? Colors.white.withAlpha(15)
+                        : const Color(0xFFE2E8F0)),
                 width: isSelected ? 2 : 1,
               ),
             ),
@@ -509,8 +522,8 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                   color: isSelected
                       ? AppTheme.accentPurple
                       : (isDark
-                            ? AppTheme.textSecondary
-                            : AppTheme.textSecondaryLight),
+                          ? AppTheme.textSecondary
+                          : AppTheme.textSecondaryLight),
                   size: 18,
                 ),
                 const SizedBox(width: 6),
@@ -520,8 +533,8 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                     color: isSelected
                         ? AppTheme.accentPurple
                         : (isDark
-                              ? AppTheme.textSecondary
-                              : AppTheme.textSecondaryLight),
+                            ? AppTheme.textSecondary
+                            : AppTheme.textSecondaryLight),
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                   ),
@@ -567,9 +580,8 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
           color: isDark ? AppTheme.surfaceDark : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withAlpha(15)
-                : const Color(0xFFE2E8F0),
+            color:
+                isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Row(
@@ -615,9 +627,10 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
           _selectedCategoryId != null &&
           spendPauseProvider.isCategoryBlocked(_selectedCategoryId!)) {
         final catName = catProvider.categories
-            .where((c) => c.id == _selectedCategoryId)
-            .map((c) => c.name)
-            .firstOrNull ?? '';
+                .where((c) => c.id == _selectedCategoryId)
+                .map((c) => c.name)
+                .firstOrNull ??
+            '';
         if (mounted) {
           final proceed = await _showFocusModeWarning(catName);
           if (!proceed) return; // user chose to stay in focus mode
@@ -910,8 +923,8 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
           TextButton(
             onPressed: () {
               context.read<TransactionProvider>().deleteTransaction(
-                widget.transaction!.id,
-              );
+                    widget.transaction!.id,
+                  );
               Navigator.of(ctx).pop();
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(

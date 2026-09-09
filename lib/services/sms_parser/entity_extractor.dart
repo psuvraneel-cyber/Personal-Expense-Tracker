@@ -494,7 +494,8 @@ class EntityExtractor {
         .trim();
 
     if (cleaned.length > 60) cleaned = cleaned.substring(0, 60).trim();
-    if (cleaned.isEmpty || cleaned.toLowerCase().startsWith('unknown')) return 'Unknown';
+    if (cleaned.isEmpty || cleaned.toLowerCase().startsWith('unknown'))
+      return 'Unknown';
     return cleaned;
   }
 

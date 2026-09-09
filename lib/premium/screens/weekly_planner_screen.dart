@@ -93,8 +93,8 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
                   Text(
                     'Category Limits',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                   const SizedBox(height: 10),
                   ...planner.entries.map(
@@ -249,14 +249,12 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: planner.weekDays.map((day) {
-            final isToday =
-                day.date.year == now.year &&
+            final isToday = day.date.year == now.year &&
                 day.date.month == now.month &&
                 day.date.day == now.day;
             final barFraction = maxSpend > 0 ? day.spent / maxSpend : 0.0;
-            final barColor = isToday
-                ? AppTheme.accentPurple
-                : AppTheme.accentTeal;
+            final barColor =
+                isToday ? AppTheme.accentPurple : AppTheme.accentTeal;
 
             return Expanded(
               child: Padding(
@@ -309,7 +307,8 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
     bool isDark,
   ) {
     final isOver = entry.isOverBudget;
-    final isBlocked = context.watch<SpendPauseProvider>().isCategoryBlocked(entry.categoryId);
+    final isBlocked =
+        context.watch<SpendPauseProvider>().isCategoryBlocked(entry.categoryId);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -320,8 +319,8 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
           color: isOver
               ? AppTheme.expenseRed.withAlpha(40)
               : (isDark
-                    ? Colors.white.withAlpha(10)
-                    : Colors.black.withAlpha(7)),
+                  ? Colors.white.withAlpha(10)
+                  : Colors.black.withAlpha(7)),
         ),
       ),
       child: Column(
@@ -562,19 +561,19 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
                       return;
                     }
                     if (limit == null || limit <= 0) {
-                      setS(() => limitError = 'Please enter a limit greater than ₹0');
+                      setS(() =>
+                          limitError = 'Please enter a limit greater than ₹0');
                       return;
                     }
-                    final catName = categories
-                        .firstWhere((c) => c.id == id)
-                        .name;
+                    final catName =
+                        categories.firstWhere((c) => c.id == id).name;
                     // Read fresh from the outer screen context — not from ctx
                     // (the sheet's inner context) which will be disposed on pop.
                     context.read<WeeklyPlannerProvider>().setLimit(
-                      categoryId: id,
-                      categoryName: catName,
-                      weeklyLimit: limit,
-                    );
+                          categoryId: id,
+                          categoryName: catName,
+                          weeklyLimit: limit,
+                        );
                     Navigator.pop(ctx);
                   },
                   style: ElevatedButton.styleFrom(

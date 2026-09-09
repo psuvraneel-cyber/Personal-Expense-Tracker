@@ -60,16 +60,14 @@ class SmsTransactionProvider extends ChangeNotifier {
   bool get isSupported => !kIsWeb;
 
   List<SmsTransaction> get debitTransactions {
-    _cachedDebits ??= _transactions
-        .where((t) => t.transactionType == 'debit')
-        .toList();
+    _cachedDebits ??=
+        _transactions.where((t) => t.transactionType == 'debit').toList();
     return _cachedDebits!;
   }
 
   List<SmsTransaction> get creditTransactions {
-    _cachedCredits ??= _transactions
-        .where((t) => t.transactionType == 'credit')
-        .toList();
+    _cachedCredits ??=
+        _transactions.where((t) => t.transactionType == 'credit').toList();
     return _cachedCredits!;
   }
 
@@ -147,9 +145,8 @@ class SmsTransactionProvider extends ChangeNotifier {
       await _repository.deduplicateExisting();
 
       final all = await _repository.getAllSmsTransactions();
-      _transactions = all
-          .where((t) => t.isVerified || t.confidence >= 0.55)
-          .toList();
+      _transactions =
+          all.where((t) => t.isVerified || t.confidence >= 0.55).toList();
       _uncertainTransactions = all
           .where(
             (t) => !t.isVerified && t.confidence < 0.55 && t.confidence >= 0.35,
@@ -305,7 +302,8 @@ class SmsTransactionProvider extends ChangeNotifier {
       );
     } catch (_) {}
     _transactions = _transactions.where((t) => t.id != id).toList();
-    _uncertainTransactions = _uncertainTransactions.where((t) => t.id != id).toList();
+    _uncertainTransactions =
+        _uncertainTransactions.where((t) => t.id != id).toList();
     _invalidateComputedCache();
     notifyListeners();
   }
@@ -356,7 +354,8 @@ class SmsTransactionProvider extends ChangeNotifier {
             : (finalType == 'debit' ? TransactionType.expense : null),
       );
     } catch (e) {
-      AppLogger.debug('[PET-SMS] Error promoting confirmed observation to ledger: $e');
+      AppLogger.debug(
+          '[PET-SMS] Error promoting confirmed observation to ledger: $e');
     }
 
     // Record feedback for future learning
@@ -370,7 +369,8 @@ class SmsTransactionProvider extends ChangeNotifier {
     );
     await _repository.saveFeedback(feedback.toMap());
 
-    _uncertainTransactions = _uncertainTransactions.where((t) => t.id != id).toList();
+    _uncertainTransactions =
+        _uncertainTransactions.where((t) => t.id != id).toList();
     _transactions = [updated, ..._transactions];
     notifyListeners();
   }
@@ -404,7 +404,8 @@ class SmsTransactionProvider extends ChangeNotifier {
       );
     } catch (_) {}
 
-    _uncertainTransactions = _uncertainTransactions.where((t) => t.id != id).toList();
+    _uncertainTransactions =
+        _uncertainTransactions.where((t) => t.id != id).toList();
     notifyListeners();
   }
 

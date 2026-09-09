@@ -38,21 +38,24 @@ class RecurringProvider extends ChangeNotifier {
 
   /// Confirmed active recurring commitments, sorted with soonest due first.
   List<RecurringPayment> get confirmedBills {
-    final list = _recurring.where((r) => r.status == RecurringStatus.confirmed).toList();
+    final list =
+        _recurring.where((r) => r.status == RecurringStatus.confirmed).toList();
     list.sort((a, b) => a.nextDueAt.compareTo(b.nextDueAt));
     return list;
   }
 
   /// Inferred unconfirmed recurring payment candidates.
   List<RecurringPayment> get detectedBills {
-    final list = _recurring.where((r) => r.status == RecurringStatus.detected).toList();
+    final list =
+        _recurring.where((r) => r.status == RecurringStatus.detected).toList();
     list.sort((a, b) => b.confidence.compareTo(a.confidence));
     return list;
   }
 
   /// Cancelled or paused recurring commitments.
   List<RecurringPayment> get cancelledBills {
-    final list = _recurring.where((r) => r.status == RecurringStatus.cancelled).toList();
+    final list =
+        _recurring.where((r) => r.status == RecurringStatus.cancelled).toList();
     list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return list;
   }
@@ -97,7 +100,8 @@ class RecurringProvider extends ChangeNotifier {
 
       await _subscribeToFirestore();
     } catch (e, st) {
-      AppLogger.error('Failed to load recurring bills', error: e, stack: st, label: 'RecurringProvider');
+      AppLogger.error('Failed to load recurring bills',
+          error: e, stack: st, label: 'RecurringProvider');
     } finally {
       if (!_disposed) {
         _isLoading = false;
@@ -137,9 +141,9 @@ class RecurringProvider extends ChangeNotifier {
             if (!kIsWeb) await _repository.upsert(remote);
             changed = true;
           } else if (remote.updatedAt.isAfter(local.updatedAt) ||
-                     remote.status != local.status ||
-                     remote.amount != local.amount ||
-                     remote.nextDueAt != local.nextDueAt) {
+              remote.status != local.status ||
+              remote.amount != local.amount ||
+              remote.nextDueAt != local.nextDueAt) {
             localMap[remote.id] = remote;
             if (!kIsWeb) await _repository.upsert(remote);
             changed = true;
@@ -319,10 +323,14 @@ class RecurringProvider extends ChangeNotifier {
 
     if (_firestoreSync.isAuthenticated) {
       unawaited(_firestoreSync.upsertRecurringPayment(updated).catchError((e) {
-        AppLogger.debug('[RecurringProvider] Firestore markAsPaid sync error: $e');
+        AppLogger.debug(
+            '[RecurringProvider] Firestore markAsPaid sync error: $e');
       }));
-      unawaited(_firestoreSync.upsertRecurringPaymentHistory(historyEntry).catchError((e) {
-        AppLogger.debug('[RecurringProvider] Firestore markAsPaid history sync error: $e');
+      unawaited(_firestoreSync
+          .upsertRecurringPaymentHistory(historyEntry)
+          .catchError((e) {
+        AppLogger.debug(
+            '[RecurringProvider] Firestore markAsPaid history sync error: $e');
       }));
     }
   }
@@ -486,7 +494,8 @@ class RecurringProvider extends ChangeNotifier {
   }
 
   /// Fetches payment history records for a bill.
-  Future<List<RecurringPaymentHistory>> getHistory(String recurringPaymentId) async {
+  Future<List<RecurringPaymentHistory>> getHistory(
+      String recurringPaymentId) async {
     return await _repository.getHistory(recurringPaymentId);
   }
 
@@ -525,7 +534,8 @@ class RecurringProvider extends ChangeNotifier {
 
     if (!kIsWeb) {
       await _repository.clearAll().catchError((e) {
-        AppLogger.error('Recurring clear failed', error: e, label: 'RecurringProvider');
+        AppLogger.error('Recurring clear failed',
+            error: e, label: 'RecurringProvider');
       });
     }
   }

@@ -11,7 +11,9 @@ void main() {
   });
 
   group('SQLite Migration v15 Tests', () {
-    test('Fresh install at v15 creates all tables including recurring_rules and recurring_occurrences', () async {
+    test(
+        'Fresh install at v15 creates all tables including recurring_rules and recurring_occurrences',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'v15_fresh_test.db');
 
@@ -49,7 +51,9 @@ void main() {
       }
     });
 
-    test('Migration from version 14 to 15 adds columns, creates tables, and backfills legacy recurring rows', () async {
+    test(
+        'Migration from version 14 to 15 adds columns, creates tables, and backfills legacy recurring rows',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'migration_v14_to_v15_test.db');
 
@@ -126,12 +130,15 @@ void main() {
           onUpgrade: (db, oldVersion, newVersion) async {
             if (oldVersion < 15) {
               // Test helper internal migration step
-              final txnCols = await db.rawQuery('PRAGMA table_info(transactions)');
+              final txnCols =
+                  await db.rawQuery('PRAGMA table_info(transactions)');
               if (!txnCols.any((c) => c['name'] == 'recurringRuleId')) {
-                await db.execute('ALTER TABLE transactions ADD COLUMN recurringRuleId TEXT');
+                await db.execute(
+                    'ALTER TABLE transactions ADD COLUMN recurringRuleId TEXT');
               }
               if (!txnCols.any((c) => c['name'] == 'occurrenceDate')) {
-                await db.execute('ALTER TABLE transactions ADD COLUMN occurrenceDate TEXT');
+                await db.execute(
+                    'ALTER TABLE transactions ADD COLUMN occurrenceDate TEXT');
               }
 
               await db.execute('''
@@ -175,7 +182,8 @@ void main() {
               // Backfill
               final legacyRows = await db.query(
                 'transactions',
-                where: 'isRecurring = 1 AND recurringFrequency IS NOT NULL AND (recurringRuleId IS NULL OR recurringRuleId = \'\')',
+                where:
+                    'isRecurring = 1 AND recurringFrequency IS NOT NULL AND (recurringRuleId IS NULL OR recurringRuleId = \'\')',
               );
 
               for (final row in legacyRows) {
@@ -240,7 +248,8 @@ void main() {
           'transactions',
           where: 'id = ?',
           whereArgs: ['txn_legacy_salary'],
-        )).first;
+        ))
+            .first;
         expect(updatedTxn['recurringRuleId'], 'rule_legacy_txn_legacy_salary');
         expect(updatedTxn['occurrenceDate'], '2026-08-20T10:02:00.000');
 
@@ -249,7 +258,8 @@ void main() {
           'transactions',
           where: 'id = ?',
           whereArgs: ['txn_normal'],
-        )).first;
+        ))
+            .first;
         expect(normalTxn['recurringRuleId'], isNull);
 
         await dbV15.close();

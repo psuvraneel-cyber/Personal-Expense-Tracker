@@ -5,7 +5,8 @@ class RecurringPayment {
   final String id;
   final String merchantName;
   final double amount;
-  final String frequency; // daily, weekly, monthly, quarterly, semiannual, yearly
+  final String
+      frequency; // daily, weekly, monthly, quarterly, semiannual, yearly
   final DateTime lastPaidAt;
   final DateTime nextDueAt;
   final String categoryId;
@@ -148,7 +149,8 @@ class RecurringPayment {
       status: status ?? this.status,
       isAutopay: isAutopay ?? this.isAutopay,
       previousAmount: previousAmount ?? this.previousAmount,
-      priceChangeDetectedAt: priceChangeDetectedAt ?? this.priceChangeDetectedAt,
+      priceChangeDetectedAt:
+          priceChangeDetectedAt ?? this.priceChangeDetectedAt,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),

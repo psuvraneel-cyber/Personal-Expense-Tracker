@@ -82,7 +82,8 @@ class CashflowForecastService {
         ? 'ref_${referenceDate.millisecondsSinceEpoch}'
         : 'live_${now.year}-${now.month}-${now.day}';
 
-    final cacheKey = '${userId ?? "anon"}_${txnsHash}_${billsHash}_${days}_${lookbackDays}_'
+    final cacheKey =
+        '${userId ?? "anon"}_${txnsHash}_${billsHash}_${days}_${lookbackDays}_'
         '${dateKey}_'
         '${openingBalanceOverride ?? "none"}_'
         '${goalReserves}_'
@@ -93,9 +94,8 @@ class CashflowForecastService {
     }
 
     // ── 1. Filter out future-dated transactions ──────────────────────────────
-    final pastTransactions = transactions
-        .where((t) => !t.date.isAfter(now))
-        .toList();
+    final pastTransactions =
+        transactions.where((t) => !t.date.isAfter(now)).toList();
 
     // ── 2. Determine Starting Balance ────────────────────────────────────────
     double balance = openingBalanceOverride ?? 0.0;
@@ -112,9 +112,8 @@ class CashflowForecastService {
 
     // ── 3. Unified Rolling Baseline Window (CF-01 & CF-02 Fix) ───────────────
     final baselineStart = now.subtract(Duration(days: lookbackDays));
-    final baselineTransactions = pastTransactions
-        .where((t) => !t.date.isBefore(baselineStart))
-        .toList();
+    final baselineTransactions =
+        pastTransactions.where((t) => !t.date.isBefore(baselineStart)).toList();
 
     int effectiveDays = lookbackDays;
     if (pastTransactions.isNotEmpty) {
@@ -150,15 +149,15 @@ class CashflowForecastService {
     final double baselineVariableExpense = baselineTransactions
         .where((t) => t.type == TransactionType.expense)
         .where((t) {
-          if (t.isRecurring) return false;
-          if (t.recurringRuleId != null && t.recurringRuleId!.isNotEmpty) return false;
-          if (t.merchantName != null &&
-              billMerchantNames.contains(t.merchantName!.trim().toLowerCase())) {
-            return false;
-          }
-          return true;
-        })
-        .fold(0.0, (sum, t) => sum + t.amount);
+      if (t.isRecurring) return false;
+      if (t.recurringRuleId != null && t.recurringRuleId!.isNotEmpty)
+        return false;
+      if (t.merchantName != null &&
+          billMerchantNames.contains(t.merchantName!.trim().toLowerCase())) {
+        return false;
+      }
+      return true;
+    }).fold(0.0, (sum, t) => sum + t.amount);
 
     final variableDailyExpense = baselineVariableExpense / effectiveDays;
 
@@ -180,10 +179,13 @@ class CashflowForecastService {
       // Overdue bill handling: If nextDueAt is before today and unpaid, treat as due TODAY
       var occ = bill.nextDueAt;
       if (occ.isBefore(todayFloor)) {
-        final todayKey = '${todayFloor.year}-${todayFloor.month}-${todayFloor.day}';
+        final todayKey =
+            '${todayFloor.year}-${todayFloor.month}-${todayFloor.day}';
         billDeductionsByDate[todayKey] =
             (billDeductionsByDate[todayKey] ?? 0.0) + bill.amount;
-        billNamesByDate.putIfAbsent(todayKey, () => []).add('${bill.merchantName} (Overdue)');
+        billNamesByDate
+            .putIfAbsent(todayKey, () => [])
+            .add('${bill.merchantName} (Overdue)');
 
         majorEvents.add(CashflowEvent(
           date: todayFloor,
@@ -207,7 +209,8 @@ class CashflowForecastService {
         safety++;
         if (!occ.isBefore(todayFloor)) {
           final key = '${occ.year}-${occ.month}-${occ.day}';
-          billDeductionsByDate[key] = (billDeductionsByDate[key] ?? 0.0) + bill.amount;
+          billDeductionsByDate[key] =
+              (billDeductionsByDate[key] ?? 0.0) + bill.amount;
           billNamesByDate.putIfAbsent(key, () => []).add(bill.merchantName);
 
           majorEvents.add(CashflowEvent(
@@ -249,14 +252,16 @@ class CashflowForecastService {
       final billNamesToday = billNamesByDate[dateKey] ?? const <String>[];
       totalBillsInHorizon += billsDueToday;
 
-      final netDailyChange = (avgDailyIncome - variableDailyExpense) - billsDueToday;
+      final netDailyChange =
+          (avgDailyIncome - variableDailyExpense) - billsDueToday;
       rollingBalance += netDailyChange;
 
       if (rollingBalance < lowestBalance) {
         lowestBalance = rollingBalance;
         lowestDate = date;
         if (billNamesToday.isNotEmpty) {
-          troughDriver = '${billNamesToday.first} (₹${billsDueToday.toStringAsFixed(0)})';
+          troughDriver =
+              '${billNamesToday.first} (₹${billsDueToday.toStringAsFixed(0)})';
         }
       }
 
@@ -303,15 +308,16 @@ class CashflowForecastService {
     // ── 6. Rolling Safe-to-Spend Model (CF-03 Fix) ────────────────────────────
     // Safe-to-spend is path-dependent: preserves lowest projected balance >= safetyBuffer + goalReserves
     final double spendableHeadroom =
-        (lowestBalance - safetyBuffer - goalReserves).clamp(0.0, double.infinity);
-    final double safeToSpend = (spendableHeadroom > 0 && days > 0)
-        ? spendableHeadroom / days
-        : 0.0;
+        (lowestBalance - safetyBuffer - goalReserves)
+            .clamp(0.0, double.infinity);
+    final double safeToSpend =
+        (spendableHeadroom > 0 && days > 0) ? spendableHeadroom / days : 0.0;
 
     // ── 7. Runway & Daily Burn Calculation (CF-12 Fix) ───────────────────────
     final double totalDailyExpense = variableDailyExpense + recurringDailyBurn;
     final double netDailyBurn = totalDailyExpense - avgDailyIncome;
-    final double monthlyNetCashflow = (avgDailyIncome - totalDailyExpense) * 30.0;
+    final double monthlyNetCashflow =
+        (avgDailyIncome - totalDailyExpense) * 30.0;
     final bool isCashflowPositive = netDailyBurn <= 0;
 
     int? runwayDays;
@@ -347,20 +353,25 @@ class CashflowForecastService {
       confidenceReasons.add('Less than 7 days of recorded data.');
     } else if (effectiveDays < 21) {
       confidence = CashflowConfidence.low;
-      confidenceReasons.add('Only $effectiveDays days of history — projections are tentative.');
+      confidenceReasons.add(
+          'Only $effectiveDays days of history — projections are tentative.');
     } else if (effectiveDays < 45) {
       confidence = CashflowConfidence.moderate;
-      confidenceReasons.add('Based on $effectiveDays days of historical activity.');
+      confidenceReasons
+          .add('Based on $effectiveDays days of historical activity.');
     } else {
       confidence = CashflowConfidence.high;
-      confidenceReasons.add('Based on $effectiveDays days of solid historical baseline.');
+      confidenceReasons
+          .add('Based on $effectiveDays days of solid historical baseline.');
     }
 
     if (activeBills.isNotEmpty) {
-      confidenceReasons.add('${activeBills.length} confirmed recurring commitments included.');
+      confidenceReasons.add(
+          '${activeBills.length} confirmed recurring commitments included.');
     }
     if (goalReserves > 0) {
-      confidenceReasons.add('Protected ₹${goalReserves.toStringAsFixed(0)} goal reserves.');
+      confidenceReasons
+          .add('Protected ₹${goalReserves.toStringAsFixed(0)} goal reserves.');
     }
 
     final endingBalance =
@@ -416,7 +427,8 @@ class CashflowForecastService {
     final now = base.referenceDate;
 
     // Days offset from today
-    final dayOffset = date.difference(DateTime(now.year, now.month, now.day)).inDays;
+    final dayOffset =
+        date.difference(DateTime(now.year, now.month, now.day)).inDays;
     if (dayOffset < 0 || dayOffset >= horizonDays) {
       return base;
     }
@@ -457,8 +469,9 @@ class CashflowForecastService {
     final double scenarioHeadroom =
         (scenarioLowest - base.safetyBuffer - base.expectedGoalReserves)
             .clamp(0.0, double.infinity);
-    final double scenarioSafeToSpend =
-        (scenarioHeadroom > 0 && horizonDays > 0) ? scenarioHeadroom / horizonDays : 0.0;
+    final double scenarioSafeToSpend = (scenarioHeadroom > 0 && horizonDays > 0)
+        ? scenarioHeadroom / horizonDays
+        : 0.0;
 
     final CashflowRiskLevel scenarioRisk;
     if (scenarioLowest < 0) {

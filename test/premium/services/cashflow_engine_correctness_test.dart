@@ -9,7 +9,9 @@ void main() {
   final refDate = DateTime(2026, 7, 15, 10, 0);
 
   group('CF-01: Historical Averaging & Denominator Logic', () {
-    test('no denominator clamping inflation with 730 days (2 years) of transactions', () {
+    test(
+        'no denominator clamping inflation with 730 days (2 years) of transactions',
+        () {
       // Create transactions spanning 730 days: ₹1,000 expense per day
       // In the old broken engine: total = 730,000 / min(730, 365) = 730,000 / 365 = 2,000/day (2x inflation!)
       // In the new engine: 60-day rolling baseline -> only the last 60 days of expenses are counted
@@ -36,7 +38,9 @@ void main() {
       expect(forecast.dailyBurnRate, closeTo(1000.0, 50.0));
     });
 
-    test('rolling baseline accurately computes 30-day and 60-day observation windows', () {
+    test(
+        'rolling baseline accurately computes 30-day and 60-day observation windows',
+        () {
       // 30 days of ₹500/day expenses
       final txns = List.generate(
         30,
@@ -62,7 +66,8 @@ void main() {
   });
 
   group('CF-02 & CF-05: Income Normalization & Risk Model', () {
-    test('single monthly salary does not become artificial daily income rate', () {
+    test('single monthly salary does not become artificial daily income rate',
+        () {
       // ₹60,000 monthly salary deposited 5 days ago
       final txns = [
         TransactionRecord(
@@ -98,7 +103,8 @@ void main() {
       expect(forecast.isCashflowPositive, isTrue);
     });
 
-    test('stable salary with small cashback does NOT trigger false high risk', () {
+    test('stable salary with small cashback does NOT trigger false high risk',
+        () {
       // Stable salary + tiny cashback of ₹50
       final txns = [
         TransactionRecord(
@@ -142,7 +148,8 @@ void main() {
 
       // Old engine flagged high risk because CV between 80,000 and 50 was huge.
       // New engine identifies strong recurring salary consistency.
-      expect(forecast.riskLevel, isNot(equals(CashflowRiskLevel.deficitExpected)));
+      expect(
+          forecast.riskLevel, isNot(equals(CashflowRiskLevel.deficitExpected)));
       expect(forecast.riskLevel, equals(CashflowRiskLevel.healthy));
     });
 
@@ -170,7 +177,9 @@ void main() {
   });
 
   group('CF-03: Rolling Safe-to-Spend & Month-End Cliff Resistance', () {
-    test('safe-to-spend does not jump or collapse across month boundary (day 28 vs day 1)', () {
+    test(
+        'safe-to-spend does not jump or collapse across month boundary (day 28 vs day 1)',
+        () {
       final txns = [
         TransactionRecord(
           id: 't_inc',
@@ -210,7 +219,8 @@ void main() {
       // In the old broken engine: remaining balance was divided by 3 days on July 28 (massive spike),
       // then divided by 31 days on August 1 (massive crash - 10x cliff!).
       // In the new engine: derived from 30-day horizon headroom. Daily rate is smooth.
-      expect((forecastEnd.safeToSpend - forecastStart.safeToSpend).abs(), lessThan(500.0));
+      expect((forecastEnd.safeToSpend - forecastStart.safeToSpend).abs(),
+          lessThan(500.0));
     });
 
     test('upcoming bill in next month correctly depresses safe-to-spend', () {
@@ -260,13 +270,17 @@ void main() {
       );
 
       expect(withBillForecast.expectedBills, equals(30000.0));
-      expect(withBillForecast.safeToSpend, lessThan(noBillForecast.safeToSpend));
-      expect(withBillForecast.lowestProjectedBalance, lessThan(noBillForecast.lowestProjectedBalance));
+      expect(
+          withBillForecast.safeToSpend, lessThan(noBillForecast.safeToSpend));
+      expect(withBillForecast.lowestProjectedBalance,
+          lessThan(noBillForecast.lowestProjectedBalance));
     });
   });
 
   group('CF-04: Overdue Bills Preservation', () {
-    test('unpaid active overdue bill is placed on Day 0 and impacts risk immediately', () {
+    test(
+        'unpaid active overdue bill is placed on Day 0 and impacts risk immediately',
+        () {
       final txns = [
         TransactionRecord(
           id: 't_inc',
@@ -337,7 +351,8 @@ void main() {
       }
     });
 
-    test('runway reflects accurate cashflow positive vs net daily burn rate', () {
+    test('runway reflects accurate cashflow positive vs net daily burn rate',
+        () {
       // Cashflow positive user
       final posTxns = [
         TransactionRecord(
@@ -401,7 +416,9 @@ void main() {
   });
 
   group('CF-17: "Can I Afford This?" What-If Scenario Simulator', () {
-    test('simulateExpense evaluates purchase impact without mutating baseline data', () {
+    test(
+        'simulateExpense evaluates purchase impact without mutating baseline data',
+        () {
       final txns = [
         TransactionRecord(
           id: 't_inc',
@@ -438,8 +455,10 @@ void main() {
 
       // Verify simulated forecast captures the impact
       expect(simulated.lowestProjectedBalance, closeTo(44545.45, 1.0));
-      expect(simulated.lowestProjectedBalance, lessThan(baseForecast.lowestProjectedBalance));
-      expect(simulated.expectedBills, equals(baseForecast.expectedBills + 25000.0));
+      expect(simulated.lowestProjectedBalance,
+          lessThan(baseForecast.lowestProjectedBalance));
+      expect(simulated.expectedBills,
+          equals(baseForecast.expectedBills + 25000.0));
 
       // Check points before and after purchase date
       final ptBefore = simulated.dailyPoints[4]; // Day 4

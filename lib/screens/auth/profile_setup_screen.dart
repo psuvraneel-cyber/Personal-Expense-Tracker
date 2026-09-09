@@ -113,18 +113,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                 Text(
                   'Phone verified!',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Let\'s set up your profile to personalise your experience.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: isDark
-                        ? AppTheme.textTertiary
-                        : AppTheme.textSecondaryLight,
-                    height: 1.4,
-                  ),
+                        color: isDark
+                            ? AppTheme.textTertiary
+                            : AppTheme.textSecondaryLight,
+                        height: 1.4,
+                      ),
                 ),
                 const SizedBox(height: 40),
                 // Avatar placeholder
@@ -192,8 +192,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                 Text(
                   'Your name',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
                 const SizedBox(height: 10),
                 // Name field
@@ -205,8 +205,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                       color: _errorText != null
                           ? AppTheme.expenseRed
                           : (isDark
-                                ? Colors.white.withAlpha(10)
-                                : Colors.black.withAlpha(8)),
+                              ? Colors.white.withAlpha(10)
+                              : Colors.black.withAlpha(8)),
                       width: _errorText != null ? 1.5 : 1,
                     ),
                     boxShadow: [
@@ -223,8 +223,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                     controller: _nameController,
                     textCapitalization: TextCapitalization.words,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                          fontWeight: FontWeight.w600,
+                        ),
                     decoration: InputDecoration(
                       hintText: 'Enter your name',
                       prefixIcon: Icon(
@@ -287,8 +287,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                           gradient: _isSaving ? null : AppTheme.heroGradient,
                           color: _isSaving
                               ? (isDark
-                                    ? Colors.white.withAlpha(10)
-                                    : Colors.black.withAlpha(10))
+                                  ? Colors.white.withAlpha(10)
+                                  : Colors.black.withAlpha(10))
                               : null,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: _isSaving

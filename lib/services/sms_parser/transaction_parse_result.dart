@@ -19,9 +19,9 @@ enum TransactionDirection {
 
   /// Human-readable label for UI.
   String get label => switch (this) {
-    TransactionDirection.debit => 'Debit',
-    TransactionDirection.credit => 'Credit',
-  };
+        TransactionDirection.debit => 'Debit',
+        TransactionDirection.credit => 'Credit',
+      };
 }
 
 /// Sub-type classification for richer analytics.
@@ -48,14 +48,14 @@ enum TransactionChannel {
   unknown;
 
   String get label => switch (this) {
-    TransactionChannel.upi => 'UPI',
-    TransactionChannel.neft => 'NEFT',
-    TransactionChannel.imps => 'IMPS',
-    TransactionChannel.rtgs => 'RTGS',
-    TransactionChannel.card => 'Card',
-    TransactionChannel.wallet => 'Wallet',
-    TransactionChannel.unknown => 'Unknown',
-  };
+        TransactionChannel.upi => 'UPI',
+        TransactionChannel.neft => 'NEFT',
+        TransactionChannel.imps => 'IMPS',
+        TransactionChannel.rtgs => 'RTGS',
+        TransactionChannel.card => 'Card',
+        TransactionChannel.wallet => 'Wallet',
+        TransactionChannel.unknown => 'Unknown',
+      };
 }
 
 /// The output of parsing a single SMS body.
@@ -158,23 +158,23 @@ class TransactionParseResult {
   const TransactionParseResult.rejected({
     required this.reasons,
     this.confidence = 0,
-  }) : isTransaction = false,
-       isUncertain = false,
-       direction = null,
-       amount = null,
-       merchant = null,
-       upiId = null,
-       reference = null,
-       bank = null,
-       accountTail = null,
-       date = null,
-       time = null,
-       channel = TransactionChannel.unknown,
-       subType = TransactionSubType.unknown,
-       balanceAfter = null,
-       isBill = false,
-       billAmountDue = null,
-       billDueDate = null;
+  })  : isTransaction = false,
+        isUncertain = false,
+        direction = null,
+        amount = null,
+        merchant = null,
+        upiId = null,
+        reference = null,
+        bank = null,
+        accountTail = null,
+        date = null,
+        time = null,
+        channel = TransactionChannel.unknown,
+        subType = TransactionSubType.unknown,
+        balanceAfter = null,
+        isBill = false,
+        billAmountDue = null,
+        billDueDate = null;
 
   /// Quick constructor for an uncertain message (needs user verification).
   const TransactionParseResult.uncertain({
@@ -195,8 +195,8 @@ class TransactionParseResult {
     this.isBill = false,
     this.billAmountDue,
     this.billDueDate,
-  }) : isTransaction = false,
-       isUncertain = true;
+  })  : isTransaction = false,
+        isUncertain = true;
 
   TransactionParseResult copyWith({
     bool? isTransaction,

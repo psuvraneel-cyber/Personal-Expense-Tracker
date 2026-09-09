@@ -151,8 +151,8 @@ class _CalculatorSheet extends StatelessWidget {
                       Text(
                         'Calculator',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                     ],
                   ),
@@ -399,9 +399,8 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
         color: isDark ? Colors.white.withAlpha(6) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withAlpha(10)
-              : Colors.black.withAlpha(8),
+          color:
+              isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(8),
         ),
         boxShadow: [
           BoxShadow(
@@ -455,9 +454,8 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
           Text(
             _expression.isEmpty ? ' ' : _expression,
             style: TextStyle(
-              color: isDark
-                  ? AppTheme.textSecondary
-                  : AppTheme.textSecondaryLight,
+              color:
+                  isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
               fontSize: 18,
               fontWeight: FontWeight.w400,
               letterSpacing: 1,
@@ -478,9 +476,8 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
               style: TextStyle(
                 fontSize: 40,
                 fontWeight: FontWeight.bold,
-                color: isDark
-                    ? AppTheme.textPrimary
-                    : AppTheme.textPrimaryLight,
+                color:
+                    isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
                 letterSpacing: -1,
               ),
               textAlign: TextAlign.right,
@@ -602,8 +599,7 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
   }
 
   Widget _calcButton(BuildContext context, String label, bool isDark) {
-    final isOperator =
-        label == '÷' ||
+    final isOperator = label == '÷' ||
         label == '×' ||
         label == '−' ||
         label == '+' ||
@@ -706,13 +702,13 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
             AddEditTransactionScreen(prefillAmount: val, prefillType: type),
         transitionsBuilder: (context, animation, secAnim, child) {
           return SlideTransition(
-            position: Tween(begin: const Offset(0, 1), end: Offset.zero)
-                .animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
+            position:
+                Tween(begin: const Offset(0, 1), end: Offset.zero).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+            ),
             child: child,
           );
         },
@@ -774,8 +770,8 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
                     Text(
                       'History',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     GestureDetector(
                       onTap: () {

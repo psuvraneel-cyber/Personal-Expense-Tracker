@@ -86,14 +86,27 @@ void main() {
 
   group('Android Notification Grouping & Summary in NotificationService', () {
     test('isAlertCategory identifies alert categories correctly', () {
-      expect(NotificationService.isAlertCategory(NotificationCategory.budget), isTrue);
-      expect(NotificationService.isAlertCategory(NotificationCategory.anomaly), isTrue);
-      expect(NotificationService.isAlertCategory(NotificationCategory.bill), isTrue);
+      expect(NotificationService.isAlertCategory(NotificationCategory.budget),
+          isTrue);
+      expect(NotificationService.isAlertCategory(NotificationCategory.anomaly),
+          isTrue);
+      expect(NotificationService.isAlertCategory(NotificationCategory.bill),
+          isTrue);
 
-      expect(NotificationService.isAlertCategory(NotificationCategory.dailySummary), isFalse);
-      expect(NotificationService.isAlertCategory(NotificationCategory.weeklyReport), isFalse);
-      expect(NotificationService.isAlertCategory(NotificationCategory.goalProgress), isFalse);
-      expect(NotificationService.isAlertCategory(NotificationCategory.cashflow), isFalse);
+      expect(
+          NotificationService.isAlertCategory(
+              NotificationCategory.dailySummary),
+          isFalse);
+      expect(
+          NotificationService.isAlertCategory(
+              NotificationCategory.weeklyReport),
+          isFalse);
+      expect(
+          NotificationService.isAlertCategory(
+              NotificationCategory.goalProgress),
+          isFalse);
+      expect(NotificationService.isAlertCategory(NotificationCategory.cashflow),
+          isFalse);
     });
 
     test('showInstant assigns groupKey to alert categories', () async {
@@ -115,7 +128,8 @@ void main() {
       expect(specifics?['setAsGroupSummary'], isFalse);
     });
 
-    test('showInstant does not assign groupKey to non-alert categories', () async {
+    test('showInstant does not assign groupKey to non-alert categories',
+        () async {
       await NotificationService.showInstant(
         id: 102,
         title: 'Daily Summary',
@@ -130,7 +144,8 @@ void main() {
       expect(specifics?['groupKey'], isNull);
     });
 
-    test('rolling window: <= 2 alerts does NOT trigger group summary', () async {
+    test('rolling window: <= 2 alerts does NOT trigger group summary',
+        () async {
       await NotificationService.showInstant(
         id: 201,
         title: 'Alert 1',
@@ -147,12 +162,15 @@ void main() {
       final showCalls = methodCalls.where((c) => c.method == 'show').toList();
       expect(showCalls.length, equals(2));
       expect(
-        showCalls.any((c) => c.arguments['id'] == NotificationService.alertsSummaryNotificationId),
+        showCalls.any((c) =>
+            c.arguments['id'] ==
+            NotificationService.alertsSummaryNotificationId),
         isFalse,
       );
     });
 
-    test('rolling window: > 2 alerts triggers group summary notification', () async {
+    test('rolling window: > 2 alerts triggers group summary notification',
+        () async {
       await NotificationService.showInstant(
         id: 201,
         title: 'Alert 1',
@@ -177,10 +195,13 @@ void main() {
       expect(showCalls.length, equals(4));
 
       final summaryCall = showCalls.firstWhere(
-        (c) => c.arguments['id'] == NotificationService.alertsSummaryNotificationId,
+        (c) =>
+            c.arguments['id'] ==
+            NotificationService.alertsSummaryNotificationId,
       );
       final specifics = summaryCall.arguments['platformSpecifics'] as Map?;
-      expect(specifics?['groupKey'], equals(NotificationService.alertsGroupKey));
+      expect(
+          specifics?['groupKey'], equals(NotificationService.alertsGroupKey));
       expect(specifics?['setAsGroupSummary'], isTrue);
       expect(summaryCall.arguments['title'], equals('3 new alerts'));
       expect(specifics?['style'], equals(AndroidNotificationStyle.inbox.index));
@@ -210,7 +231,8 @@ void main() {
       expect(showCalls.length, equals(1));
       expect(showCalls.first.arguments['title'], equals('Single Anomaly'));
       final specifics = showCalls.first.arguments['platformSpecifics'] as Map?;
-      expect(specifics?['groupKey'], equals(NotificationService.alertsGroupKey));
+      expect(
+          specifics?['groupKey'], equals(NotificationService.alertsGroupKey));
     });
 
     test('batch of <= 2 alerts fires individual notifications', () async {
@@ -239,12 +261,16 @@ void main() {
       final showCalls = methodCalls.where((c) => c.method == 'show').toList();
       expect(showCalls.length, equals(2));
       expect(
-        showCalls.any((c) => c.arguments['id'] == NotificationService.alertsSummaryNotificationId),
+        showCalls.any((c) =>
+            c.arguments['id'] ==
+            NotificationService.alertsSummaryNotificationId),
         isFalse,
       );
     });
 
-    test('batch of 8 alerts (sweep) caps individual banners at 2 and posts 1 summary', () async {
+    test(
+        'batch of 8 alerts (sweep) caps individual banners at 2 and posts 1 summary',
+        () async {
       final provider = AlertProvider();
       final alerts = List<BudgetAlert>.generate(
         8,
@@ -262,19 +288,29 @@ void main() {
 
       final showCalls = methodCalls.where((c) => c.method == 'show').toList();
       // Should have exactly 2 individual banners + 1 summary banner
-      final individualCalls = showCalls.where(
-        (c) => c.arguments['id'] != NotificationService.alertsSummaryNotificationId,
-      ).toList();
-      final summaryCalls = showCalls.where(
-        (c) => c.arguments['id'] == NotificationService.alertsSummaryNotificationId,
-      ).toList();
+      final individualCalls = showCalls
+          .where(
+            (c) =>
+                c.arguments['id'] !=
+                NotificationService.alertsSummaryNotificationId,
+          )
+          .toList();
+      final summaryCalls = showCalls
+          .where(
+            (c) =>
+                c.arguments['id'] ==
+                NotificationService.alertsSummaryNotificationId,
+          )
+          .toList();
 
       expect(individualCalls.length, equals(2));
       expect(summaryCalls.length, equals(1));
       expect(summaryCalls.first.arguments['title'], equals('8 new alerts'));
-      final summarySpecifics = summaryCalls.first.arguments['platformSpecifics'] as Map?;
+      final summarySpecifics =
+          summaryCalls.first.arguments['platformSpecifics'] as Map?;
       expect(summarySpecifics?['setAsGroupSummary'], isTrue);
-      expect(summarySpecifics?['groupKey'], equals(NotificationService.alertsGroupKey));
+      expect(summarySpecifics?['groupKey'],
+          equals(NotificationService.alertsGroupKey));
     });
   });
 }

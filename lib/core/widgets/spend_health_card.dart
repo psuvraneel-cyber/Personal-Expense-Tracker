@@ -50,9 +50,8 @@ class SpendHealthCard extends StatelessWidget {
               Text(
                 'Spend Health',
                 style: AppTypography.sectionHeader(
-                  color: isDark
-                      ? AppTheme.textPrimary
-                      : AppTheme.textPrimaryLight,
+                  color:
+                      isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
                 ),
               ),
               Container(

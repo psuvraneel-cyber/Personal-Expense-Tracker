@@ -7,7 +7,9 @@ void main() {
   group('CashflowForecastService', () {
     final now = DateTime.now();
 
-    test('calculates positive net baseline and daily projections correctly with sufficient data', () {
+    test(
+        'calculates positive net baseline and daily projections correctly with sufficient data',
+        () {
       final txns = <TransactionRecord>[
         TransactionRecord(
           id: '1',
@@ -29,7 +31,8 @@ void main() {
 
       expect(forecast.startingBalance, equals(30000.0));
       expect(forecast.hasNegativeStartingBalance, isFalse);
-      expect(forecast.hasInsufficientData, isFalse); // Span is 10 + 1 = 11 days >= 7
+      expect(forecast.hasInsufficientData,
+          isFalse); // Span is 10 + 1 = 11 days >= 7
       expect(forecast.safeToSpend, greaterThan(0));
       expect(forecast.dailyPoints.length, equals(30));
     });
@@ -63,7 +66,8 @@ void main() {
       expect(forecast.dailyPoints.first.balance, isNotNull);
     });
 
-    test('flags hasInsufficientData when transaction span is less than 7 days', () {
+    test('flags hasInsufficientData when transaction span is less than 7 days',
+        () {
       final txns = <TransactionRecord>[
         TransactionRecord(
           id: '1',
@@ -79,7 +83,8 @@ void main() {
     });
 
     test('handles zero transactions safely', () {
-      final forecast = CashflowForecastService.forecast(<TransactionRecord>[], days: 30);
+      final forecast =
+          CashflowForecastService.forecast(<TransactionRecord>[], days: 30);
 
       expect(forecast.startingBalance, equals(0.0));
       expect(forecast.projectedEndingBalance, equals(0.0));

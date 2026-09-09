@@ -97,20 +97,19 @@ class _HomeScreenState extends State<HomeScreen> {
                             const AddEditTransactionScreen(),
                         transitionsBuilder:
                             (context, animation, secondaryAnimation, child) {
-                              return SlideTransition(
-                                position:
-                                    Tween(
-                                      begin: const Offset(0, 1),
-                                      end: Offset.zero,
-                                    ).animate(
-                                      CurvedAnimation(
-                                        parent: animation,
-                                        curve: Curves.easeOutCubic,
-                                      ),
-                                    ),
-                                child: child,
-                              );
-                            },
+                          return SlideTransition(
+                            position: Tween(
+                              begin: const Offset(0, 1),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                            child: child,
+                          );
+                        },
                         transitionDuration: const Duration(milliseconds: 350),
                       ),
                     );
@@ -238,8 +237,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: isActive
                       ? AppTheme.accentPurple
                       : (isDark
-                            ? AppTheme.textTertiary
-                            : AppTheme.textSecondaryLight),
+                          ? AppTheme.textTertiary
+                          : AppTheme.textSecondaryLight),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -250,8 +249,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: isActive
                         ? AppTheme.accentPurple
                         : (isDark
-                              ? AppTheme.textTertiary
-                              : AppTheme.textSecondaryLight),
+                            ? AppTheme.textTertiary
+                            : AppTheme.textSecondaryLight),
                   ),
                 ),
               ],

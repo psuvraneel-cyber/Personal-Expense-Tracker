@@ -296,7 +296,8 @@ class AlertProvider extends ChangeNotifier {
 
     if (!kIsWeb) {
       await _repository.deleteAll().catchError((e) {
-        AppLogger.error('Alerts clear failed', error: e, label: 'AlertProvider');
+        AppLogger.error('Alerts clear failed',
+            error: e, label: 'AlertProvider');
       });
     }
   }

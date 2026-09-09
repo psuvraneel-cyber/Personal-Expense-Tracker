@@ -36,7 +36,8 @@ void main() {
   });
 
   group('SpendPauseService Account Isolation', () {
-    test('State is isolated per userId and logged-out state is always disabled', () async {
+    test('State is isolated per userId and logged-out state is always disabled',
+        () async {
       final prefs = await SharedPreferences.getInstance();
 
       final pauseUserA = SpendPause(
@@ -46,20 +47,25 @@ void main() {
       );
 
       // Save for user_a
-      await SpendPauseService.setState(pauseUserA, userId: 'user_a', prefsInstance: prefs);
+      await SpendPauseService.setState(pauseUserA,
+          userId: 'user_a', prefsInstance: prefs);
 
       // Check user_a state
-      final retrievedA = await SpendPauseService.getState(userId: 'user_a', prefsInstance: prefs);
+      final retrievedA = await SpendPauseService.getState(
+          userId: 'user_a', prefsInstance: prefs);
       expect(retrievedA.enabled, isTrue);
-      expect(retrievedA.blockedCategoryIds, containsAll(['dining', 'shopping']));
+      expect(
+          retrievedA.blockedCategoryIds, containsAll(['dining', 'shopping']));
 
       // Check user_b state - MUST be disabled / empty
-      final retrievedB = await SpendPauseService.getState(userId: 'user_b', prefsInstance: prefs);
+      final retrievedB = await SpendPauseService.getState(
+          userId: 'user_b', prefsInstance: prefs);
       expect(retrievedB.enabled, isFalse);
       expect(retrievedB.blockedCategoryIds, isEmpty);
 
       // Check null (unauthenticated) state - MUST be disabled / empty
-      final retrievedNull = await SpendPauseService.getState(userId: null, prefsInstance: prefs);
+      final retrievedNull =
+          await SpendPauseService.getState(userId: null, prefsInstance: prefs);
       expect(retrievedNull.enabled, isFalse);
       expect(retrievedNull.blockedCategoryIds, isEmpty);
     });
@@ -78,14 +84,18 @@ void main() {
         blockedCategoryIds: ['travel'],
       );
 
-      await SpendPauseService.setState(pauseA, userId: 'user_a', prefsInstance: prefs);
-      await SpendPauseService.setState(pauseB, userId: 'user_b', prefsInstance: prefs);
+      await SpendPauseService.setState(pauseA,
+          userId: 'user_a', prefsInstance: prefs);
+      await SpendPauseService.setState(pauseB,
+          userId: 'user_b', prefsInstance: prefs);
 
       // Clear user_a
       await SpendPauseService.clear(userId: 'user_a', prefsInstance: prefs);
 
-      final stateA = await SpendPauseService.getState(userId: 'user_a', prefsInstance: prefs);
-      final stateB = await SpendPauseService.getState(userId: 'user_b', prefsInstance: prefs);
+      final stateA = await SpendPauseService.getState(
+          userId: 'user_a', prefsInstance: prefs);
+      final stateB = await SpendPauseService.getState(
+          userId: 'user_b', prefsInstance: prefs);
 
       expect(stateA.enabled, isFalse);
       expect(stateB.enabled, isTrue);
@@ -94,7 +104,8 @@ void main() {
   });
 
   group('SpendPauseProvider Account Isolation & Lifecycle', () {
-    test('clearData() resets in-memory state and disables active pause', () async {
+    test('clearData() resets in-memory state and disables active pause',
+        () async {
       final fakeSync = FakeSyncServiceForSpendPause()..setUid('user_a');
       final provider = SpendPauseProvider(firestoreSync: fakeSync);
 

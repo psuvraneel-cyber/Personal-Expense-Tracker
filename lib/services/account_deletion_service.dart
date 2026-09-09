@@ -31,9 +31,9 @@ class AccountDeletionService {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     required DatabaseHelper dbHelper,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance,
-       _auth = auth ?? FirebaseAuth.instance,
-       _dbHelper = dbHelper;
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance,
+        _dbHelper = dbHelper;
 
   /// Stream of deletion progress for UI display
   final _progressController = StreamController<DeletionStep>.broadcast();

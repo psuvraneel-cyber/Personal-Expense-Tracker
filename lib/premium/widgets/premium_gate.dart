@@ -58,17 +58,17 @@ class PremiumGate extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentPurple.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.lock_rounded,
-                          size: 48,
-                          color: AppTheme.accentPurple,
-                        ),
-                      )
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentPurple.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.lock_rounded,
+                      size: 48,
+                      color: AppTheme.accentPurple,
+                    ),
+                  )
                       .animate(onPlay: (c) => c.repeat(reverse: true))
                       .shimmer(
                         duration: 2500.ms,

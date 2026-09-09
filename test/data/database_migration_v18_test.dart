@@ -10,8 +10,12 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  group('SQLite Migration v18 Tests (Unified Financial Ingestion & Canonical Observation)', () {
-    test('Fresh install at v18 creates financial_observations, merchant_learned_rules, and columns', () async {
+  group(
+      'SQLite Migration v18 Tests (Unified Financial Ingestion & Canonical Observation)',
+      () {
+    test(
+        'Fresh install at v18 creates financial_observations, merchant_learned_rules, and columns',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'v18_fresh_test.db');
 
@@ -25,7 +29,8 @@ void main() {
         );
 
         // 1. Verify financial_observations table columns
-        final obsCols = await db.rawQuery('PRAGMA table_info(financial_observations)');
+        final obsCols =
+            await db.rawQuery('PRAGMA table_info(financial_observations)');
         final obsColNames = obsCols.map((c) => c['name'] as String).toSet();
 
         expect(obsColNames.contains('observationId'), isTrue);
@@ -48,7 +53,8 @@ void main() {
         expect(obsColNames.contains('canonicalTransactionId'), isTrue);
 
         // 2. Verify merchant_learned_rules columns
-        final ruleCols = await db.rawQuery('PRAGMA table_info(merchant_learned_rules)');
+        final ruleCols =
+            await db.rawQuery('PRAGMA table_info(merchant_learned_rules)');
         final ruleColNames = ruleCols.map((c) => c['name'] as String).toSet();
 
         expect(ruleColNames.contains('id'), isTrue);
@@ -64,7 +70,8 @@ void main() {
         expect(txnColNames.contains('sourceFingerprint'), isTrue);
 
         // 4. Verify linked_accounts table has lastObservedBalance & accountTail
-        final acctCols = await db.rawQuery('PRAGMA table_info(linked_accounts)');
+        final acctCols =
+            await db.rawQuery('PRAGMA table_info(linked_accounts)');
         final acctColNames = acctCols.map((c) => c['name'] as String).toSet();
 
         expect(acctColNames.contains('accountTail'), isTrue);
@@ -92,7 +99,9 @@ void main() {
       }
     });
 
-    test('Migration from v17 to v18 adds new tables and backfills verified SMS rows without resurrecting deleted ones', () async {
+    test(
+        'Migration from v17 to v18 adds new tables and backfills verified SMS rows without resurrecting deleted ones',
+        () async {
       final tempDir = Directory.systemTemp.createTempSync();
       final dbPath = p.join(tempDir.path, 'v17_to_v18_migration_test.db');
 
@@ -222,13 +231,15 @@ void main() {
           dbPath,
           version: 18,
           onUpgrade: (db, oldVersion, newVersion) async {
-            await DatabaseHelper().onUpgradeForTesting(db, oldVersion, newVersion);
+            await DatabaseHelper()
+                .onUpgradeForTesting(db, oldVersion, newVersion);
           },
         );
 
         // Verify backfilled transactions in canonical ledger
         final coreTxns = await db.query('transactions');
-        expect(coreTxns.length, equals(1), reason: 'Only verified/eligible SMS should be backfilled');
+        expect(coreTxns.length, equals(1),
+            reason: 'Only verified/eligible SMS should be backfilled');
         expect(coreTxns.first['amount'], equals(450.0));
         expect(coreTxns.first['merchantName'], equals('Starbucks'));
         expect(coreTxns.first['sourceObservationId'], equals('sms_001'));
@@ -244,7 +255,8 @@ void main() {
         await DatabaseHelper().onUpgradeForTesting(db, 17, 18);
 
         final coreTxnsAfter = await db.query('transactions');
-        expect(coreTxnsAfter.length, equals(1), reason: 'Re-running migration must be strictly idempotent');
+        expect(coreTxnsAfter.length, equals(1),
+            reason: 'Re-running migration must be strictly idempotent');
 
         await db.close();
       } finally {

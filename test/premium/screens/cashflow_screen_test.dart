@@ -42,7 +42,8 @@ class FakePremiumProvider extends ChangeNotifier implements PremiumProvider {
   Future<void> clearData() async {}
 }
 
-class FakeTransactionProvider extends ChangeNotifier implements TransactionProvider {
+class FakeTransactionProvider extends ChangeNotifier
+    implements TransactionProvider {
   final List<TransactionRecord> _txns;
   FakeTransactionProvider(this._txns);
 
@@ -55,7 +56,8 @@ class FakeTransactionProvider extends ChangeNotifier implements TransactionProvi
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class FakeRecurringProvider extends ChangeNotifier implements RecurringProvider {
+class FakeRecurringProvider extends ChangeNotifier
+    implements RecurringProvider {
   final List<RecurringPayment> _bills;
   FakeRecurringProvider(this._bills);
 
@@ -109,7 +111,8 @@ void main() {
   }
 
   group('CashflowScreen Widget Tests', () {
-    testWidgets('shows premium gate paywall when user is not premium', (tester) async {
+    testWidgets('shows premium gate paywall when user is not premium',
+        (tester) async {
       fakePremium.isPremium = false;
 
       await tester.pumpWidget(buildTestWidget(transactions: [], bills: []));
@@ -119,7 +122,8 @@ void main() {
       expect(find.text('Unlock Premium'), findsOneWidget);
     });
 
-    testWidgets('renders full premium cashflow dashboard for entitled user', (tester) async {
+    testWidgets('renders full premium cashflow dashboard for entitled user',
+        (tester) async {
       fakePremium.isPremium = true;
 
       final txns = [
@@ -156,7 +160,8 @@ void main() {
       tester.view.devicePixelRatio = 2.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      await tester.pumpWidget(buildTestWidget(transactions: txns, bills: bills));
+      await tester
+          .pumpWidget(buildTestWidget(transactions: txns, bills: bills));
       await tester.pumpAndSettle();
 
       // Verify Hero Card with Safe-to-Spend & 30-day window
@@ -184,7 +189,9 @@ void main() {
       expect(find.text('Bills & Income'), findsOneWidget);
     });
 
-    testWidgets('opens Safe-to-Spend breakdown modal bottom sheet upon tapping info icon', (tester) async {
+    testWidgets(
+        'opens Safe-to-Spend breakdown modal bottom sheet upon tapping info icon',
+        (tester) async {
       fakePremium.isPremium = true;
 
       final txns = [
@@ -219,7 +226,9 @@ void main() {
       expect(find.text('Daily Safe-to-Spend'), findsOneWidget);
     });
 
-    testWidgets('Defect 4 UI Consistency: explanation strictly matches engine Safe-to-Spend when linear sum != engine value', (tester) async {
+    testWidgets(
+        'Defect 4 UI Consistency: explanation strictly matches engine Safe-to-Spend when linear sum != engine value',
+        (tester) async {
       fakePremium.isPremium = true;
 
       // Scenario where linear arithmetic diverges from path-dependent trough:
@@ -257,7 +266,8 @@ void main() {
       tester.view.devicePixelRatio = 2.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
-      await tester.pumpWidget(buildTestWidget(transactions: txns, bills: bills));
+      await tester
+          .pumpWidget(buildTestWidget(transactions: txns, bills: bills));
       await tester.pumpAndSettle();
 
       // Open bottom sheet
@@ -273,7 +283,9 @@ void main() {
       expect(find.text('Path-Dependent Headroom'), findsOneWidget);
     });
 
-    testWidgets('switching horizons updates horizon chips and recalculates forecast', (tester) async {
+    testWidgets(
+        'switching horizons updates horizon chips and recalculates forecast',
+        (tester) async {
       fakePremium.isPremium = true;
 
       final txns = [

@@ -14,8 +14,8 @@ class ThemeModeNotifier extends InheritedWidget {
   });
 
   static ThemeModeNotifier of(BuildContext context) {
-    final result = context
-        .dependOnInheritedWidgetOfExactType<ThemeModeNotifier>();
+    final result =
+        context.dependOnInheritedWidgetOfExactType<ThemeModeNotifier>();
     assert(result != null, 'No ThemeModeNotifier found in context');
     return result!;
   }

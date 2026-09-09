@@ -41,7 +41,9 @@ void main() {
   });
 
   group('Recurring Transactions Concurrency & Idempotency Tests', () {
-    test('1. Parallel concurrent execution: 10 racing workers generate exactly 1 transaction', () async {
+    test(
+        '1. Parallel concurrent execution: 10 racing workers generate exactly 1 transaction',
+        () async {
       final now = DateTime(2026, 8, 20, 10, 0);
       final startDate = DateTime(2026, 8, 1, 10, 0);
 
@@ -69,7 +71,9 @@ void main() {
 
       // Count total generated transactions across all workers
       final totalGenerated = results.expand((list) => list).length;
-      expect(totalGenerated, equals(1), reason: 'Only exactly 1 transaction should be generated across all 10 racing workers');
+      expect(totalGenerated, equals(1),
+          reason:
+              'Only exactly 1 transaction should be generated across all 10 racing workers');
 
       // Verify transactions table in SQLite has exactly 1 row
       final allTxns = await txnRepo.getAllTransactions();
@@ -78,13 +82,17 @@ void main() {
       expect(allTxns.first.recurringRuleId, equals('rule_concurrent_test'));
 
       // Verify occurrences table has exactly 1 row
-      final occurrences = await repo.getOccurrencesForRule('rule_concurrent_test');
+      final occurrences =
+          await repo.getOccurrencesForRule('rule_concurrent_test');
       expect(occurrences.length, equals(1));
-      expect(occurrences.first.status, equals(RecurringOccurrenceStatus.generated));
+      expect(occurrences.first.status,
+          equals(RecurringOccurrenceStatus.generated));
       expect(occurrences.first.transactionId, equals(allTxns.first.id));
     });
 
-    test('2. Sequential retry idempotency: Repeated calls produce zero duplicate transactions', () async {
+    test(
+        '2. Sequential retry idempotency: Repeated calls produce zero duplicate transactions',
+        () async {
       final now = DateTime(2026, 8, 20, 10, 0);
       final startDate = DateTime(2026, 8, 1, 10, 0);
 
@@ -110,7 +118,8 @@ void main() {
       expect(secondRun, isEmpty);
 
       // Third run: 5 minutes later before next month
-      final thirdRun = await service.generateDueOccurrences(now: now.add(const Duration(minutes: 5)));
+      final thirdRun = await service.generateDueOccurrences(
+          now: now.add(const Duration(minutes: 5)));
       expect(thirdRun, isEmpty);
 
       // Verify DB has strictly 1 transaction
@@ -118,7 +127,9 @@ void main() {
       expect(txns.length, equals(1));
     });
 
-    test('3. Skipped occurrence invariant: Skipped occurrence is NEVER re-generated during reconciliation', () async {
+    test(
+        '3. Skipped occurrence invariant: Skipped occurrence is NEVER re-generated during reconciliation',
+        () async {
       final now = DateTime(2026, 9, 5, 10, 0);
       final startDate = DateTime(2026, 8, 1, 10, 0);
 
@@ -158,7 +169,9 @@ void main() {
       expect(allTxns.first.date, equals(DateTime(2026, 9, 1, 10, 0)));
     });
 
-    test('4. Delete occurrence and skip: Deleting transaction marks occurrence skipped and prevents re-creation', () async {
+    test(
+        '4. Delete occurrence and skip: Deleting transaction marks occurrence skipped and prevents re-creation',
+        () async {
       final now = DateTime(2026, 8, 20, 10, 0);
 
       // Create rule and generate first transaction immediately
@@ -199,7 +212,9 @@ void main() {
       expect(dates.contains(DateTime(2026, 8, 15, 10, 0)), isTrue);
     });
 
-    test('5. Bounded multi-month catch-up: Generates past occurrences in chronological order and advances rule', () async {
+    test(
+        '5. Bounded multi-month catch-up: Generates past occurrences in chronological order and advances rule',
+        () async {
       final now = DateTime(2026, 11, 15, 10, 0);
       final startDate = DateTime(2026, 8, 31, 10, 0);
 
@@ -227,7 +242,8 @@ void main() {
 
       // Verify rule's nextOccurrenceDate advanced to Nov 30
       final updatedRule = await repo.getRuleById('rule_catchup_test');
-      expect(updatedRule!.nextOccurrenceDate, equals(DateTime(2026, 11, 30, 10, 0)));
+      expect(updatedRule!.nextOccurrenceDate,
+          equals(DateTime(2026, 11, 30, 10, 0)));
     });
   });
 }

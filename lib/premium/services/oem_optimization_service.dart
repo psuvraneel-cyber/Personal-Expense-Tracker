@@ -45,7 +45,8 @@ class OemOptimizationService {
         return info.packageName;
       }
     } catch (e) {
-      AppLogger.debug('[OemOptimizationService] Failed to read package info: $e');
+      AppLogger.debug(
+          '[OemOptimizationService] Failed to read package info: $e');
     }
     return 'com.pet.tracker.pet';
   }
@@ -59,8 +60,7 @@ class OemOptimizationService {
       final manufacturer = androidInfo.manufacturer.toLowerCase();
       final brand = androidInfo.brand.toLowerCase();
 
-      final matches =
-          isManufacturerAggressive(manufacturer) ||
+      final matches = isManufacturerAggressive(manufacturer) ||
           isManufacturerAggressive(brand);
       AppLogger.debug(
         '[OemOptimizationService] Manufacturer: $manufacturer, Brand: $brand -> Aggressive OEM: $matches',
@@ -168,7 +168,8 @@ class OemOptimizationService {
         const AndroidIntent(
           action: 'android.intent.action.MAIN',
           package: 'com.samsung.android.sm',
-          componentName: 'com.samsung.android.sm.ui.battery.AppSleepListActivity',
+          componentName:
+              'com.samsung.android.sm.ui.battery.AppSleepListActivity',
         ),
         // Samsung CN variant
         const AndroidIntent(
@@ -212,14 +213,14 @@ class OemOptimizationService {
           package: 'com.coloros.oppoguardelf',
         ),
       ];
-    } else if (manufacturer.contains('vivo') ||
-        manufacturer.contains('iqoo')) {
+    } else if (manufacturer.contains('vivo') || manufacturer.contains('iqoo')) {
       return [
         // Vivo / iQOO Add Whitelist
         const AndroidIntent(
           action: 'android.intent.action.MAIN',
           package: 'com.iqoo.secure',
-          componentName: 'com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity',
+          componentName:
+              'com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity',
         ),
         // Vivo / iQOO Bg Start Up Manager
         const AndroidIntent(

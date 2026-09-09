@@ -77,9 +77,9 @@ class FirestoreSyncService {
 
   /// Current immutable account session token.
   AccountSession get currentSession => AccountSession(
-    uid: activeSessionUid,
-    generation: _sessionGeneration,
-  );
+        uid: activeSessionUid,
+        generation: _sessionGeneration,
+      );
 
   /// Safe accessor for current user ID, returning null instead of throwing StateError if logged out.
   String? get currentUserIdOrNull {
@@ -107,7 +107,8 @@ class FirestoreSyncService {
   /// Callers should check this before attempting Firestore operations.
   bool get isAuthenticated {
     try {
-      if (_auth.isLocalGuest || _auth.currentUser?.isAnonymous == true) return false;
+      if (_auth.isLocalGuest || _auth.currentUser?.isAnonymous == true)
+        return false;
       final uid = _auth.currentUserId;
       return uid != null && uid.isNotEmpty && uid != 'guest_user';
     } catch (_) {
@@ -139,8 +140,9 @@ class FirestoreSyncService {
   CollectionReference<Map<String, dynamic>> get _recurringRulesCollection =>
       _db.collection('users').doc(_uid).collection('recurring_rules');
 
-  CollectionReference<Map<String, dynamic>> get _recurringOccurrencesCollection =>
-      _db.collection('users').doc(_uid).collection('recurring_occurrences');
+  CollectionReference<Map<String, dynamic>>
+      get _recurringOccurrencesCollection =>
+          _db.collection('users').doc(_uid).collection('recurring_occurrences');
 
   CollectionReference<Map<String, dynamic>> get _savingGoalsCollection =>
       _db.collection('users').doc(_uid).collection('saving_goals');
@@ -148,8 +150,11 @@ class FirestoreSyncService {
   CollectionReference<Map<String, dynamic>> get _recurringPaymentsCollection =>
       _db.collection('users').doc(_uid).collection('recurring_payments');
 
-  CollectionReference<Map<String, dynamic>> get _recurringPaymentHistoryCollection =>
-      _db.collection('users').doc(_uid).collection('recurring_payment_history');
+  CollectionReference<Map<String, dynamic>>
+      get _recurringPaymentHistoryCollection => _db
+          .collection('users')
+          .doc(_uid)
+          .collection('recurring_payment_history');
 
   CollectionReference<Map<String, dynamic>> get _alertsCollection =>
       _db.collection('users').doc(_uid).collection('alerts');
@@ -236,9 +241,8 @@ class FirestoreSyncService {
 
     try {
       while (true) {
-        var query = _txnCollection
-            .orderBy('date', descending: true)
-            .limit(batchSize);
+        var query =
+            _txnCollection.orderBy('date', descending: true).limit(batchSize);
 
         if (lastDoc != null) {
           query = query.startAfterDocument(lastDoc);
@@ -327,9 +331,9 @@ class FirestoreSyncService {
               .toList(),
         )
         .handleError((Object e) {
-          AppLogger.debug('[Firestore] categoriesStream error: $e');
-          return <cat_model.Category>[];
-        });
+      AppLogger.debug('[Firestore] categoriesStream error: $e');
+      return <cat_model.Category>[];
+    });
   }
 
   // ── Budget Operations ─────────────────────────────────────────────────
@@ -383,9 +387,9 @@ class FirestoreSyncService {
               .toList(),
         )
         .handleError((Object e) {
-          AppLogger.debug('[Firestore] budgetsStream error: $e');
-          return <Budget>[];
-        });
+      AppLogger.debug('[Firestore] budgetsStream error: $e');
+      return <Budget>[];
+    });
   }
 
   // ── User Profile ─────────────────────────────────────────────────────
@@ -456,9 +460,9 @@ class FirestoreSyncService {
         .snapshots()
         .map((snap) => snap.docs.map((doc) => doc.data()).toList())
         .handleError((Object e) {
-          AppLogger.debug('[Firestore] tombstonesStream error: $e');
-          return <Map<String, dynamic>>[];
-        });
+      AppLogger.debug('[Firestore] tombstonesStream error: $e');
+      return <Map<String, dynamic>>[];
+    });
   }
 
   // ── Recurring Rules Sync ─────────────────────────────────────────────
@@ -485,28 +489,25 @@ class FirestoreSyncService {
 
   Stream<List<RecurringRule>> recurringRulesStream() {
     if (_auth.currentUserId == null) return Stream.value([]);
-    return _recurringRulesCollection
-        .snapshots()
-        .map((snap) {
-          return snap.docs
-              .map((doc) {
-                try {
-                  return RecurringRule.fromFirestore(
-                    doc.id,
-                    doc.data(),
-                  );
-                } catch (e) {
-                  AppLogger.debug('[Firestore] Failed to parse rule ${doc.id}: $e');
-                  return null;
-                }
-              })
-              .whereType<RecurringRule>()
-              .toList();
-        })
-        .handleError((Object e) {
-          AppLogger.debug('[Firestore] recurringRulesStream error: $e');
-          return <RecurringRule>[];
-        });
+    return _recurringRulesCollection.snapshots().map((snap) {
+      return snap.docs
+          .map((doc) {
+            try {
+              return RecurringRule.fromFirestore(
+                doc.id,
+                doc.data(),
+              );
+            } catch (e) {
+              AppLogger.debug('[Firestore] Failed to parse rule ${doc.id}: $e');
+              return null;
+            }
+          })
+          .whereType<RecurringRule>()
+          .toList();
+    }).handleError((Object e) {
+      AppLogger.debug('[Firestore] recurringRulesStream error: $e');
+      return <RecurringRule>[];
+    });
   }
 
   Future<List<RecurringRule>> fetchAllRecurringRules() async {
@@ -541,7 +542,8 @@ class FirestoreSyncService {
           .doc(occurrence.id)
           .set(occurrence.toFirestore(), SetOptions(merge: true));
     } on FirebaseException catch (e) {
-      AppLogger.debug('[Firestore] upsertRecurringOccurrence error: ${e.message}');
+      AppLogger.debug(
+          '[Firestore] upsertRecurringOccurrence error: ${e.message}');
       rethrow;
     }
   }
@@ -550,35 +552,34 @@ class FirestoreSyncService {
     try {
       await _recurringOccurrencesCollection.doc(occurrenceId).delete();
     } on FirebaseException catch (e) {
-      AppLogger.debug('[Firestore] deleteRecurringOccurrence error: ${e.message}');
+      AppLogger.debug(
+          '[Firestore] deleteRecurringOccurrence error: ${e.message}');
       rethrow;
     }
   }
 
   Stream<List<RecurringOccurrence>> recurringOccurrencesStream() {
     if (_auth.currentUserId == null) return Stream.value([]);
-    return _recurringOccurrencesCollection
-        .snapshots()
-        .map((snap) {
-          return snap.docs
-              .map((doc) {
-                try {
-                  return RecurringOccurrence.fromFirestore(
-                    doc.id,
-                    doc.data(),
-                  );
-                } catch (e) {
-                  AppLogger.debug('[Firestore] Failed to parse occurrence ${doc.id}: $e');
-                  return null;
-                }
-              })
-              .whereType<RecurringOccurrence>()
-              .toList();
-        })
-        .handleError((Object e) {
-          AppLogger.debug('[Firestore] recurringOccurrencesStream error: $e');
-          return <RecurringOccurrence>[];
-        });
+    return _recurringOccurrencesCollection.snapshots().map((snap) {
+      return snap.docs
+          .map((doc) {
+            try {
+              return RecurringOccurrence.fromFirestore(
+                doc.id,
+                doc.data(),
+              );
+            } catch (e) {
+              AppLogger.debug(
+                  '[Firestore] Failed to parse occurrence ${doc.id}: $e');
+              return null;
+            }
+          })
+          .whereType<RecurringOccurrence>()
+          .toList();
+    }).handleError((Object e) {
+      AppLogger.debug('[Firestore] recurringOccurrencesStream error: $e');
+      return <RecurringOccurrence>[];
+    });
   }
 
   // ── Saving Goals Sync ────────────────────────────────────────────────
@@ -603,27 +604,24 @@ class FirestoreSyncService {
 
   Stream<List<SavingGoal>> savingGoalsStream() {
     if (_auth.currentUserId == null) return Stream.value([]);
-    return _savingGoalsCollection
-        .snapshots()
-        .map((snap) {
-          return snap.docs
-              .map((doc) {
-                try {
-                  return SavingGoal.fromMap(doc.data());
-                } catch (e) {
-                  AppLogger.debug(
-                    '[Firestore] Failed to parse saving goal ${doc.id}: $e',
-                  );
-                  return null;
-                }
-              })
-              .whereType<SavingGoal>()
-              .toList();
-        })
-        .handleError((Object e) {
-          AppLogger.debug('[Firestore] savingGoalsStream error: $e');
-          return <SavingGoal>[];
-        });
+    return _savingGoalsCollection.snapshots().map((snap) {
+      return snap.docs
+          .map((doc) {
+            try {
+              return SavingGoal.fromMap(doc.data());
+            } catch (e) {
+              AppLogger.debug(
+                '[Firestore] Failed to parse saving goal ${doc.id}: $e',
+              );
+              return null;
+            }
+          })
+          .whereType<SavingGoal>()
+          .toList();
+    }).handleError((Object e) {
+      AppLogger.debug('[Firestore] savingGoalsStream error: $e');
+      return <SavingGoal>[];
+    });
   }
 
   Future<List<SavingGoal>> fetchAllSavingGoals() async {
@@ -671,27 +669,24 @@ class FirestoreSyncService {
 
   Stream<List<RecurringPayment>> recurringPaymentsStream() {
     if (_auth.currentUserId == null) return Stream.value([]);
-    return _recurringPaymentsCollection
-        .snapshots()
-        .map((snap) {
-          return snap.docs
-              .map((doc) {
-                try {
-                  return RecurringPayment.fromMap(doc.data());
-                } catch (e) {
-                  AppLogger.debug(
-                    '[Firestore] Failed to parse recurring payment ${doc.id}: $e',
-                  );
-                  return null;
-                }
-              })
-              .whereType<RecurringPayment>()
-              .toList();
-        })
-        .handleError((Object e) {
-          AppLogger.debug('[Firestore] recurringPaymentsStream error: $e');
-          return <RecurringPayment>[];
-        });
+    return _recurringPaymentsCollection.snapshots().map((snap) {
+      return snap.docs
+          .map((doc) {
+            try {
+              return RecurringPayment.fromMap(doc.data());
+            } catch (e) {
+              AppLogger.debug(
+                '[Firestore] Failed to parse recurring payment ${doc.id}: $e',
+              );
+              return null;
+            }
+          })
+          .whereType<RecurringPayment>()
+          .toList();
+    }).handleError((Object e) {
+      AppLogger.debug('[Firestore] recurringPaymentsStream error: $e');
+      return <RecurringPayment>[];
+    });
   }
 
   Future<List<RecurringPayment>> fetchAllRecurringPayments() async {
@@ -743,7 +738,8 @@ class FirestoreSyncService {
     }
   }
 
-  Future<List<RecurringPaymentHistory>> fetchAllRecurringPaymentHistory() async {
+  Future<List<RecurringPaymentHistory>>
+      fetchAllRecurringPaymentHistory() async {
     if (_auth.currentUserId == null) return [];
     try {
       final snap = await _recurringPaymentHistoryCollection.get();
@@ -788,27 +784,24 @@ class FirestoreSyncService {
 
   Stream<List<AppAlert>> alertsStream() {
     if (_auth.currentUserId == null) return Stream.value([]);
-    return _alertsCollection
-        .snapshots()
-        .map((snap) {
-          return snap.docs
-              .map((doc) {
-                try {
-                  return AppAlert.fromMap(doc.data());
-                } catch (e) {
-                  AppLogger.debug(
-                    '[Firestore] Failed to parse alert ${doc.id}: $e',
-                  );
-                  return null;
-                }
-              })
-              .whereType<AppAlert>()
-              .toList();
-        })
-        .handleError((Object e) {
-          AppLogger.debug('[Firestore] alertsStream error: $e');
-          return <AppAlert>[];
-        });
+    return _alertsCollection.snapshots().map((snap) {
+      return snap.docs
+          .map((doc) {
+            try {
+              return AppAlert.fromMap(doc.data());
+            } catch (e) {
+              AppLogger.debug(
+                '[Firestore] Failed to parse alert ${doc.id}: $e',
+              );
+              return null;
+            }
+          })
+          .whereType<AppAlert>()
+          .toList();
+    }).handleError((Object e) {
+      AppLogger.debug('[Firestore] alertsStream error: $e');
+      return <AppAlert>[];
+    });
   }
 
   Future<List<AppAlert>> fetchAllAlerts() async {
@@ -840,9 +833,9 @@ class FirestoreSyncService {
     if (!isAuthenticated) return;
     try {
       await _weeklyLimitsCollection.doc(limit.id).set(
-        limit.toMap(),
-        SetOptions(merge: true),
-      );
+            limit.toMap(),
+            SetOptions(merge: true),
+          );
     } catch (e) {
       AppLogger.warn(
         'Failed to sync weekly limit ${limit.id}: $e',
@@ -865,31 +858,28 @@ class FirestoreSyncService {
 
   Stream<List<WeeklyLimit>> weeklyLimitsStream() {
     if (!isAuthenticated) return const Stream.empty();
-    return _weeklyLimitsCollection
-        .snapshots()
-        .map((snap) {
-          return snap.docs
-              .map((doc) {
-                try {
-                  return WeeklyLimit.fromMap(doc.data());
-                } catch (e) {
-                  AppLogger.warn(
-                    'Failed to parse weekly limit ${doc.id}: $e',
-                    label: 'FirestoreSync',
-                  );
-                  return null;
-                }
-              })
-              .whereType<WeeklyLimit>()
-              .toList();
-        })
-        .handleError((Object e) {
-          AppLogger.warn(
-            'weeklyLimitsStream error: $e',
-            label: 'FirestoreSync',
-          );
-          return <WeeklyLimit>[];
-        });
+    return _weeklyLimitsCollection.snapshots().map((snap) {
+      return snap.docs
+          .map((doc) {
+            try {
+              return WeeklyLimit.fromMap(doc.data());
+            } catch (e) {
+              AppLogger.warn(
+                'Failed to parse weekly limit ${doc.id}: $e',
+                label: 'FirestoreSync',
+              );
+              return null;
+            }
+          })
+          .whereType<WeeklyLimit>()
+          .toList();
+    }).handleError((Object e) {
+      AppLogger.warn(
+        'weeklyLimitsStream error: $e',
+        label: 'FirestoreSync',
+      );
+      return <WeeklyLimit>[];
+    });
   }
 
   Future<List<WeeklyLimit>> fetchAllWeeklyLimits() async {

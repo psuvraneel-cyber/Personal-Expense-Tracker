@@ -46,7 +46,10 @@ class ClassificationRuleEngine {
 
     final result = consensus.result;
 
-    if (result.isTransaction || result.isUncertain || result.isBill || result.balanceAfter != null) {
+    if (result.isTransaction ||
+        result.isUncertain ||
+        result.isBill ||
+        result.balanceAfter != null) {
       AppLogger.debug(
         '[PET-Rules] ${consensus.source.name} → '
         '${result.direction?.name ?? "?"} ₹${result.amount} '

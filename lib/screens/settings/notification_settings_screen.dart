@@ -122,9 +122,8 @@ class _NotificationSettingsScreenState
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? AppTheme.cardDarkSurface
-                        : AppTheme.cardLight,
+                    color:
+                        isDark ? AppTheme.cardDarkSurface : AppTheme.cardLight,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isDark

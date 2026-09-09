@@ -154,7 +154,8 @@ class GoalProvider extends ChangeNotifier {
           // Local is strictly newer: preserve local and upload to Firestore
           if (_firestoreSync.isAuthenticated) {
             unawaited(_firestoreSync.upsertSavingGoal(local).catchError((e) {
-              AppLogger.debug('[GoalProvider] Uploading newer local goal to remote: $e');
+              AppLogger.debug(
+                  '[GoalProvider] Uploading newer local goal to remote: $e');
             }));
           }
         } else {
@@ -168,8 +169,10 @@ class GoalProvider extends ChangeNotifier {
               changed = true;
             } else {
               if (_firestoreSync.isAuthenticated) {
-                unawaited(_firestoreSync.upsertSavingGoal(local).catchError((e) {
-                  AppLogger.debug('[GoalProvider] Uploading tied local goal to remote: $e');
+                unawaited(
+                    _firestoreSync.upsertSavingGoal(local).catchError((e) {
+                  AppLogger.debug(
+                      '[GoalProvider] Uploading tied local goal to remote: $e');
                 }));
               }
             }
@@ -184,7 +187,8 @@ class GoalProvider extends ChangeNotifier {
       if (!remoteIds.contains(local.id)) {
         if (_firestoreSync.isAuthenticated) {
           unawaited(_firestoreSync.upsertSavingGoal(local).catchError((e) {
-            AppLogger.debug('[GoalProvider] Syncing offline-created goal to remote: $e');
+            AppLogger.debug(
+                '[GoalProvider] Syncing offline-created goal to remote: $e');
           }));
         }
       }
@@ -438,7 +442,8 @@ class GoalProvider extends ChangeNotifier {
 
     if (_firestoreSync.isAuthenticated) {
       unawaited(_firestoreSync.upsertSavingGoal(updated).catchError((e) {
-        AppLogger.debug('[GoalProvider] Firestore sync withdrawFromGoal failed: $e');
+        AppLogger.debug(
+            '[GoalProvider] Firestore sync withdrawFromGoal failed: $e');
       }));
     }
   }
@@ -522,7 +527,8 @@ class GoalProvider extends ChangeNotifier {
     try {
       await AlertEvaluationCoordinator().onGoalsChanged([goal]);
     } catch (e) {
-      AppLogger.debug('[GoalProvider] Alert coordinator notification failed: $e');
+      AppLogger.debug(
+          '[GoalProvider] Alert coordinator notification failed: $e');
     }
   }
 

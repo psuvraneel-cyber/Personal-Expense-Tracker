@@ -199,8 +199,8 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
     // Centralized auth-state listener — drives data reload / clear.
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
-      _onAuthStateChanged,
-    );
+          _onAuthStateChanged,
+        );
 
     // Query notification permission status
     NotificationService.permissionStatus();
@@ -309,7 +309,9 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
 
       if (!kIsWeb) {
         await DatabaseHelper().wipeAllUserData().catchError((e) {
-          AppLogger.error('Database wipeAllUserData failed in auth state change', error: e);
+          AppLogger.error(
+              'Database wipeAllUserData failed in auth state change',
+              error: e);
         });
       }
 
@@ -364,9 +366,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       } catch (e) {
         AppLogger.debug('[MAIN] Failed to trigger sync queue on resume: $e');
       }
-      try {
-
-      } catch (e) {
+      try {} catch (e) {
         AppLogger.debug(
           '[MAIN] Failed to trigger SMS reconciliation on resume: $e',
         );
@@ -491,22 +491,19 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
             },
             routes: {
               '/': (_) => SplashScreen(
-                onThemeToggle: () => _setThemeMode(
-                  themeMode == ThemeMode.dark
-                      ? ThemeMode.light
-                      : ThemeMode.dark,
-                ),
-                onThemeModeChanged: _setThemeMode,
-                themeMode: themeMode,
-                isDarkMode:
-                    themeMode == ThemeMode.dark ||
-                    (themeMode == ThemeMode.system &&
-                        WidgetsBinding
-                                .instance
-                                .platformDispatcher
-                                .platformBrightness ==
-                            Brightness.dark),
-              ),
+                    onThemeToggle: () => _setThemeMode(
+                      themeMode == ThemeMode.dark
+                          ? ThemeMode.light
+                          : ThemeMode.dark,
+                    ),
+                    onThemeModeChanged: _setThemeMode,
+                    themeMode: themeMode,
+                    isDarkMode: themeMode == ThemeMode.dark ||
+                        (themeMode == ThemeMode.system &&
+                            WidgetsBinding.instance.platformDispatcher
+                                    .platformBrightness ==
+                                Brightness.dark),
+                  ),
             },
             initialRoute: '/',
           ),

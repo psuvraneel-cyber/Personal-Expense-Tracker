@@ -11,7 +11,9 @@ void main() {
   });
 
   group('BillReminderScheduler.scheduleReminders', () {
-    test('filters out reminders whose schedule date (due - 3 days at 10 AM) is in the past', () async {
+    test(
+        'filters out reminders whose schedule date (due - 3 days at 10 AM) is in the past',
+        () async {
       final now = DateTime(2026, 7, 27, 12, 0, 0);
       // Due on July 29 -> reminder date is July 26 at 10:00 AM (in the past relative to July 27)
       final pastBill = RecurringPayment(
@@ -30,7 +32,9 @@ void main() {
       await BillReminderScheduler.scheduleReminders([pastBill], now: now);
     });
 
-    test('calculates correct reminder date 3 days prior at 10 AM for future bills', () async {
+    test(
+        'calculates correct reminder date 3 days prior at 10 AM for future bills',
+        () async {
       final now = DateTime(2026, 7, 20, 10, 0, 0);
       // Due on July 29 -> reminder date is July 26 at 10:00 AM (in the future relative to July 20)
       final futureBill = RecurringPayment(

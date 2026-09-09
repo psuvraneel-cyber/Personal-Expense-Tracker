@@ -10,7 +10,8 @@ void main() {
     //  SECTION 1: LEGITIMATE BANK TRANSACTIONS WITH REMINDER FOOTERS
     // ═════════════════════════════════════════════════════════════════
 
-    test('1. HDFC Credit Card Txn with "Pay your bill by" footer is ACCEPTED', () {
+    test('1. HDFC Credit Card Txn with "Pay your bill by" footer is ACCEPTED',
+        () {
       final body =
           'Rs 1,250.00 debited from HDFC Bank Credit Card xx1234 at SWIGGY on 25-JUL-26. '
           'Total Available Limit: Rs 45,000. Pay your bill by 10-AUG-26 to avoid charges.';
@@ -141,7 +142,8 @@ void main() {
       expect(r.amount, equals(5200.0));
     });
 
-    test('9. AU Small Finance Bank CC Txn with reminder footer is ACCEPTED', () {
+    test('9. AU Small Finance Bank CC Txn with reminder footer is ACCEPTED',
+        () {
       final body =
           'Rs 1,100.00 debited from AU Bank Credit Card xx4455 on 25-Jul-26 at Shell. '
           'Pay your bill by 11-Aug-26.';

@@ -177,7 +177,8 @@ void main() {
   });
 
   group('STRESS TEST STAGE 2 & 3: Delete & Ignore While Parsing Race', () {
-    test('Concurrent Delete/Ignore vs Continuous Ingestion (500 Iterations)', () async {
+    test('Concurrent Delete/Ignore vs Continuous Ingestion (500 Iterations)',
+        () async {
       final baseDate = DateTime(2026, 7, 24, 15, 0);
       final random = Random(42);
 

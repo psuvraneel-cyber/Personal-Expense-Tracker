@@ -86,7 +86,9 @@ void main() {
   });
 
   group('Adversarial Remediation Regression Tests (DEF-01 through DEF-05)', () {
-    test('Test A — Live notification + inbox scan produces exactly one canonical transaction', () async {
+    test(
+        'Test A — Live notification + inbox scan produces exactly one canonical transaction',
+        () async {
       final notif = NativeSmsMessage(
         address: 'PhonePe',
         packageName: 'com.phonepe.app',
@@ -105,7 +107,8 @@ void main() {
       mockReader.messages = [
         NativeSmsMessage(
           address: 'HDFCBK',
-          body: 'Rs 350.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Starbucks. Ref UPI/8899001122.',
+          body:
+              'Rs 350.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Starbucks. Ref UPI/8899001122.',
           dateMillis: DateTime(2026, 8, 24, 10, 0).millisecondsSinceEpoch,
           source: 'sms',
         ),
@@ -122,10 +125,13 @@ void main() {
       expect(observations.length, equals(2));
     });
 
-    test('Test B — Live SMS + reconciliation preserves exactly one canonical transaction', () async {
+    test(
+        'Test B — Live SMS + reconciliation preserves exactly one canonical transaction',
+        () async {
       final liveSms = NativeSmsMessage(
         address: 'SBIBNK',
-        body: 'Rs 1,200.00 debited from A/c XX5678 on 24-Aug-26 to Reliance Fresh. Ref 99887766.',
+        body:
+            'Rs 1,200.00 debited from A/c XX5678 on 24-Aug-26 to Reliance Fresh. Ref 99887766.',
         dateMillis: DateTime(2026, 8, 24, 11, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -142,11 +148,14 @@ void main() {
       expect(txns.length, equals(1));
     });
 
-    test('Test C — Reconciliation-only transaction is properly promoted to canonical ledger', () async {
+    test(
+        'Test C — Reconciliation-only transaction is properly promoted to canonical ledger',
+        () async {
       // Offline / background missed event
       final missedSms = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 750.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at BookMyShow. Avl Bal Rs 20,000.00. Ref BMS123456.',
+        body:
+            'Rs 750.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at BookMyShow. Avl Bal Rs 20,000.00. Ref BMS123456.',
         dateMillis: DateTime(2026, 8, 24, 12, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -167,10 +176,13 @@ void main() {
       expect(obs.first['source'], equals('sms'));
     });
 
-    test('Test D — Bill found by reconciliation creates recurring commitment and 0 expenses', () async {
+    test(
+        'Test D — Bill found by reconciliation creates recurring commitment and 0 expenses',
+        () async {
       final billSms = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Total amount due on your HDFC Bank Credit Card ending 9876 is Rs 14,520.00. Due date is 15-Sep-2026. Min due Rs 1,452.00.',
+        body:
+            'Total amount due on your HDFC Bank Credit Card ending 9876 is Rs 14,520.00. Due date is 15-Sep-2026. Min due Rs 1,452.00.',
         dateMillis: DateTime(2026, 8, 24, 13, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -188,7 +200,9 @@ void main() {
       expect(bills.first['amount'], equals(14520.0));
     });
 
-    test('Test E — Balance found by reconciliation updates linked account and creates 0 transactions', () async {
+    test(
+        'Test E — Balance found by reconciliation updates linked account and creates 0 transactions',
+        () async {
       // Pre-seed matching linked account
       await db.insert('linked_accounts', {
         'id': 'acct_sbi_1234',
@@ -204,7 +218,8 @@ void main() {
 
       final balanceSms = NativeSmsMessage(
         address: 'SBIINB',
-        body: 'Dear Customer, Available balance for your A/c XX1234 is Rs 82,450.00 as on 24-Aug-2026.',
+        body:
+            'Dear Customer, Available balance for your A/c XX1234 is Rs 82,450.00 as on 24-Aug-2026.',
         dateMillis: DateTime(2026, 8, 24, 14, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -223,10 +238,13 @@ void main() {
       expect(IngestionDiagnostics().balanceObservations, equals(1));
     });
 
-    test('Test F — Rejected/OTP message found by reconciliation creates 0 transactions and persists rejected state', () async {
+    test(
+        'Test F — Rejected/OTP message found by reconciliation creates 0 transactions and persists rejected state',
+        () async {
       final otpSms = NativeSmsMessage(
         address: 'HDFCBK',
-        body: '482910 is your OTP for transaction of Rs 500.00 at Amazon. Do NOT share this OTP with anyone.',
+        body:
+            '482910 is your OTP for transaction of Rs 500.00 at Amazon. Do NOT share this OTP with anyone.',
         dateMillis: DateTime(2026, 8, 24, 15, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -244,10 +262,13 @@ void main() {
       expect(obs.first['state'], equals('rejected'));
     });
 
-    test('Test G — Reconciliation repeated is idempotent and produces no duplicates', () async {
+    test(
+        'Test G — Reconciliation repeated is idempotent and produces no duplicates',
+        () async {
       final sms = NativeSmsMessage(
         address: 'ICICIB',
-        body: 'Your A/c XX4321 is debited for Rs 899.00 on 24-Aug-26 at Flipkart. UPI Ref 334455.',
+        body:
+            'Your A/c XX4321 is debited for Rs 899.00 on 24-Aug-26 at Flipkart. UPI Ref 334455.',
         dateMillis: DateTime(2026, 8, 24, 16, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -267,10 +288,13 @@ void main() {
       expect(txns2.first['id'], equals(id1));
     });
 
-    test('Test H — Inbox scan repeated is idempotent and produces no duplicates', () async {
+    test(
+        'Test H — Inbox scan repeated is idempotent and produces no duplicates',
+        () async {
       final sms = NativeSmsMessage(
         address: 'AXISBK',
-        body: 'INR 450.00 debited from A/c no. XX9988 on 24-Aug-2026 17:00:00 at Dominos. Ref 556677.',
+        body:
+            'INR 450.00 debited from A/c no. XX9988 on 24-Aug-2026 17:00:00 at Dominos. Ref 556677.',
         dateMillis: DateTime(2026, 8, 24, 17, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -285,13 +309,18 @@ void main() {
       final count2 = await smsService.scanInbox();
       expect(count2, equals(0));
       txns = await db.query('transactions');
-      expect(txns.length, equals(1), reason: 'Repeated scanInbox must not duplicate canonical transactions');
+      expect(txns.length, equals(1),
+          reason:
+              'Repeated scanInbox must not duplicate canonical transactions');
     });
 
-    test('Test I — Delete/ignore followed by inbox scan does not resurrect deleted transactions', () async {
+    test(
+        'Test I — Delete/ignore followed by inbox scan does not resurrect deleted transactions',
+        () async {
       final sms = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 600.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Cinepolis. Ref 112244.',
+        body:
+            'Rs 600.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Cinepolis. Ref 112244.',
         dateMillis: DateTime(2026, 8, 24, 18, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -303,7 +332,8 @@ void main() {
       final obsId = obs.first['observationId'] as String;
 
       // 2. User deletes/rejects
-      await FinancialIngestionService().rejectObservation(observationId: obsId, reason: 'user_deleted');
+      await FinancialIngestionService()
+          .rejectObservation(observationId: obsId, reason: 'user_deleted');
       await db.delete('transactions', where: 'id = ?', whereArgs: [txn!.id]);
 
       var txns = await db.query('transactions');
@@ -315,28 +345,35 @@ void main() {
 
       // Assert transaction is NOT resurrected
       txns = await db.query('transactions');
-      expect(txns.isEmpty, isTrue, reason: 'Tombstone must prevent resurrection by inbox scan');
+      expect(txns.isEmpty, isTrue,
+          reason: 'Tombstone must prevent resurrection by inbox scan');
     });
 
-    test('Test J — Notification obs: deep link routes to PendingReviewScreen and preserves observationId', () {
+    test(
+        'Test J — Notification obs: deep link routes to PendingReviewScreen and preserves observationId',
+        () {
       const payload = 'obs:test_observation_abc_123';
       final widget = PETApp.screenForPayload(payload);
 
       expect(widget, isA<PendingReviewScreen>());
-      expect((widget as PendingReviewScreen).initialObservationId, equals('test_observation_abc_123'));
+      expect((widget as PendingReviewScreen).initialObservationId,
+          equals('test_observation_abc_123'));
     });
 
-    test('Test K — Legitimate transactions with same amount remain distinct', () async {
+    test('Test K — Legitimate transactions with same amount remain distinct',
+        () async {
       // Two distinct legitimate transactions with identical amounts at different times/merchants
       final sms1 = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 500.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Swiggy. Ref 101010.',
+        body:
+            'Rs 500.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Swiggy. Ref 101010.',
         dateMillis: DateTime(2026, 8, 24, 10, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
       final sms2 = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 500.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Uber. Ref 202020.',
+        body:
+            'Rs 500.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at Uber. Ref 202020.',
         dateMillis: DateTime(2026, 8, 24, 14, 0).millisecondsSinceEpoch,
         source: 'sms',
       );
@@ -345,14 +382,17 @@ void main() {
       await smsService.scanInbox();
 
       final txns = await db.query('transactions', orderBy: 'date ASC');
-      expect(txns.length, equals(2), reason: 'Two legitimate ₹500 transactions must not be collapsed');
+      expect(txns.length, equals(2),
+          reason: 'Two legitimate ₹500 transactions must not be collapsed');
       expect(txns[0]['amount'], equals(500.0));
       expect(txns[0]['merchantName'], equals('Swiggy'));
       expect(txns[1]['amount'], equals(500.0));
       expect(txns[1]['merchantName'], equals('Uber'));
     });
 
-    test('Test L — Cross-source identity produces 2 observations and exactly 1 canonical transaction', () async {
+    test(
+        'Test L — Cross-source identity produces 2 observations and exactly 1 canonical transaction',
+        () async {
       final notif = NativeSmsMessage(
         address: 'Google Pay',
         packageName: 'com.google.android.apps.nbu.paisa.user',
@@ -363,7 +403,8 @@ void main() {
       );
       final sms = NativeSmsMessage(
         address: 'HDFCBK',
-        body: 'Rs 1500.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at DMart. Ref UPI/445566778899.',
+        body:
+            'Rs 1500.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 at DMart. Ref UPI/445566778899.',
         dateMillis: DateTime(2026, 8, 24, 19, 0).millisecondsSinceEpoch,
         source: 'sms',
       );

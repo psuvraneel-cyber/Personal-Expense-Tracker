@@ -61,7 +61,8 @@ class RecurringPaymentRepository {
   Future<void> delete(String id) async {
     final db = await _dbHelper.database;
     await db.transaction((txn) async {
-      await txn.delete('recurring_payment_history', where: 'recurringPaymentId = ?', whereArgs: [id]);
+      await txn.delete('recurring_payment_history',
+          where: 'recurringPaymentId = ?', whereArgs: [id]);
       await txn.delete('recurring_payments', where: 'id = ?', whereArgs: [id]);
     });
   }
@@ -79,7 +80,8 @@ class RecurringPaymentRepository {
 
   // ── Payment History Operations ──────────────────────────────────────────────
 
-  Future<List<RecurringPaymentHistory>> getHistory(String recurringPaymentId) async {
+  Future<List<RecurringPaymentHistory>> getHistory(
+      String recurringPaymentId) async {
     final db = await _dbHelper.database;
     final maps = await db.query(
       'recurring_payment_history',
@@ -152,7 +154,8 @@ class RecurringPaymentRepository {
 
   /// Atomically merges newly detected recurring bills without modifying or duplicating
   /// user-confirmed or user-cancelled recurring bills, suppressing user-dismissed candidates.
-  Future<void> syncDetectedPayments(List<RecurringPayment> newlyDetected) async {
+  Future<void> syncDetectedPayments(
+      List<RecurringPayment> newlyDetected) async {
     final db = await _dbHelper.database;
     final dismissed = await getDismissedCandidates();
 
@@ -163,7 +166,9 @@ class RecurringPaymentRepository {
         columns: ['merchantName', 'status'],
       );
       final activeMerchants = existingMaps
-          .where((m) => m['status'] == RecurringStatus.confirmed.toJson() || m['status'] == RecurringStatus.cancelled.toJson())
+          .where((m) =>
+              m['status'] == RecurringStatus.confirmed.toJson() ||
+              m['status'] == RecurringStatus.cancelled.toJson())
           .map((m) => (m['merchantName'] as String).toLowerCase().trim())
           .toSet();
 
