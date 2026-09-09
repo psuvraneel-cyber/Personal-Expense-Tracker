@@ -103,9 +103,22 @@ void main() {
     test(
         'PET-06: Stale Supabase environment variables are removed from AppEnv and .env',
         () {
-      final envFile = File('.env').readAsStringSync();
-      expect(envFile.contains('SUPABASE_URL'), isFalse);
-      expect(envFile.contains('SUPABASE_ANON_KEY'), isFalse);
+      final appEnv = File('lib/config/app_env.dart').readAsStringSync();
+      expect(appEnv.contains('SUPABASE_URL'), isFalse);
+      expect(appEnv.contains('SUPABASE_ANON_KEY'), isFalse);
+      expect(appEnv.contains('supabaseUrl'), isFalse);
+      expect(appEnv.contains('supabaseAnonKey'), isFalse);
+
+      final envExample = File('.env.example').readAsStringSync();
+      expect(envExample.contains('SUPABASE_URL'), isFalse);
+      expect(envExample.contains('SUPABASE_ANON_KEY'), isFalse);
+
+      final envFile = File('.env');
+      if (envFile.existsSync()) {
+        final content = envFile.readAsStringSync();
+        expect(content.contains('SUPABASE_URL'), isFalse);
+        expect(content.contains('SUPABASE_ANON_KEY'), isFalse);
+      }
 
       final manifest =
           File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
