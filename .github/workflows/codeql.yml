@@ -35,7 +35,8 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.44.7'
+          # Keep in sync with ci.yml / the local toolchain.
+          flutter-version: '3.41.6'
           channel: 'stable'
           cache: true
 
@@ -45,6 +46,45 @@ jobs:
             echo "flutter.sdk=$FLUTTER_ROOT"
             echo "sdk.dir=$ANDROID_SDK_ROOT"
           } > android/local.properties
+
+      # Firebase client config is gitignored. Use the real files from secrets
+      # when available; otherwise compile against the template/placeholder
+      # (sufficient for static analysis).
+      - name: Create Firebase config files
+        env:
+          FIREBASE_OPTIONS_DART: ${{ secrets.FIREBASE_OPTIONS_DART }}
+          GOOGLE_SERVICES_SECRET: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$FIREBASE_OPTIONS_DART" ]; then
+            printf '%s' "$FIREBASE_OPTIONS_DART" > lib/firebase_options.dart
+          else
+            cp lib/firebase_options.example.dart lib/firebase_options.dart
+          fi
+          if [ -n "$GOOGLE_SERVICES_SECRET" ]; then
+            echo "$GOOGLE_SERVICES_SECRET" > android/app/google-services.json
+          else
+            cat > android/app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "pet-tracker",
+              "storage_bucket": "pet-tracker.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
+                  "android_client_info": { "package_name": "com.pet.tracker.pet" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "AIzaSyFakeKeyForCIBaseBuild123456789" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+          fi
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
