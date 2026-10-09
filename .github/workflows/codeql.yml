@@ -86,6 +86,26 @@ jobs:
           JSON
           fi
 
+      # Gradle otherwise downloads the NDK mid-build; that download has failed
+      # with a corrupt archive on hosted runners. Pre-install the exact
+      # version Flutter expects, with retries.
+      - name: Install Android NDK
+        run: |
+          NDK_VERSION=$(grep -oE 'val ndkVersion: String = "[0-9.]+"' \
+            "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt" \
+            | grep -oE '[0-9][0-9.]+')
+          echo "Flutter NDK: $NDK_VERSION"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          for attempt in 1 2 3; do
+            if yes | "$SDKMANAGER" --install "ndk;$NDK_VERSION" > /dev/null; then
+              exit 0
+            fi
+            echo "NDK install attempt $attempt failed; retrying..."
+            rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+            sleep 10
+          done
+          exit 1
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
