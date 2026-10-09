@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,8 +18,10 @@ class MockPathProviderPlatform extends PathProviderPlatform {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  // Keep track of shared file paths to verify them
+  // Keep track of shared file paths, and their bytes at the moment of sharing
+  // (the service deletes the temp file once the share sheet closes).
   final sharedFiles = <String>[];
+  final sharedBytes = <String, List<int>>{};
 
   setUpAll(() {
     PathProviderPlatform.instance = MockPathProviderPlatform();
@@ -35,6 +38,10 @@ void main() {
           if (paths != null) {
             for (final p in paths) {
               sharedFiles.add(p.toString());
+              final f = File(p.toString());
+              if (f.existsSync()) {
+                sharedBytes[p.toString()] = f.readAsBytesSync();
+              }
             }
           }
           return null;
@@ -54,6 +61,10 @@ void main() {
           if (paths != null) {
             for (final p in paths) {
               sharedFiles.add(p.toString());
+              final f = File(p.toString());
+              if (f.existsSync()) {
+                sharedBytes[p.toString()] = f.readAsBytesSync();
+              }
             }
           }
           return null;
@@ -65,6 +76,7 @@ void main() {
 
   setUp(() {
     sharedFiles.clear();
+    sharedBytes.clear();
   });
 
   group('ExportService Tests', () {
@@ -119,10 +131,11 @@ void main() {
         final filePath = sharedFiles.first;
         expect(filePath.endsWith('.csv'), isTrue);
 
-        final file = File(filePath);
-        expect(await file.exists(), isTrue);
+        // Shared, then removed from temp storage (audit P2-14).
+        expect(sharedBytes.containsKey(filePath), isTrue);
+        expect(await File(filePath).exists(), isFalse);
 
-        final csvContent = await file.readAsString();
+        final csvContent = utf8.decode(sharedBytes[filePath]!);
 
         // Verify known category ID exports display name
         expect(csvContent.contains('Food & Dining'), isTrue);
@@ -146,8 +159,7 @@ void main() {
           isTrue,
         );
 
-        // Cleanup
-        await file.delete();
+        // (No cleanup needed: the service already deleted the temp file.)
       },
     );
 
@@ -163,10 +175,10 @@ void main() {
         final filePath = sharedFiles.first;
         expect(filePath.endsWith('.pdf'), isTrue);
 
-        final file = File(filePath);
-        expect(await file.exists(), isTrue);
+        expect(sharedBytes.containsKey(filePath), isTrue);
+        expect(await File(filePath).exists(), isFalse);
 
-        final pdfBytes = await file.readAsBytes();
+        final pdfBytes = sharedBytes[filePath]!;
         // Basic PDF header magic number verification
         expect(pdfBytes.length, greaterThan(100));
         expect(
@@ -177,8 +189,7 @@ void main() {
           isTrue,
         ); // %PDF
 
-        // Cleanup
-        await file.delete();
+        // (No cleanup needed: the service already deleted the temp file.)
       },
     );
   });

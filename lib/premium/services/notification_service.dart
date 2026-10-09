@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:pet/premium/models/notification_category.dart';
 import 'package:pet/premium/services/notification_preferences_service.dart';
+import 'package:pet/services/notification_action_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 /// Wraps [FlutterLocalNotificationsPlugin] with:
@@ -280,21 +281,31 @@ class NotificationService {
 
     try {
       await _plugin.initialize(
-        initSettings,
+        settings: initSettings,
         onDidReceiveNotificationResponse:
             (NotificationResponse response) async {
           final payload = response.payload;
           final actionId = response.actionId;
-          if (actionId != null && actionId.isNotEmpty && payload != null) {
-            if (onActionReceived != null) {
+          if (actionId != null && actionId.isNotEmpty) {
+            // Confirm / Ignore are handled here; anything else (e.g. "edit")
+            // falls through to deep-linking.
+            final consumed = await handleTransactionNotificationAction(
+              actionId,
+              payload,
+            );
+            if (consumed) return;
+            if (onActionReceived != null && payload != null) {
               await onActionReceived!(actionId, payload);
-              return;
             }
           }
           if (payload != null && payload.isNotEmpty) {
             handleNotificationTap(payload);
           }
         },
+        // Action buttons without UI are delivered to a background isolate
+        // (requires ActionBroadcastReceiver in AndroidManifest.xml).
+        onDidReceiveBackgroundNotificationResponse:
+            notificationActionBackgroundHandler,
       );
 
       // Check cold start launch payload
@@ -458,7 +469,7 @@ class NotificationService {
       _pending.removeWhere((item) => item.id == id);
       _pendingScheduled.removeWhere((item) => item.id == id);
       if (!_isInitialized) return;
-      await _plugin.cancel(id);
+      await _plugin.cancel(id: id);
     } catch (e, st) {
       AppLogger.debug('[NotificationService] cancelNotification error: $e');
       _recordCrashlyticsError(e, st, reason: 'notification_cancel_failed');
@@ -609,11 +620,13 @@ class NotificationService {
 
     try {
       await _plugin.show(
-        id,
-        title,
-        body,
-        details,
-        payload: 'obs:$observationId',
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: details,
+        payload: isUncertain
+            ? '$kReviewPayloadPrefix$observationId'
+            : '$kImportedPayloadPrefix$observationId',
       );
     } catch (e, st) {
       AppLogger.debug(
@@ -677,7 +690,13 @@ class NotificationService {
           presentSound: true,
         ),
       );
-      await _plugin.show(id, title, body, details, payload: payload);
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: details,
+        payload: payload,
+      );
 
       if (isAlertCategory(category)) {
         await _trackAlertAndMaybePostSummary(
@@ -757,10 +776,10 @@ class NotificationService {
       );
 
       await _plugin.show(
-        alertsSummaryNotificationId,
-        summaryTitle,
-        summaryBody,
-        details,
+        id: alertsSummaryNotificationId,
+        title: summaryTitle,
+        body: summaryBody,
+        notificationDetails: details,
         payload: 'summary:alerts',
       );
     } catch (e, st) {
@@ -797,15 +816,13 @@ class NotificationService {
       );
 
       await _plugin.zonedSchedule(
-        id,
-        title,
-        body,
-        tz.TZDateTime.from(scheduledDate, tz.local),
-        details,
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
+        notificationDetails: details,
         payload: payload,
         androidScheduleMode: await _resolveScheduleMode(),
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
       );
     } catch (e, st) {
       AppLogger.debug('[NotificationService] schedule failed (id=$id): $e');

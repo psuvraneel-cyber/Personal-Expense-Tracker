@@ -30,10 +30,10 @@ import dev.fluttercommunity.workmanager.BackgroundWorker
  *   1. Reconstructs multi-part SMS PDU fragments per sender address.
  *   2. Pre-filters with [SmsReaderPlugin.isLikelyBankSms].
  *   3. If valid bank SMS:
- *      - Persists to [EncryptedNotificationCache] using AES-256 GCM encrypted storage.
- *      - Delivers to [SmsReaderPlugin.eventSink] if foreground session is active.
- *      - Enqueues an expedited OneTimeWorkRequest via WorkManager to trigger [smsCallbackDispatcher]
- *        in a background Dart isolate within seconds.
+ *      - Delivers to [SmsReaderPlugin.eventSink] if the app is running (the only
+ *        live delivery path — the plugin no longer registers a second receiver).
+ *      - Otherwise enqueues an expedited WorkManager inbox scan in a background
+ *        Dart isolate. The system SMS provider is the durable store.
  */
 class SmsBroadcastReceiver : BroadcastReceiver() {
 
@@ -70,7 +70,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
             messagesByAddress.getOrPut(address) { StringBuilder() }.append(bodyPart)
             if (!timestampByAddress.containsKey(address)) {
-                timestampByAddress[address] = smsMessage.timestampMillis
+                // Use the device receive time — the same clock the SMS provider
+                // stores in its `date` column, which inbox scans read. The
+                // SMSC `timestampMillis` can differ by hours on some networks,
+                // which would defeat cross-path deduplication.
+                timestampByAddress[address] = System.currentTimeMillis()
             }
         }
 
@@ -93,14 +97,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
                 SafeLog.d(TAG, "Static SMS_RECEIVED captured bank SMS from $address")
 
-                // 1. Persist to encrypted cache for safe non-volatile persistence
-                try {
-                    EncryptedNotificationCache.saveNotification(context, messageData)
-                } catch (e: Exception) {
-                    SafeLog.e(TAG, "Failed to cache incoming SMS: ${e.message}", e)
-                }
-
-                // 2. Deliver to live Flutter eventSink if active
+                // Single delivery path: live to Flutter when the app is running.
+                // The message is already persisted by the system SMS provider,
+                // so no extra cache copy is needed — if the app isn't running
+                // (or live delivery fails) the inbox scan below picks it up.
                 val sink = SmsReaderPlugin.eventSink
                 if (sink != null) {
                     Handler(Looper.getMainLooper()).post {
@@ -108,14 +108,15 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             sink.success(messageData)
                         } catch (e: Exception) {
                             SafeLog.e(TAG, "Failed to deliver SMS to live EventSink: ${e.message}")
+                            enqueueExpeditedSmsScan(context)
                         }
                     }
                 }
             }
         }
 
-        // 3. If any bank SMS was captured, enqueue expedited WorkManager one-off task
-        if (bankSmsCount > 0) {
+        // App not running: process via an expedited background inbox scan.
+        if (bankSmsCount > 0 && SmsReaderPlugin.eventSink == null) {
             enqueueExpeditedSmsScan(context)
         }
     }
@@ -137,7 +138,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
             WorkManager.getInstance(context).enqueueUniqueWork(
                 WORK_NAME_EXPEDITED_SCAN,
-                ExistingWorkPolicy.REPLACE,
+                ExistingWorkPolicy.APPEND_OR_REPLACE, // never cancel an in-flight import
                 workRequest
             )
             SafeLog.d(TAG, "Enqueued expedited WorkManager task ($WORK_NAME_EXPEDITED_SCAN)")

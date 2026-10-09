@@ -99,6 +99,7 @@ class LinkedAccountsScreen extends StatelessWidget {
                         title: Text(account.accountName),
                         subtitle: Text(account.accountType),
                         trailing: IconButton(
+                          tooltip: 'Disconnect',
                           icon: const Icon(Icons.link_off_rounded,
                               color: AppTheme.expenseRed),
                           onPressed: () =>

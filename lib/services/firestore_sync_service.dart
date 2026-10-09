@@ -29,6 +29,27 @@ import 'package:pet/services/firebase_auth_service.dart';
 ///                  users/{uid}/categories/{categoryId}
 ///                  users/{uid}/budgets/{budgetId}
 class FirestoreSyncService {
+  /// Every sub-collection the app (or Firestore rules) allows under
+  /// `users/{uid}`. Account deletion removes all of them — keep this list in
+  /// sync with `firestore.rules`.
+  static const List<String> userCollections = [
+    'transactions',
+    'budgets',
+    'categories',
+    'tombstones',
+    'saving_goals',
+    'recurring_payments',
+    'recurring_payment_history',
+    'recurring_rules',
+    'recurring_occurrences',
+    'alerts',
+    'family_members',
+    'linked_accounts',
+    'tax_categories',
+    'weekly_limits',
+    'ai_reports',
+  ];
+
   static final FirestoreSyncService _instance =
       FirestoreSyncService._internal();
 
@@ -220,7 +241,6 @@ class FirestoreSyncService {
 
     return query.snapshots().map(_docsToTransactions).handleError((Object e) {
       AppLogger.debug('[Firestore] transactionsStream error: $e');
-      return <TransactionRecord>[];
     });
   }
 
@@ -333,7 +353,6 @@ class FirestoreSyncService {
         )
         .handleError((Object e) {
       AppLogger.debug('[Firestore] categoriesStream error: $e');
-      return <cat_model.Category>[];
     });
   }
 
@@ -389,7 +408,6 @@ class FirestoreSyncService {
         )
         .handleError((Object e) {
       AppLogger.debug('[Firestore] budgetsStream error: $e');
-      return <Budget>[];
     });
   }
 
@@ -438,7 +456,9 @@ class FirestoreSyncService {
     try {
       await _tombstoneCollection.doc(transactionId).set({
         'id': transactionId,
-        'deletedAt': FieldValue.serverTimestamp(),
+        // Same clock as transaction `updatedAt` (see TransactionRecord).
+        'deletedAt': Timestamp.fromDate(DateTime.now()),
+        'serverDeletedAt': FieldValue.serverTimestamp(),
       });
     } on FirebaseException catch (e) {
       AppLogger.debug('[Firestore] createTombstone error: ${e.message}');
@@ -462,7 +482,6 @@ class FirestoreSyncService {
         .map((snap) => snap.docs.map((doc) => doc.data()).toList())
         .handleError((Object e) {
       AppLogger.debug('[Firestore] tombstonesStream error: $e');
-      return <Map<String, dynamic>>[];
     });
   }
 
@@ -507,7 +526,6 @@ class FirestoreSyncService {
           .toList();
     }).handleError((Object e) {
       AppLogger.debug('[Firestore] recurringRulesStream error: $e');
-      return <RecurringRule>[];
     });
   }
 
@@ -579,7 +597,6 @@ class FirestoreSyncService {
           .toList();
     }).handleError((Object e) {
       AppLogger.debug('[Firestore] recurringOccurrencesStream error: $e');
-      return <RecurringOccurrence>[];
     });
   }
 
@@ -621,7 +638,6 @@ class FirestoreSyncService {
           .toList();
     }).handleError((Object e) {
       AppLogger.debug('[Firestore] savingGoalsStream error: $e');
-      return <SavingGoal>[];
     });
   }
 
@@ -686,7 +702,6 @@ class FirestoreSyncService {
           .toList();
     }).handleError((Object e) {
       AppLogger.debug('[Firestore] recurringPaymentsStream error: $e');
-      return <RecurringPayment>[];
     });
   }
 
@@ -801,7 +816,6 @@ class FirestoreSyncService {
           .toList();
     }).handleError((Object e) {
       AppLogger.debug('[Firestore] alertsStream error: $e');
-      return <AppAlert>[];
     });
   }
 
@@ -879,7 +893,6 @@ class FirestoreSyncService {
         'weeklyLimitsStream error: $e',
         label: 'FirestoreSync',
       );
-      return <WeeklyLimit>[];
     });
   }
 

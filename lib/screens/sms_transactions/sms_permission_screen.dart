@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/config/app_links.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:pet/core/theme/app_theme.dart';
@@ -117,6 +118,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
       appBar: AppBar(
         title: const Text('Auto-Detect Transactions'),
         leading: IconButton(
+          tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
@@ -167,8 +169,8 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               const SizedBox(height: 12),
 
               Text(
-                'P.E.T can automatically detect your UPI payments by '
-                'reading bank SMS messages. Everything stays on your device.',
+                'P.E.T reads the SMS messages you receive to find bank and '
+                "UPI transaction alerts, so you don't have to type them in.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -183,17 +185,21 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               // Feature cards
               _FeatureCard(
                 icon: Icons.security_rounded,
-                title: '100% On-Device',
-                description: 'SMS data never leaves your phone. All parsing '
-                    'happens locally with zero network calls.',
+                title: 'Processed on your device',
+                description: 'Message text is analysed on this phone and never '
+                    'uploaded. Only the extracted amount, merchant, date and '
+                    'category are saved — and backed up to your account if '
+                    'you sign in with Google.',
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
               _FeatureCard(
                 icon: Icons.auto_awesome_rounded,
-                title: 'Smart Detection',
-                description: 'Supports HDFC, SBI, ICICI, Axis, and 15+ other '
-                    'Indian banks. Auto-categorizes spending.',
+                title: 'Personal messages ignored',
+                description:
+                    'Messages from personal phone numbers and messages '
+                    'without a payment amount are discarded immediately. '
+                    'Non-transaction messages are never stored.',
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
@@ -207,9 +213,11 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               const SizedBox(height: 12),
               _FeatureCard(
                 icon: Icons.filter_alt_rounded,
-                title: 'No Duplicates',
-                description: 'Each SMS is fingerprinted to prevent the same '
-                    'transaction from being recorded twice.',
+                title: 'Masked & auto-deleted',
+                description:
+                    'Account, card and phone numbers are masked. Stored '
+                    'message text is deleted after 90 days. Turn this off any '
+                    'time in Settings.',
                 isDark: isDark,
               ),
 
@@ -247,7 +255,8 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
                     _PermissionRow(
                       icon: Icons.mark_email_read_rounded,
                       label: 'READ_SMS',
-                      description: 'Read existing bank messages',
+                      description: 'Read received messages (last 90 days) '
+                          'to find past transactions',
                       isDark: isDark,
                     ),
                     const SizedBox(height: 8),
@@ -261,7 +270,12 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => AppLinks.open(context, AppLinks.privacyPolicy),
+                child: const Text('Read the Privacy Policy'),
+              ),
+              const SizedBox(height: 16),
 
               // Grant permission button
               SizedBox(

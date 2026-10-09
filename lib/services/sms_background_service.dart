@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/services/app_bootstrap.dart';
+import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/repositories/budget_repository.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/premium/models/notification_category.dart';
@@ -40,6 +42,10 @@ void smsCallbackDispatcher() {
   WidgetsFlutterBinding.ensureInitialized();
   Workmanager().executeTask((taskName, inputData) async {
     AppLogger.debug('[PET-BG] Background task started: $taskName');
+    // Each background isolate starts empty: set up time zones (bill
+    // reminders) and Firebase (sync ownership) like the UI isolate does.
+    await AppBootstrap.initTimeZones();
+    await AppBootstrap.initFirebase();
 
     if (taskName == kSmsInboxScanTask) {
       try {
@@ -114,6 +120,7 @@ void smsCallbackDispatcher() {
       }
     } else if (taskName == kAlertEvaluationTask) {
       try {
+        await DatabaseHelper().purgeExpiredSensitiveData();
         await NotificationService.initialize();
 
         final now = DateTime.now();

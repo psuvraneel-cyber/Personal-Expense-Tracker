@@ -92,6 +92,36 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
 
+      // Bill payment history (recurring payments ledger)
+      match /recurring_payment_history/{historyId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.amount is number
+          && request.resource.data.amount >= 0;
+      }
+
+      // Weekly planner limits
+      match /weekly_limits/{limitId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.weeklyLimit is number
+          && request.resource.data.weeklyLimit >= 0;
+      }
+
+      // User reports about AI Copilot replies (Play AI-Generated Content policy).
+      // Write-once; the user can read/delete their own reports.
+      match /ai_reports/{reportId} {
+        allow read, delete: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['reply', 'prompt', 'reason', 'createdAt'])
+          && request.resource.data.reply is string
+          && request.resource.data.reply.size() <= 5000
+          && request.resource.data.prompt is string
+          && request.resource.data.prompt.size() <= 2000
+          && request.resource.data.reason is string
+          && request.resource.data.reason.size() <= 100;
+      }
+
       // Allow deletion and read of any other legacy or auxiliary document within the user's subtree
       // (ensures account deletion can cleanly wipe all orphaned subcollections)
       match /{document=**} {

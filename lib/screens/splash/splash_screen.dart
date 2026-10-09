@@ -15,7 +15,7 @@ import 'package:pet/utils/retry_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
-import 'package:pet/data/database/database_helper.dart';
+import 'package:pet/services/local_data_wiper.dart';
 import 'package:pet/premium/services/premium_entitlement_service.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -79,7 +79,7 @@ class _SplashScreenState extends State<SplashScreen>
     _particles = List.generate(20, (_) => _Particle.random(rng));
 
     // ── Auth Gate ──
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((
+    _authSubscription = FirebaseAuthService().authStateChanges().listen((
       user,
     ) async {
       final isLoggedIn = FirebaseAuthService().isLoggedIn;
@@ -232,39 +232,7 @@ class _SplashScreenState extends State<SplashScreen>
   // ── Navigation (unchanged) ─────────────────────────────────────────────
 
   Future<void> _clearLocalDataOnStartup() async {
-    final dbHelper = DatabaseHelper();
-    final db = await dbHelper.database;
-    const tablesToClear = [
-      'user_feedback',
-      'unknown_format_logs',
-      'classification_rules',
-      'sms_transactions',
-      'sms_processing_state',
-      'tax_categories',
-      'linked_accounts',
-      'family_members',
-      'alerts',
-      'recurring_payments',
-      'saving_goals',
-      'transactions',
-      'budgets',
-      'categories',
-      'ce',
-    ];
-    await db.transaction((txn) async {
-      try {
-        await txn.delete('transaction_sync_queue');
-      } catch (_) {}
-      for (final table in tablesToClear) {
-        try {
-          await txn.delete(table);
-        } catch (_) {}
-      }
-    });
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-
+    await LocalDataWiper.wipe();
     try {
       await PremiumEntitlementService.logOut();
     } catch (_) {}
@@ -275,9 +243,12 @@ class _SplashScreenState extends State<SplashScreen>
     _hasNavigated = true;
 
     if (!showDeletionImmediately) {
-      try {
-        final txnProvider = context.read<TransactionProvider>();
-        await retryWithBackoff(
+      // Offline-first: open the app on local data immediately and pull cloud
+      // changes in the background (the sync chip shows progress). Blocking
+      // here kept users on the splash for up to ~90 s on poor networks.
+      final txnProvider = context.read<TransactionProvider>();
+      unawaited(
+        retryWithBackoff(
           () => txnProvider.syncFromFirestore().timeout(
             const Duration(seconds: 30),
             onTimeout: () {
@@ -288,12 +259,10 @@ class _SplashScreenState extends State<SplashScreen>
           onRetry: (attempt, error) => AppLogger.debug(
             '[Sync] Attempt $attempt failed: $error — retrying…',
           ),
-        );
-      } catch (e) {
-        AppLogger.debug(
-          '[Sync] All sync attempts failed, proceeding with local data: $e',
-        );
-      }
+        ).catchError((Object e) {
+          AppLogger.debug('[Sync] Background sync failed: $e');
+        }),
+      );
     }
 
     if (!mounted) return;

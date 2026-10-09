@@ -89,3 +89,30 @@ node_modules
 # Stray audit/report exports (should never be committed)
 PET_Technical_Audit_Report.*
 *audit_report*.md
+# ── Local-only: AI-workflow tooling, internal audits and stray outputs ──────
+# (untracked from the public repo; files remain on the developer machine)
+analyze*.txt
+analyze*.json
+plan_extracted.txt
+pet-codex-audit-prompt.md
+desktop.ini
+/package.json
+/package-lock.json
+GSD-STYLE.md
+PROJECT_RULES.md
+model_capabilities.yaml
+gsd-template
+.agent/
+.gsd/
+.gemini/
+adapters/
+docs/PRODUCTION_LAUNCH_AUDIT_REPORT.md
+docs/play-store-audit.html
+docs/model-selection-playbook.md
+docs/token-optimization-guide.md
+scripts/validate-*
+flutter_*.log
+repomix-output.txt
+
+# Gradle build output
+/android/build/

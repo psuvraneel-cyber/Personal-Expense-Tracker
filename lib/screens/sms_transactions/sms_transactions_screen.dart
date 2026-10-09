@@ -63,6 +63,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
         backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
         title: const Text('Transaction History'),
         leading: IconButton(
+          tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
@@ -1039,6 +1040,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
         : DateFormat('dd MMM yyyy, hh:mm a').format(txn.timestamp);
 
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1269,6 +1271,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
     ];
 
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       backgroundColor: Theme.of(context).brightness == Brightness.dark
           ? AppTheme.surfaceDark

@@ -24,10 +24,10 @@
 # Local Auth (biometric)
 -keep class androidx.biometric.** { *; }
 
-# SQLCipher (database encryption)
--keep class net.sqlcipher.** { *; }
--keep class net.sqlcipher.database.** { *; }
--dontwarn net.sqlcipher.**
+# SQLCipher (database encryption). sqflite_sqlcipher 3.x uses
+# net.zetetic:sqlcipher-android, whose classes are reached from JNI.
+-keep class net.zetetic.database.** { *; }
+-dontwarn net.zetetic.database.**
 
 # Keep custom Application class
 -keep class com.pet.tracker.pet.** { *; }

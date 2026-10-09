@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/config/app_links.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -155,6 +156,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                     backgroundColor: Colors.transparent,
                     elevation: 0,
                     leading: IconButton(
+                      tooltip: 'Close',
                       icon: Icon(
                         Icons.close_rounded,
                         color: isDark ? Colors.white70 : Colors.black87,
@@ -233,7 +235,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                             .slideY(begin: 0.2, end: 0),
                         const SizedBox(height: 8),
                         Text(
-                          'Gain access to elite wealth tracking features and AI-driven insights.',
+                          'Unlock AI insights, tax tracking, cash-flow forecasts and Focus Mode.',
                           style: TextStyle(
                             fontSize: 15,
                             color: isDark ? Colors.white70 : Colors.black54,
@@ -247,7 +249,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                           icon: Icons.auto_awesome_rounded,
                           title: 'AI Financial Copilot',
                           subtitle:
-                              'Custom advice & automated budget adjustments.',
+                              'Ask questions about your spending in plain English.',
                           color: const Color(0xFFEC4899),
                           isDark: isDark,
                         )
@@ -282,7 +284,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                         _buildFeatureRow(
                           icon: Icons.timer_rounded,
                           title: 'Spending Focus Mode',
-                          subtitle: 'Temporarily pause impulse transactions.',
+                          subtitle:
+                              'Get warned before spending in paused categories.',
                           color: const Color(0xFFF59E0B),
                           isDark: isDark,
                         )
@@ -357,7 +360,12 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                   left: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsets.all(24.0),
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      24,
+                      24,
+                      24 + MediaQuery.of(context).viewPadding.bottom,
+                    ),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
@@ -412,12 +420,38 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'Secured with Google Play billing. Cancel anytime.',
+                          'Payment is charged to your Google Play account. '
+                          'Subscriptions renew automatically at the price and '
+                          'period shown unless cancelled at least 24 hours '
+                          'before renewal in Google Play → Subscriptions.',
                           style: TextStyle(
                             fontSize: 11,
                             color: AppTheme.textTertiary,
                           ),
                           textAlign: TextAlign.center,
+                        ),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () =>
+                                  AppLinks.open(context, AppLinks.terms),
+                              child: const Text('Terms',
+                                  style: TextStyle(fontSize: 12)),
+                            ),
+                            TextButton(
+                              onPressed: () => AppLinks.open(
+                                  context, AppLinks.privacyPolicy),
+                              child: const Text('Privacy Policy',
+                                  style: TextStyle(fontSize: 12)),
+                            ),
+                            TextButton(
+                              onPressed: () => AppLinks.open(
+                                  context, AppLinks.manageSubscriptions),
+                              child: const Text('Manage subscription',
+                                  style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -479,15 +513,28 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   Widget _buildPackageItem(Package package, bool isSelected, bool isDark) {
     // Generate helpful duration markers for titles
     String durationTag = 'Subscription';
+    String periodSuffix = '';
     bool isYearly = false;
 
     if (package.packageType == PackageType.lifetime) {
       durationTag = 'Lifetime Access';
+      periodSuffix = ' once';
     } else if (package.packageType == PackageType.annual) {
       durationTag = 'Yearly Plan';
+      periodSuffix = ' / year';
       isYearly = true;
+    } else if (package.packageType == PackageType.sixMonth) {
+      durationTag = '6-Month Plan';
+      periodSuffix = ' / 6 months';
+    } else if (package.packageType == PackageType.threeMonth) {
+      durationTag = '3-Month Plan';
+      periodSuffix = ' / 3 months';
     } else if (package.packageType == PackageType.monthly) {
       durationTag = 'Monthly Plan';
+      periodSuffix = ' / month';
+    } else if (package.packageType == PackageType.weekly) {
+      durationTag = 'Weekly Plan';
+      periodSuffix = ' / week';
     }
 
     return GestureDetector(
@@ -588,7 +635,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                   Text(
                     package.packageType == PackageType.lifetime
                         ? 'Pay once, unlock forever'
-                        : 'Cancel anytime. Auto-renews.',
+                        : 'Auto-renews each billing period. Cancel anytime.',
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? Colors.white60 : Colors.black54,
@@ -598,7 +645,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
               ),
             ),
             Text(
-              package.storeProduct.priceString,
+              '${package.storeProduct.priceString}$periodSuffix',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,

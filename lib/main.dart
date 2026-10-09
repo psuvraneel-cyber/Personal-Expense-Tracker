@@ -1,7 +1,7 @@
 import 'package:pet/core/utils/app_logger.dart';
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kReleaseMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,12 +14,12 @@ import 'package:pet/providers/recurring_transaction_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'dart:ui' show PlatformDispatcher;
 import 'package:pet/data/database/database_helper.dart';
-import 'package:pet/firebase_options.example.dart';
 import 'package:pet/screens/splash/splash_screen.dart';
+import 'package:pet/screens/splash/database_recovery_screen.dart';
+import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/premium/providers/premium_provider.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';
 import 'package:pet/premium/providers/goal_provider.dart';
@@ -34,18 +34,20 @@ import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
+import 'package:pet/services/local_data_wiper.dart';
 import 'package:pet/providers/dashboard_config_provider.dart';
 import 'package:pet/services/haptic_service.dart';
 import 'package:pet/services/biometric_service.dart';
 import 'package:pet/screens/biometric/biometric_lock_screen.dart';
 import 'package:pet/screens/budget/budget_screen.dart';
 import 'package:pet/screens/sms_transactions/pending_review_screen.dart';
+import 'package:pet/screens/transactions/transaction_edit_loader.dart';
 import 'package:pet/premium/screens/alerts_screen.dart';
 import 'package:pet/premium/screens/recurring_bills_screen.dart';
 import 'package:pet/premium/screens/goals_screen.dart';
 import 'package:pet/premium/screens/cashflow_screen.dart';
 
-import 'package:timezone/data/latest.dart' as tz;
+import 'package:pet/services/app_bootstrap.dart';
 
 void main() async {
   // Global Privacy & Security Guard:
@@ -57,27 +59,32 @@ void main() async {
   }
 
   WidgetsFlutterBinding.ensureInitialized();
-  tz.initializeTimeZones();
+  await AppBootstrap.initTimeZones();
 
   // Prevent Google Fonts from downloading at runtime — use bundled fonts only
   GoogleFonts.config.allowRuntimeFetching = false;
 
   // Theme mode is loaded from SharedPreferences below
 
-  try {
-    // Initialize Firebase
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+  // Initialize Firebase (idempotent: main() is re-run by the recovery screen)
+  if (await AppBootstrap.initFirebase()) {
+    await AppBootstrap.activateAppCheck();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+        prefs.getBool(kCrashReportsPrefKey) ?? true,
+      );
+    } catch (_) {}
+    // Framework errors that reach here are real crashes of the UI.
     FlutterError.onError = (errorDetails) {
       FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
     };
+    // Uncaught async errors usually don't terminate the app — record them as
+    // non-fatal so real crashes stay visible in Crashlytics.
     PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: false);
       return true;
     };
-  } catch (e) {
-    AppLogger.debug('Firebase init failed: $e');
   }
 
   // Silently restore Google + Firebase session on cold start (Android/iOS).
@@ -104,8 +111,18 @@ void main() async {
         '[MAIN] ⚠️ Database corruption detected — cloud data preserved in Firestore',
       );
     }
-  } catch (e) {
-    AppLogger.debug('Database init failed: $e');
+    // Enforce message-text retention limits (privacy policy commitments).
+    await DatabaseHelper().purgeExpiredSensitiveData();
+  } catch (e, st) {
+    // Never continue with an unusable database (key lost, failed migration,
+    // corruption): every screen would silently fail. Offer recovery instead.
+    AppLogger.error('Database could not be opened', error: e, stack: st);
+    _recordNonFatal(e, st, 'database_open_failed');
+    runApp(DatabaseRecoveryApp(
+      keyProblem: e is DatabaseKeyUnavailableException,
+      onRestart: () async => main(),
+    ));
+    return;
   }
 
   try {
@@ -142,6 +159,17 @@ void main() async {
   runApp(PETApp(themeMode: themeMode));
 }
 
+void _recordNonFatal(Object error, StackTrace stack, String reason) {
+  try {
+    FirebaseCrashlytics.instance.recordError(
+      error,
+      stack,
+      reason: reason,
+      fatal: false,
+    );
+  } catch (_) {}
+}
+
 class PETApp extends StatefulWidget {
   final ThemeMode themeMode;
 
@@ -156,6 +184,8 @@ class PETApp extends StatefulWidget {
     switch (type) {
       case 'obs':
         return PendingReviewScreen(initialObservationId: observationId);
+      case 'txn':
+        return TransactionEditLoader(observationId: observationId ?? '');
       case 'bill':
         return const RecurringBillsScreen();
       case 'budget':
@@ -198,7 +228,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
     _lastUid = FirebaseAuthService().currentUserId;
 
     // Centralized auth-state listener — drives data reload / clear.
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
+    _authSubscription = FirebaseAuthService().authStateChanges().listen(
           _onAuthStateChanged,
         );
 
@@ -307,15 +337,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       taxProv.clearData();
       dashProv.clearData();
 
-      if (!kIsWeb) {
-        await DatabaseHelper().wipeAllUserData().catchError((e) {
-          AppLogger.error(
-              'Database wipeAllUserData failed in auth state change',
-              error: e);
-        });
-      }
-
-      await NotificationService.cancelAllNotifications();
+      await LocalDataWiper.wipe();
     } else if (currentUserId != null && currentUserId != _lastUid) {
       AppLogger.debug(
         '[MAIN] New user signed in ($currentUserId) — reloading data',
@@ -359,17 +381,24 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
     }
     if (state == AppLifecycleState.resumed) {
       NotificationService.permissionStatus();
-      try {
-        _navigatorKey.currentContext
-            ?.read<TransactionProvider>()
-            .triggerSyncQueue();
-      } catch (e) {
-        AppLogger.debug('[MAIN] Failed to trigger sync queue on resume: $e');
-      }
-      try {} catch (e) {
-        AppLogger.debug(
-          '[MAIN] Failed to trigger SMS reconciliation on resume: $e',
-        );
+      final ctx = _navigatorKey.currentContext;
+      if (ctx != null) {
+        // Picks up transactions imported by background workers while the
+        // app was closed, then flushes the cloud-sync queue.
+        try {
+          ctx.read<TransactionProvider>().reloadFromLocal();
+        } catch (e) {
+          AppLogger.debug('[MAIN] Failed to reload ledger on resume: $e');
+        }
+        try {
+          final sms = ctx.read<SmsTransactionProvider>();
+          sms.refreshNotificationAccess();
+          sms.runReconciliation();
+        } catch (e) {
+          AppLogger.debug(
+            '[MAIN] Failed to trigger SMS reconciliation on resume: $e',
+          );
+        }
       }
     }
 
@@ -386,6 +415,10 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       }
     }
   }
+
+  /// System Back while locked must not pop routes hidden under the lock.
+  @override
+  Future<bool> didPopRoute() async => _showBiometricLock;
 
   void _onBiometricUnlocked() {
     BiometricService.instance.markActive();
@@ -411,7 +444,10 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
           create: (_) => CategoryProvider()..loadCategories(),
         ),
         ChangeNotifierProvider(
-          create: (_) => TransactionProvider()..loadTransactions(),
+          create: (ctx) => TransactionProvider()
+            ..categoryNameLookup =
+                ((id) => ctx.read<CategoryProvider>().getCategoryById(id)?.name)
+            ..loadTransactions(),
         ),
         ChangeNotifierProvider(
           create: (_) => RecurringTransactionProvider()..loadRules(),
@@ -481,9 +517,18 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
             navigatorKey: _navigatorKey,
             builder: (context, child) {
               // Biometric lock overlay sits above all navigation
+              // While locked, the app underneath is removed from the
+              // accessibility tree (TalkBack can't read balances) and can't
+              // receive touches.
               return Stack(
                 children: [
-                  child ?? const SizedBox.shrink(),
+                  ExcludeSemantics(
+                    excluding: _showBiometricLock,
+                    child: AbsorbPointer(
+                      absorbing: _showBiometricLock,
+                      child: child ?? const SizedBox.shrink(),
+                    ),
+                  ),
                   if (_showBiometricLock)
                     BiometricLockScreen(onUnlocked: _onBiometricUnlocked),
                 ],

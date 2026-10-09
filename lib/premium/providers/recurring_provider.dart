@@ -504,7 +504,9 @@ class RecurringProvider extends ChangeNotifier {
     if (identical(_lastSmsForRecurring, sms)) return;
     _lastSmsForRecurring = sms;
     _isLoading = true;
-    notifyListeners();
+    // Called from ChangeNotifierProxyProvider.update (i.e. during a build):
+    // defer the notification to avoid "markNeedsBuild called during build".
+    Future.microtask(notifyListeners);
 
     final detected = RecurringDetectionService.detect(sms);
     await _repository.syncDetectedPayments(detected);

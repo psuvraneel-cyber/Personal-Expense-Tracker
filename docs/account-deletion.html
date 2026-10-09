@@ -140,15 +140,15 @@
         <p>If you have the P.E.T. app installed on your device, you can delete your data immediately without waiting for support processing:</p>
         <ul>
             <li>Open <strong>P.E.T.</strong> on your Android device.</li>
-            <li>Navigate to <strong>Settings &gt; Account Settings &gt; Delete Account</strong>.</li>
-            <li>Confirm deletion using your biometric or device credentials.</li>
-            <li>All local SQLite encrypted databases, Firebase Cloud Firestore documents, and Authentication records are erased instantly.</li>
+            <li>Go to <strong>Settings &gt; Danger Zone &gt; Delete Account</strong>.</li>
+            <li>Google accounts: confirm by signing in with Google again. Guest users: confirm directly.</li>
+            <li>Your cloud data, your sign-in account and all P.E.T data on the device are erased immediately.</li>
         </ul>
 
         <h2>2. Web-Based Deletion Request</h2>
-        <p>If you no longer have access to the app, submit the form below or email <a href="mailto:psuvraneel@gmail.com?subject=PET%20Account%20Deletion%20Request">psuvraneel@gmail.com</a> with your registered Google / Firebase account email address. Requests are processed within 48 hours.</p>
+        <p>If you no longer have access to the app, submit the form below or email <a href="mailto:psuvraneel@gmail.com?subject=PET%20Account%20Deletion%20Request">psuvraneel@gmail.com</a> from the Google account you used with P.E.T. We complete requests within 30 days (usually within 48 hours) and confirm by email.</p>
 
-        <form action="mailto:psuvraneel@gmail.com" method="post" enctype="text/plain">
+        <form id="deletion-form" novalidate>
             <div class="form-group">
                 <label for="email">Registered Email Address *</label>
                 <input type="email" id="email" name="Email" required placeholder="your.email@example.com">
@@ -157,15 +157,52 @@
                 <label for="reason">Reason for deletion (Optional)</label>
                 <textarea id="reason" name="Reason" rows="3" placeholder="Let us know if you encountered any issues..."></textarea>
             </div>
-            <button type="submit" class="btn">Submit Deletion Request</button>
+            <!-- Honeypot: humans leave this empty -->
+            <input type="text" name="website" id="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+            <button type="submit" class="btn" id="submit-btn">Submit Deletion Request</button>
+            <p id="form-status" role="status" aria-live="polite"></p>
         </form>
+        <script>
+          (function () {
+            var form = document.getElementById('deletion-form');
+            var status = document.getElementById('form-status');
+            var btn = document.getElementById('submit-btn');
+            var endpoint = 'https://pet-ai-copilot.pet-app.workers.dev/deletion-request';
+            form.addEventListener('submit', function (e) {
+              e.preventDefault();
+              var email = document.getElementById('email').value.trim();
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                status.textContent = 'Please enter a valid email address.';
+                return;
+              }
+              btn.disabled = true;
+              status.textContent = 'Sending…';
+              fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: email,
+                  reason: document.getElementById('reason').value.slice(0, 1000),
+                  website: document.getElementById('website').value
+                })
+              }).then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                status.textContent = 'Request received. We will confirm by email once your data is deleted.';
+                form.reset();
+              }).catch(function () {
+                status.innerHTML = 'Could not submit the form. Please email <a href="mailto:psuvraneel@gmail.com?subject=PET%20Account%20Deletion%20Request">psuvraneel@gmail.com</a> instead.';
+              }).finally(function () { btn.disabled = false; });
+            });
+          })();
+        </script>
 
         <h2>3. What Data Is Permanently Erased</h2>
         <ul>
             <li><strong>Firebase Authentication Record:</strong> Email, User UID, and OAuth provider tokens.</li>
-            <li><strong>Cloud Firestore Collections:</strong> All synchronized transactions, budgets, custom categories, saving goals, recurring rules, alerts, and tombstones.</li>
+            <li><strong>Cloud Firestore Collections:</strong> All synchronized transactions, budgets, custom categories, saving goals, recurring rules and bills, bill payment history, weekly limits, alerts, AI response reports, and tombstones.</li>
             <li><strong>Subscription Entitlements:</strong> RevenueCat subscriber record dissociation.</li>
-            <li><strong>Local Application Storage:</strong> SQLCipher 256-bit encrypted database and SharedPreferences cache upon next app launch / local wipe.</li>
+            <li><strong>Local Application Storage (in-app deletion):</strong> every table in the SQLCipher 256-bit encrypted database, cached SMS/notification data, scheduled notifications and app preferences.</li>
+            <li><strong>Retention:</strong> nothing is kept after deletion, except records we are legally required to keep (Google Play keeps its own purchase records).</li>
         </ul>
 
         <div class="highlight-box">
@@ -174,7 +211,7 @@
         </div>
 
         <div class="footer">
-            <p>P.E.T. (Personal Expense Tracker) • <a href="https://github.com/psuvraneel-cyber/Personal-Expense-Tracker/blob/main/PRIVACY_POLICY.md">Privacy Policy</a> • Contact: <a href="mailto:psuvraneel@gmail.com">psuvraneel@gmail.com</a></p>
+            <p>P.E.T. (Personal Expense Tracker) • <a href="privacy-policy.html">Privacy Policy</a> • Contact: <a href="mailto:psuvraneel@gmail.com">psuvraneel@gmail.com</a></p>
         </div>
     </div>
 </body>

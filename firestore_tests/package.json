@@ -1,0 +1,16 @@
+{
+  "name": "pet-firestore-rules-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "cd .. && npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-pet \"node --test firestore_tests/rules.test.js\"",
+    "test:java17": "cd .. && npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-pet \"node --test firestore_tests/rules.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6"
+  }
+}

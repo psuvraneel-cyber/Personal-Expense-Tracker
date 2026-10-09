@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  # Keep in sync with the local toolchain (`flutter --version`).
+  FLUTTER_VERSION: '3.41.6'
+
 jobs:
   analyze:
     name: Analyze & Test
@@ -17,43 +21,73 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.2'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
           cache: true
 
+      # lib/firebase_options.dart is gitignored. Restore it from a secret when
+      # available; otherwise use the template so the code still compiles.
+      - name: Create firebase_options.dart
+        env:
+          FIREBASE_OPTIONS_DART: ${{ secrets.FIREBASE_OPTIONS_DART }}
+        run: |
+          if [ -n "$FIREBASE_OPTIONS_DART" ]; then
+            printf '%s' "$FIREBASE_OPTIONS_DART" > lib/firebase_options.dart
+          else
+            cp lib/firebase_options.example.dart lib/firebase_options.dart
+          fi
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Check formatting
-        run: dart format --set-exit-if-changed .
+        run: dart format --set-exit-if-changed lib test
 
       - name: Analyze code
         run: flutter analyze --no-fatal-infos
 
       - name: Run unit tests
         run: flutter test --coverage
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GROQ_MODEL: llama-3.3-70b-versatile
+
+  backend-tests:
+    name: Firestore rules & AI Worker tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cloudflare Worker tests
+        working-directory: cloudflare_worker
+        run: npm test
+
+      - name: Firestore security rules tests (emulator)
+        working-directory: firestore_tests
+        run: |
+          npm ci || npm install
+          npm test
 
   build-android:
-    name: Build APK
+    name: Build Android (CI smoke build — never upload to Play)
     needs: analyze
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: false
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.2'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
           cache: true
 
@@ -63,28 +97,40 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Create firebase_options.dart
+        env:
+          FIREBASE_OPTIONS_DART: ${{ secrets.FIREBASE_OPTIONS_DART }}
+        run: |
+          if [ -n "$FIREBASE_OPTIONS_DART" ]; then
+            printf '%s' "$FIREBASE_OPTIONS_DART" > lib/firebase_options.dart
+          else
+            cp lib/firebase_options.example.dart lib/firebase_options.dart
+          fi
+
       - name: Install dependencies
         run: flutter pub get
 
+      # Only public client-side defines belong here. Server secrets (Groq,
+      # RevenueCat secret key) live exclusively in the Cloudflare Worker.
       - name: Create .env.ci
+        env:
+          RC_ANDROID_KEY: ${{ secrets.REVENUECAT_ANDROID_API_KEY }}
         run: |
           cat <<EOF > .env.ci
-          SUPABASE_URL=${{ secrets.SUPABASE_URL || 'https://placeholder.supabase.co' }}
-          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY || 'placeholder_anon_key' }}
-          GROQ_API_KEY=${{ secrets.GROQ_API_KEY || 'placeholder_groq_key' }}
           GROQ_MODEL=llama-3.3-70b-versatile
+          REVENUECAT_ANDROID_API_KEY=${RC_ANDROID_KEY:-goog_ci_placeholder}
           EOF
 
+      # Throwaway keystore: CI artifacts are for smoke testing only.
       - name: Setup Signing Keystore for CI
         run: |
           keytool -genkey -v -keystore android/app/ci.keystore -alias cikey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=CI, OU=CI, O=CI, L=City, S=State, C=US"
-          cat <<EOF > android/key.properties
+          cat <<EOF > android/app/key.properties
           storeFile=ci.keystore
           storePassword=android
           keyAlias=cikey
           keyPassword=android
           EOF
-          cp android/key.properties android/app/key.properties
 
       - name: Create google-services.json
         env:
@@ -126,13 +172,32 @@ jobs:
           EOF
           fi
 
-      - name: Build release APK
+      # Gradle otherwise downloads the NDK mid-build; that download has failed
+      # with a corrupt archive on hosted runners. Pre-install the exact
+      # version Flutter expects, with retries.
+      - name: Install Android NDK
         run: |
-          flutter build apk --release --no-tree-shake-icons --dart-define-from-file=.env.ci
+          NDK_VERSION=$(grep -oE 'val ndkVersion: String = "[0-9.]+"' \
+            "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt" \
+            | grep -oE '[0-9][0-9.]+')
+          echo "Flutter NDK: $NDK_VERSION"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          for attempt in 1 2 3; do
+            if yes | "$SDKMANAGER" --install "ndk;$NDK_VERSION" > /dev/null; then
+              exit 0
+            fi
+            echo "NDK install attempt $attempt failed; retrying..."
+            rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+            sleep 10
+          done
+          exit 1
 
-      - name: Upload APK artifact
+      - name: Build release App Bundle
+        run: flutter build appbundle --release --dart-define-from-file=.env.ci
+
+      - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
+          name: ci-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 14

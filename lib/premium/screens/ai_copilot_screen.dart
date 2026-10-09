@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:pet/config/app_env.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pet/config/app_links.dart';
 import 'package:intl/intl.dart';
 
 import 'package:pet/premium/widgets/premium_gate.dart';
@@ -366,6 +368,38 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
 
   Widget _buildMessage(BuildContext context, CopilotMessage msg, bool isDark) {
     final isUser = msg.role == 'user';
+    final bubble = _buildMessageBubble(context, msg, isDark);
+    if (isUser) return bubble;
+    return GestureDetector(
+      onLongPress: () => _reportMessage(msg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          bubble,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: TextButton.icon(
+              onPressed: () => _reportMessage(msg),
+              icon: const Icon(Icons.flag_outlined, size: 14),
+              label: const Text('Report', style: TextStyle(fontSize: 11)),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.textTertiary,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(
+    BuildContext context,
+    CopilotMessage msg,
+    bool isDark,
+  ) {
+    final isUser = msg.role == 'user';
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -490,6 +524,7 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
+                    tooltip: 'Send',
                     onPressed: _isSending ? null : _send,
                     icon: const Icon(Icons.send_rounded, color: Colors.white),
                   ),
@@ -498,7 +533,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'AI Copilot can make mistakes. Consider verifying important information.',
+              'AI can make mistakes and is not financial advice. '
+              'Long-press an answer to report it.',
               style: TextStyle(fontSize: 10, color: AppTheme.textTertiary),
               textAlign: TextAlign.center,
             ),
@@ -520,12 +556,105 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
     });
   }
 
+  static const _consentKey = 'ai_copilot_consent_v1';
+
+  /// First-use disclosure: chat content and a spending summary leave the
+  /// device and are processed by a third-party AI provider.
+  Future<bool> _ensureConsent() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_consentKey) == true) return true;
+    if (!mounted) return false;
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Before you chat'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'To answer, P.E.T sends your question, this chat, and a summary '
+            "of your finances (this month's totals, top categories, budgets, "
+            'up to 10 recent transactions, goals and forecast) to our server, '
+            'which forwards it to our AI provider, Groq.\n\n'
+            "Chats are not stored by P.E.T. Please don't share account "
+            'numbers or other personal details.\n\n'
+            'AI answers can be wrong and are not financial advice. You can '
+            'long-press any answer to report it.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => AppLinks.open(ctx, AppLinks.privacyPolicy),
+            child: const Text('Privacy Policy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('I agree'),
+          ),
+        ],
+      ),
+    );
+    if (agreed == true) {
+      await prefs.setBool(_consentKey, true);
+      return true;
+    }
+    return false;
+  }
+
+  /// Lets the user flag an AI reply (Google Play AI-Generated Content policy).
+  Future<void> _reportMessage(CopilotMessage msg) async {
+    final index = _messages.indexOf(msg);
+    final prompt = index > 0 ? _messages[index - 1].content : '';
+    const reasons = [
+      'Offensive or harmful',
+      'Inaccurate or misleading',
+      'Inappropriate financial advice',
+      'Other',
+    ];
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Report this response'),
+        children: [
+          for (final r in reasons)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, r),
+              child: Text(r),
+            ),
+        ],
+      ),
+    );
+    if (reason == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await AiCopilotService.reportResponse(
+        reply: msg.content,
+        prompt: prompt,
+        reason: reason,
+      );
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Thanks — your report was sent.')),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Could not send the report. Please try again.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _send() async {
     final service = _service;
     if (service == null) return;
 
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+
+    if (!await _ensureConsent()) return;
+    if (!mounted) return;
 
     // Capture financial context while we still have BuildContext.
     final financialCtx = _buildContext();

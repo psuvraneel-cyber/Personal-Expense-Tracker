@@ -73,6 +73,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           prefixIcon: const Icon(Icons.search, size: 20),
                           suffixIcon: _searchController.text.isNotEmpty
                               ? IconButton(
+                                  tooltip: 'Close',
                                   icon: const Icon(Icons.close, size: 18),
                                   onPressed: () {
                                     _searchController.clear();
@@ -414,6 +415,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     DateTime? endDate;
 
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).brightness == Brightness.dark
@@ -444,6 +446,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       IconButton(
+                        tooltip: 'Close',
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close),
                       ),

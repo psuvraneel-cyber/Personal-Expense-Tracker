@@ -155,7 +155,13 @@ class TransactionRecord {
       'taxCategory': taxCategory,
       'source': source.toJson(),
       'accountId': accountId,
-      'updatedAt': FieldValue.serverTimestamp(),
+      // Last-write-wins compares this value with local `updatedAt`, so both
+      // must come from the same clock (the editing device). The server time
+      // is kept separately for diagnostics only.
+      'updatedAt': updatedAt != null
+          ? Timestamp.fromDate(updatedAt!)
+          : FieldValue.serverTimestamp(),
+      'serverUpdatedAt': FieldValue.serverTimestamp(),
       'recurringRuleId': recurringRuleId,
       'occurrenceDate':
           occurrenceDate != null ? Timestamp.fromDate(occurrenceDate!) : null,

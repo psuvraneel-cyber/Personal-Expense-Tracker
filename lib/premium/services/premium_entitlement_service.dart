@@ -189,7 +189,11 @@ class PremiumEntitlementService {
     }
   }
 
+  static bool _configured = false;
+
   static Future<void> init() async {
+    // Configure exactly once per process; re-configuring resets SDK state.
+    if (_configured) return;
     // Only enable debug logging in debug builds — never leak purchase info
     // in production device logs.
     await Purchases.setLogLevel(kDebugMode ? LogLevel.debug : LogLevel.warn);
@@ -217,12 +221,16 @@ class PremiumEntitlementService {
 
     if (configuration != null) {
       await Purchases.configure(configuration);
+      _configured = true;
     }
   }
 
   /// Identify the RevenueCat user so entitlements are scoped per Firebase UID.
   /// Must be called after sign-in.
   static Future<void> logIn(String uid) async {
+    // Guests must stay anonymous: a shared literal id such as 'guest_user'
+    // would give every guest the same subscriber (and entitlements).
+    if (uid.isEmpty || uid == 'guest_user') return;
     try {
       await Purchases.logIn(uid);
     } catch (e) {

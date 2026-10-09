@@ -74,15 +74,19 @@ void main() {
     test(
         'PET-04: Privacy Policy accurately discloses all third-party processors and AI payload details',
         () {
-      final policy = File('PRIVACY_POLICY.md').readAsStringSync();
+      final policy = File('docs/privacy-policy.html').readAsStringSync();
 
       expect(policy.contains('Firebase Authentication'), isTrue);
       expect(policy.contains('Google Cloud Firestore'), isTrue);
       expect(policy.contains('Firebase Crashlytics'), isTrue);
-      expect(policy.contains('Cloudflare Workers'), isTrue);
-      expect(policy.contains('Groq API'), isTrue);
+      expect(policy.contains('Cloudflare'), isTrue);
+      expect(policy.contains('Groq'), isTrue);
       expect(policy.contains('RevenueCat'), isTrue);
-      expect(policy.contains('Anonymized monthly category totals'), isTrue);
+      // The AI payload is described precisely, not as "anonymized".
+      expect(policy.contains('up to 10 recent transactions'), isTrue);
+      expect(policy.toLowerCase().contains('anonymized'), isFalse);
+      // Messaging apps are explicitly excluded from notification access.
+      expect(policy.contains('chat and social media apps'), isTrue);
     });
 
     test(

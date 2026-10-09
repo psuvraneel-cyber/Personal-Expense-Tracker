@@ -16,6 +16,9 @@ class NativeSmsMessage {
   final String? packageName;
   final String source; // 'sms' or 'notification'
 
+  /// Id of the item in the native encrypted cache (null for live/inbox SMS).
+  final String? cacheId;
+
   NativeSmsMessage({
     required this.address,
     required this.body,
@@ -24,6 +27,7 @@ class NativeSmsMessage {
     this.title,
     this.packageName,
     this.source = 'sms',
+    this.cacheId,
   });
 
   DateTime get dateTime => DateTime.fromMillisecondsSinceEpoch(dateMillis);
@@ -71,6 +75,7 @@ class NativeSmsMessage {
       title: title,
       packageName: pkg,
       source: source,
+      cacheId: map['cacheId'] as String?,
     );
   }
 }
@@ -310,6 +315,31 @@ class NativeSmsReader {
       AppLogger.debug(
           '[NativeSmsReader] Error peeking pending notifications: $e');
       return [];
+    }
+  }
+
+  /// Removes exactly the given cached items after they were processed.
+  Future<bool> acknowledgeNotificationIds(List<String> ids) async {
+    if (!isSupported || ids.isEmpty) return true;
+    try {
+      final bool? ok = await _methodChannel.invokeMethod(
+        'acknowledgeNotificationIds',
+        {'ids': ids},
+      );
+      return ok ?? false;
+    } catch (e) {
+      AppLogger.debug('[NativeSmsReader] Error acknowledging by id: $e');
+      return false;
+    }
+  }
+
+  /// Permanently clears the native encrypted notification cache.
+  Future<void> clearPendingNotifications() async {
+    if (!isSupported) return;
+    try {
+      await _methodChannel.invokeMethod('clearPendingNotifications');
+    } catch (e) {
+      AppLogger.debug('[NativeSmsReader] Error clearing pending cache: $e');
     }
   }
 

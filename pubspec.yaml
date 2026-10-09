@@ -12,39 +12,41 @@ dependencies:
   cupertino_icons: ^1.0.8
   meta: ^1.12.0
   sqflite_sqlcipher: ^3.4.0
-  sqflite_common_ffi: ^2.3.4+4
   path_provider: ^2.1.5
   path: ^1.9.1
   provider: ^6.1.4
-  fl_chart: ^0.70.2
+  fl_chart: ^1.2.0
   intl: ^0.20.2
-  flutter_local_notifications: ^18.0.1
+  flutter_local_notifications: ^22.3.1
   uuid: ^4.5.1
-  flutter_slidable: ^3.1.1
-  google_fonts: ^6.2.1
+  flutter_slidable: ^4.0.3
+  google_fonts: ^8.2.1
   shared_preferences: ^2.3.5
-  flutter_secure_storage: ^9.2.2
-  timezone: ^0.9.4
+  flutter_secure_storage: ^11.2.0
+  timezone: ^0.11.1
   # Firebase + Google Sign-In
-  firebase_core: ^3.13.0
-  firebase_auth: ^5.5.2
-  cloud_firestore: ^5.6.6
-  firebase_crashlytics: ^4.3.0
-  google_sign_in: ^6.2.2
-  connectivity_plus: ^6.1.4
+  firebase_core: ^4.15.0
+  firebase_auth: ^6.7.0
+  cloud_firestore: ^6.10.0
+  firebase_crashlytics: ^5.4.0
+  google_sign_in: ^7.2.0
+  connectivity_plus: ^7.3.1
   # SMS Transaction Auto-Detection (Android only)
-  permission_handler: ^11.3.1
-  workmanager: ^0.9.0+3
-  device_info_plus: ^11.3.0
-  android_intent_plus: ^5.3.0
+  permission_handler: ^12.0.1
+  workmanager: ^0.10.10
+  device_info_plus: ^13.3.0
+  android_intent_plus: ^6.1.0
   crypto: ^3.0.6
   http: ^1.2.2
   pdf: ^3.11.3
-  share_plus: ^12.0.1
+  share_plus: ^13.3.1
   flutter_animate: ^4.5.0
-  local_auth: ^2.3.0
+  local_auth: ^3.0.2
   purchases_flutter: ^10.10.0
-  package_info_plus: ^9.0.1
+  package_info_plus: ^10.2.2
+  url_launcher: ^6.3.3
+  flutter_timezone: ^5.1.1
+  firebase_app_check: ^0.4.8
 
 dev_dependencies:
   flutter_test:
@@ -52,16 +54,19 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.13.1
   path_provider_platform_interface: any
+  sqflite_common_ffi: ^2.4.0
 
 flutter:
   uses-material-design: true
   assets:
     - assets/
+    # Bundled Poppins (runtime font fetching is disabled in main.dart)
+    - assets/google_fonts/
 
 flutter_launcher_icons:
   android: true
-  ios: true
-  image_path: "assets/app_icon.jpeg"
+  ios: false
+  image_path: "assets/icon/app_icon.png"
   min_sdk_android: 21
-  adaptive_icon_background: "#1A1A2E"
-  adaptive_icon_foreground: "assets/app_icon.jpeg"
+  adaptive_icon_background: "assets/icon/icon_background.png"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"

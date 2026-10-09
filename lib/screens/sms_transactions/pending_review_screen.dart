@@ -24,8 +24,11 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkInitialObservation();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Opened from a "possible transaction" notification: make sure the
+      // newest queued items are loaded before looking up the target.
+      await context.read<SmsTransactionProvider>().loadTransactions();
+      if (mounted) _checkInitialObservation();
     });
   }
 
@@ -48,8 +51,8 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Observation ${widget.initialObservationId} is already reviewed, confirmed, or dismissed.',
+          content: const Text(
+            'This transaction has already been reviewed.',
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -73,6 +76,7 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
         backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
         title: const Text('Pending Review'),
         leading: IconButton(
+          tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),

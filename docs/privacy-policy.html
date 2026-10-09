@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — P.E.T (Personal Expense Tracker)</title>
+<style>
+  :root { --bg:#ffffff; --fg:#1f2937; --muted:#4b5563; --accent:#6d28d9; --border:#e5e7eb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f172a; --fg:#f1f5f9; --muted:#cbd5e1; --accent:#a78bfa; --border:#334155; } }
+  body { background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.6; margin:0; padding:24px 16px; }
+  main { max-width:760px; margin:0 auto; }
+  h1 { font-size:1.8rem; margin-bottom:4px; } h2 { font-size:1.2rem; margin-top:32px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+  p, li { color:var(--muted); } a { color:var(--accent); }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; } th, td { border:1px solid var(--border); padding:8px; text-align:left; vertical-align:top; }
+  .note { font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Privacy Policy</h1>
+<p class="note">P.E.T — Personal Expense Tracker (Android, package <code>com.pet.tracker.pet</code>)<br>Last updated: 7 October 2026</p>
+
+<p>P.E.T helps you track your spending. This policy explains what data the app reads, what it stores, where it is sent, how long it is kept, and how you can delete it. The developer is Suvraneel Paul, India (contact details at the end).</p>
+
+<h2>1. Summary</h2>
+<ul>
+  <li>SMS and notification text is read and processed <strong>on your device</strong>. Message text is never uploaded to our servers.</li>
+  <li>If you sign in with Google, the <strong>transactions and settings you create</strong> are backed up to our cloud database (Google Firebase) so you can restore them.</li>
+  <li>The optional AI Copilot sends a <strong>spending summary and your chat messages</strong> to an AI provider (Groq) through our server, only when you use it.</li>
+  <li>We do not sell your data, show ads, or use your data for advertising.</li>
+  <li>You can delete your account and data from inside the app or through our web form.</li>
+</ul>
+
+<h2>2. SMS access (optional)</h2>
+<p>If you turn on <em>SMS Transaction Detection</em>, the app asks for the <code>READ_SMS</code> and <code>RECEIVE_SMS</code> permissions to detect bank and UPI transaction alerts.</p>
+<ul>
+  <li>Only your <strong>received</strong> messages (inbox) are read. Your sent messages are never read.</li>
+  <li>Messages from personal phone numbers, and messages without a currency amount, are discarded immediately on the device without being stored.</li>
+  <li>Remaining messages are analysed on the device. If a message is <strong>not</strong> a transaction, only a one-way fingerprint (hash) is kept so it is not processed again; its text is not stored.</li>
+  <li>If a message <strong>is</strong> a transaction, we store the extracted amount, merchant, date, bank and category, plus a copy of the message with account, card and phone numbers masked (e.g. <code>XX****1234</code>). The masked message text is deleted automatically after 90 days; the extracted transaction stays until you delete it.</li>
+  <li>Messages whose format the app could not understand may be kept, masked, for up to 30 days to improve detection, then deleted automatically.</li>
+</ul>
+
+<h2>3. Notification access (optional)</h2>
+<p>If you grant <em>Notification access</em>, the app reads notifications only from payment and banking apps (for example Google Pay, PhonePe, Paytm, BHIM, Amazon Pay, CRED and major bank apps) to detect payments that do not arrive by SMS. Notifications from every other app — including chat and social media apps — are ignored and never stored. Detected payment notifications are handled exactly like SMS in section 2. If the app is closed when a notification arrives, it is kept briefly in encrypted storage on the device (AES-256) until it is processed.</p>
+
+<h2>4. Data stored on your device</h2>
+<p>Your transactions, categories, budgets, goals, bills and settings are stored in a database on your device encrypted with SQLCipher (256-bit AES). The encryption key is kept in Android's secure Keystore-backed storage. This database is excluded from Android cloud backup and device-to-device transfer.</p>
+
+<h2>5. Accounts and cloud backup</h2>
+<ul>
+  <li><strong>Google sign-in:</strong> we receive your name, email address and Google account ID from Firebase Authentication. Your profile (name, email) and the data you create — transactions (amount, type, category, date, note, payment method, merchant name), custom categories, budgets, recurring rules and bills, savings goals, alerts and weekly limits — are synced to Google Cloud Firestore. Security rules allow only your signed-in account to read or write your data.</li>
+  <li><strong>Guest mode:</strong> your data stays on this device only and is not backed up. The app may create an anonymous Firebase sign-in for the guest session; it contains no personal details.</li>
+</ul>
+
+<h2>6. AI Copilot (optional, Premium)</h2>
+<p>When you send a message to the AI Copilot, the app sends to our server (a Cloudflare Worker): your message, the earlier messages in the same chat, and a summary of your finances — this month's income and expense totals, top spending categories, budget usage, up to 10 recent transactions (amount, category, merchant or note), savings goals, weekly limits and the cash-flow forecast. Our server checks your sign-in and subscription, then forwards the request to Groq, Inc., which generates the reply. We do not store your chat messages. Our server logs only a hashed account identifier, the response status and timing for abuse prevention. Please do not include personal details (such as account numbers) in your questions. AI answers can be wrong and are not financial advice. You can report an inappropriate answer from inside the chat.</p>
+
+<h2>7. Service providers</h2>
+<table>
+<tr><th>Provider</th><th>Purpose</th><th>Data</th></tr>
+<tr><td>Google Firebase Authentication</td><td>Sign-in</td><td>Name, email, Google account ID</td></tr>
+<tr><td>Google Cloud Firestore</td><td>Cloud backup &amp; sync (signed-in users)</td><td>The data listed in section 5</td></tr>
+<tr><td>Firebase Crashlytics</td><td>Crash reports (you can turn this off in Settings)</td><td>Crash stack traces, device model, OS and app version, an installation identifier</td></tr>
+<tr><td>RevenueCat</td><td>Subscription management</td><td>Your app account ID, Google Play purchase records</td></tr>
+<tr><td>Google Play Billing</td><td>Payments</td><td>Handled by Google; we never see your card details</td></tr>
+<tr><td>Cloudflare</td><td>Server for the AI Copilot</td><td>The data in section 6, in transit</td></tr>
+<tr><td>Groq</td><td>AI responses</td><td>The data in section 6</td></tr>
+</table>
+<p>All data is sent over encrypted connections (HTTPS/TLS).</p>
+
+<h2>8. Retention</h2>
+<ul>
+  <li>Transactions and settings: until you delete them, sign out (device copy), or delete your account.</li>
+  <li>Masked SMS/notification text: up to 90 days. Fingerprints of non-transaction messages: until you sign out or delete your account.</li>
+  <li>Unrecognised-format diagnostics: up to 30 days.</li>
+  <li>Exported CSV/PDF files: created only when you export, and removed from the app's temporary storage after sharing.</li>
+</ul>
+
+<h2>9. Signing out and deleting your data</h2>
+<ul>
+  <li><strong>Sign out</strong> removes all P.E.T data from this device. For Google accounts, your cloud backup remains and is restored when you sign in again. For guest users, signing out permanently deletes your data.</li>
+  <li><strong>Delete account:</strong> Settings → Danger Zone → Delete Account permanently deletes your cloud data, your sign-in account, and all P.E.T data on the device.</li>
+  <li><strong>Without the app:</strong> request deletion at <a href="https://personal-expense-tracker-6891b.web.app/account-deletion.html">our account deletion page</a> or by email. We complete requests within 30 days (usually within 48 hours).</li>
+  <li>Cancel any Google Play subscription separately in Google Play → Payments &amp; subscriptions.</li>
+</ul>
+
+<h2>10. Children</h2>
+<p>P.E.T is intended for users aged 18 and over. We do not knowingly collect data from children.</p>
+
+<h2>11. Changes</h2>
+<p>We will update the date at the top of this page when this policy changes and highlight material changes in the app.</p>
+
+<h2>12. Contact</h2>
+<p>Suvraneel Paul — <a href="mailto:psuvraneel@gmail.com">psuvraneel@gmail.com</a></p>
+</main>
+</body>
+</html>

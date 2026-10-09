@@ -41,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.showDeletionImmediately) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showModalBottomSheet(
+          useSafeArea: true,
           context: context,
           isScrollControlled: true,
           isDismissible: false,
@@ -129,7 +130,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             )
           : null,
-      bottomNavigationBar: _buildBottomNav(context, isDark),
+      // SafeArea keeps the floating bar above the system navigation bar
+      // (Android 15+/targetSdk 35+ draws edge-to-edge).
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: _buildBottomNav(context, isDark),
+      ),
     );
   }
 

@@ -33,10 +33,15 @@ import 'package:pet/premium/providers/tax_provider.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/providers/dashboard_config_provider.dart';
 import 'package:pet/providers/recurring_transaction_provider.dart';
-import 'package:pet/data/database/database_helper.dart';
-import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/services/firestore_sync_service.dart';
+import 'package:pet/config/app_links.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:pet/services/app_bootstrap.dart' show kCrashReportsPrefKey;
+import 'package:pet/services/local_data_wiper.dart';
+import 'package:pet/services/firebase_auth_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:pet/screens/sms_transactions/notification_access_disclosure.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -60,17 +65,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _defaultPaymentMethod = 'UPI';
   String _userName = '';
   String _userEmail = '';
+  String _appVersion = '';
+  bool _crashReportsEnabled = true;
+
+  Future<void> _setCrashReports(bool enabled) async {
+    setState(() => _crashReportsEnabled = enabled);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(kCrashReportsPrefKey, enabled);
+    try {
+      await FirebaseCrashlytics.instance
+          .setCrashlyticsCollectionEnabled(enabled);
+    } catch (_) {}
+  }
 
   @override
   void initState() {
     super.initState();
     _loadPreferences();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) {
+        setState(
+          () => _appVersion = 'v${info.version} (${info.buildNumber})',
+        );
+      }
+    }).catchError((_) {});
   }
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _defaultPaymentMethod = prefs.getString('defaultPaymentMethod') ?? 'UPI';
+      _crashReportsEnabled = prefs.getBool(kCrashReportsPrefKey) ?? true;
       _userName = AuthService.userName ?? prefs.getString('userName') ?? '';
       _userEmail = AuthService.userEmail ?? prefs.getString('userEmail') ?? '';
     });
@@ -326,7 +351,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: smsProvider.notificationAccessGranted
                           ? 'Enabled for UPI app alerts'
                           : 'Tap to enable notification access',
-                      onTap: () => smsProvider.requestNotificationAccess(),
+                      onTap: () async {
+                        if (smsProvider.notificationAccessGranted) {
+                          // Already granted: let the user manage/revoke it.
+                          await smsProvider.requestNotificationAccess();
+                          return;
+                        }
+                        final agreed =
+                            await showNotificationAccessDisclosure(context);
+                        if (agreed) {
+                          await smsProvider.requestNotificationAccess();
+                        }
+                      },
                     ),
                   ],
                 );
@@ -377,6 +413,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 setState(() {});
                 if (value) HapticService.instance.lightTap();
               },
+              activeThumbColor: AppTheme.accentTeal,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Privacy
+          _buildSectionTitle(context, 'Privacy'),
+          const SizedBox(height: 8),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.bug_report_outlined,
+            iconColor: AppTheme.accentPurple,
+            title: 'Share crash reports',
+            subtitle: 'Send anonymous crash details to help fix bugs',
+            trailing: Switch(
+              value: _crashReportsEnabled,
+              onChanged: _setCrashReports,
               activeThumbColor: AppTheme.accentTeal,
             ),
           ),
@@ -478,7 +532,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.pets,
             iconColor: AppTheme.accentTeal,
             title: 'P.E.T',
-            subtitle: 'Personal Expense Tracker v1.0.1',
+            subtitle: 'Personal Expense Tracker $_appVersion'.trim(),
+          ),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.privacy_tip_outlined,
+            iconColor: AppTheme.accentPurple,
+            title: 'Privacy Policy',
+            subtitle: 'How your data is processed and protected',
+            onTap: () => AppLinks.open(context, AppLinks.privacyPolicy),
+          ),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.gavel_rounded,
+            iconColor: AppTheme.accentPurple,
+            title: 'Terms of Service',
+            subtitle: 'Rules for using P.E.T and subscriptions',
+            onTap: () => AppLinks.open(context, AppLinks.terms),
+          ),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.mail_outline_rounded,
+            iconColor: AppTheme.accentTeal,
+            title: 'Contact Support',
+            subtitle: AppLinks.supportEmail,
+            onTap: () => AppLinks.emailSupport(context),
+          ),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.workspace_premium_outlined,
+            iconColor: AppTheme.accentTeal,
+            title: 'Manage Subscription',
+            subtitle: 'Cancel or change your plan on Google Play',
+            onTap: () => AppLinks.open(context, AppLinks.manageSubscriptions),
+          ),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.description_outlined,
+            iconColor: AppTheme.textTertiary,
+            title: 'Open-source Licences',
+            subtitle: 'Third-party software used in this app',
+            onTap: () => showLicensePage(
+              context: context,
+              applicationName: 'P.E.T',
+              applicationVersion: _appVersion,
+            ),
           ),
           _buildSettingTile(
             context,
@@ -561,6 +664,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _startAccountDeletion(BuildContext context) {
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       isDismissible: false,
@@ -726,6 +830,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final catProvider = context.read<CategoryProvider>();
 
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).brightness == Brightness.dark
@@ -762,6 +867,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Row(
                         children: [
                           IconButton(
+                            tooltip: 'Add',
                             onPressed: () =>
                                 _showAddCategoryDialog(context, catProvider),
                             icon: Container(
@@ -778,6 +884,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                           IconButton(
+                            tooltip: 'Close',
                             onPressed: () => Navigator.pop(context),
                             icon: const Icon(Icons.close),
                           ),
@@ -822,6 +929,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                             IconButton(
+                              tooltip: 'Delete',
                               onPressed: () {
                                 catProvider.deleteCategory(cat.id);
                                 setSheetState(() {});
@@ -1128,35 +1236,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
       for (final cat in categoryProvider.categories) cat.id: cat.name,
     };
 
-    // Quick date range picker using the current financial year
+    // Let the user choose the period (defaults to the current financial
+    // year; earlier exports were silently limited to it).
     final now = DateTime.now();
     final fyStart = now.month >= 4
         ? DateTime(now.year, 4, 1)
         : DateTime(now.year - 1, 4, 1);
-    final fyEnd = now;
+    final oldest =
+        allTxns.map((t) => t.date).reduce((a, b) => a.isBefore(b) ? a : b);
+    final earliest = oldest.isAfter(now) ? now : oldest;
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(earliest.year, earliest.month, earliest.day),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: DateTimeRange(
+        start: fyStart.isBefore(earliest) ? earliest : fyStart,
+        end: DateTime(now.year, now.month, now.day),
+      ),
+      helpText: 'Choose export period',
+      saveText: 'Export',
+    );
+    if (range == null || !context.mounted) return;
+    final rangeStart = range.start;
+    final rangeEnd =
+        DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
 
     try {
       if (format == 'csv') {
         await ExportService.instance.exportToCsv(
           allTxns,
-          startDate: fyStart,
-          endDate: fyEnd,
+          startDate: rangeStart,
+          endDate: rangeEnd,
           categoryNames: categoryNames,
         );
       } else {
         await ExportService.instance.exportToPdf(
           allTxns,
-          startDate: fyStart,
-          endDate: fyEnd,
+          startDate: rangeStart,
+          endDate: rangeEnd,
           categoryNames: categoryNames,
         );
       }
     } catch (e) {
       AppLogger.debug('[Export] Error: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Export failed. Please try again.'),
+          ),
+        );
       }
     }
   }
@@ -1202,22 +1330,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _signOut(BuildContext context) async {
+    final auth = FirebaseAuthService();
+    final isGuest = auth.isLocalGuest || auth.currentUser?.isAnonymous == true;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text(
-          'Are you sure you want to sign out? Your data will remain on this device.',
+        title: Text(isGuest ? 'Delete guest data and sign out?' : 'Sign Out'),
+        content: Text(
+          isGuest
+              ? 'You are using Guest mode, so your data is stored only on '
+                  'this device and is not backed up.\n\nSigning out will '
+                  'PERMANENTLY DELETE all your transactions, budgets and '
+                  'settings. Export them first if you want to keep a copy.'
+              : 'All P.E.T data will be removed from this device. Your '
+                  'transactions are backed up to your Google account and '
+                  'will be restored when you sign in again.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
+          if (isGuest)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx, false);
+                _exportTransactions(context, 'csv');
+              },
+              child: const Text('Export first'),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppTheme.expenseRed),
-            child: const Text('Sign Out'),
+            child: Text(isGuest ? 'Delete and sign out' : 'Sign Out'),
           ),
         ],
       ),
@@ -1268,14 +1413,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       dashboardConfigProvider.clearData();
       smsProvider.clearData();
 
-      if (!kIsWeb) {
-        await DatabaseHelper().wipeAllUserData().catchError((e) {
-          AppLogger.error('Database wipeAllUserData failed during logout',
-              error: e);
-        });
-      }
-
-      await NotificationService.cancelAllNotifications();
+      await LocalDataWiper.wipe();
 
       await AuthService.signOut();
 

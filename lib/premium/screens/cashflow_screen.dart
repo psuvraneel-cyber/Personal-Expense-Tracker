@@ -1217,6 +1217,7 @@ class _CashflowScreenState extends State<CashflowScreen> {
   // ---------------------------------------------------------------------------
   void _showSafeToSpendExplanation(CashflowForecast forecast, bool isDark) {
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       backgroundColor: isDark ? AppTheme.primaryDark : Colors.white,
       shape: const RoundedRectangleBorder(

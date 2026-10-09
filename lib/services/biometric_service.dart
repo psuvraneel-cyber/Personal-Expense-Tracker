@@ -1,4 +1,5 @@
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,6 +25,19 @@ class BiometricService {
   bool get isEnabled => _enabled;
   int get timeoutMinutes => _timeoutMinutes;
 
+  static const MethodChannel _windowChannel =
+      MethodChannel('com.pet.tracker/window');
+
+  /// With app lock on, also hide app content from the Recents thumbnail and
+  /// block screenshots/screen recording (Android FLAG_SECURE).
+  Future<void> applySecureWindow() async {
+    try {
+      await _windowChannel.invokeMethod('setSecure', {'secure': _enabled});
+    } catch (_) {
+      // Not available on this platform / in tests.
+    }
+  }
+
   /// Whether the app has been idle longer than the configured timeout.
   bool get isLocked {
     if (!_enabled) return false;
@@ -42,11 +56,13 @@ class BiometricService {
     } catch (e) {
       AppLogger.debug('[Biometric] Init error: $e');
     }
+    await applySecureWindow();
   }
 
   Future<void> setEnabled(bool value) async {
     _enabled = value;
     if (value) markActive(); // Start timeout from now
+    await applySecureWindow();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kEnabled, value);
@@ -99,11 +115,10 @@ class BiometricService {
     try {
       final result = await _auth.authenticate(
         localizedReason: reason,
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly:
-              false, // Allow PIN/pattern fallback per Play Store guidelines
-        ),
+        // Allow PIN/pattern fallback per Play Store guidelines.
+        biometricOnly: false,
+        // Formerly `stickyAuth`: survive the app being backgrounded mid-prompt.
+        persistAcrossBackgrounding: true,
       );
       if (result) markActive();
       return result;

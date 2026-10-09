@@ -70,6 +70,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     }
 
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(

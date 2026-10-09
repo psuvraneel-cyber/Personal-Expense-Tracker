@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:pet/services/account_deletion_service.dart';
 import 'package:pet/services/firebase_auth_service.dart';
+import 'package:pet/services/local_data_wiper.dart';
 import 'package:pet/screens/auth/google_sign_in_screen.dart';
 
 class AccountDeletionSheet extends StatefulWidget {
@@ -18,6 +18,13 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
   bool _isDeleting = false;
   DeletionStep? _currentDeletionStep;
   String? _errorMessage;
+
+  /// Guests (local-only or Firebase anonymous) have no Google credential to
+  /// re-authenticate with, so they skip straight to confirmation.
+  bool get _isGuest {
+    final auth = FirebaseAuthService();
+    return auth.isLocalGuest || auth.currentUser?.isAnonymous == true;
+  }
 
   // ── Step 0: Information ─────────────────────────────────────────────────
   Widget _buildInfoStep() {
@@ -106,7 +113,7 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red.shade400,
                   ),
-                  onPressed: () => setState(() => _step = 1),
+                  onPressed: () => setState(() => _step = _isGuest ? 2 : 1),
                   child: const Text(
                     'Continue →',
                     style: TextStyle(color: Colors.white),
@@ -174,7 +181,8 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
 
   // ── Step 2: Final Confirmation ─────────────────────────────────────────
   Widget _buildConfirmStep() {
-    final email = FirebaseAuth.instance.currentUser?.email ?? 'your account';
+    final email = FirebaseAuthService().currentUser?.email ??
+        (_isGuest ? 'this guest profile' : 'your account');
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -330,7 +338,10 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
               // Pop all routes and navigate to sign-in screen
               Navigator.of(
                 context,
-              ).pushNamedAndRemoveUntil('/sign_in', (route) => false);
+              ).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const GoogleSignInScreen()),
+                (route) => false,
+              );
             },
             child: const Text('Get Started'),
           ),
@@ -340,9 +351,21 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
   }
 
   Future<void> _executeDelete() async {
-    final targetUid = FirebaseAuth.instance.currentUser?.uid;
+    final targetUid = FirebaseAuthService().currentUser?.uid;
     if (targetUid == null) {
-      if (mounted) setState(() => _errorMessage = 'No authenticated user');
+      // Local-only guest: there is no cloud account, so deleting the account
+      // means erasing everything on this device.
+      setState(() {
+        _step = 3;
+        _isDeleting = true;
+      });
+      await LocalDataWiper.wipe();
+      await FirebaseAuthService().signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const GoogleSignInScreen()),
+        (route) => false,
+      );
       return;
     }
 
