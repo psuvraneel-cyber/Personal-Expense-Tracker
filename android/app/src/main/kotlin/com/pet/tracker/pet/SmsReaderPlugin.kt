@@ -26,9 +26,8 @@ import android.util.Log
  * (content://sms) using ContentResolver.
  *
  * ## Capabilities
- * - Reads INBOX (content://sms/inbox) — received bank transaction alerts
- * - Reads SENT (content://sms/sent) — some UPI confirmations appear as sent SMS
- * - Reads ALL (content://sms) with type column — comprehensive fallback
+ * - Reads INBOX (content://sms/inbox) only — received bank transaction alerts.
+ *   The user's own sent messages are never read (data minimisation).
  * - Pre-filters SMS by known bank sender patterns on native side for performance
  * - Registers BroadcastReceiver for real-time SMS_RECEIVED events
  *
@@ -36,11 +35,6 @@ import android.util.Log
  * The system content provider stores ALL SMS regardless of which app is the
  * default SMS handler. This works even when Google Messages, Samsung Messages,
  * or any third-party app is the default SMS application.
- *
- * ## Why also read Sent SMS?
- * Some UPI apps send confirmation SMS back through the sent box (e.g., payment
- * confirmations from Paytm, PhonePe outgoing receipts). Certain banks also
- * store UPI payment confirmations in the sent folder.
  */
 class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     EventChannel.StreamHandler {
@@ -113,29 +107,37 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         )
 
         /**
+         * A currency marker immediately followed by a number, e.g. "Rs.500",
+         * "INR 1,200.00", "₹ 99". A bare "rs" substring is NOT enough — it
+         * matches ordinary words such as "hours", "yours" or "offers".
+         */
+        val currencyAmountRegex = Regex(
+            """(?i)(?:\brs\.?|\binr\.?|₹)\s?\d""",
+        )
+
+        /** Personal senders are plain phone numbers; bank/UPI senders are alphanumeric headers. */
+        private val phoneNumberSender = Regex("""^\+?[\d\s-]{7,}$""")
+
+        /**
          * Native pre-filter to determine if an SMS is likely a bank transaction message.
+         *
+         * Privacy: messages from personal phone numbers are never forwarded, and
+         * every forwarded message must contain a currency amount.
          */
         fun isLikelyBankSms(address: String, body: String): Boolean {
             if (body.isBlank()) return false
+            if (phoneNumberSender.matches(address.trim())) return false
+            if (!currencyAmountRegex.containsMatchIn(body)) return false
 
             val upperAddress = address.uppercase()
             val senderMatch = bankSenderPatterns.any { pattern ->
                 upperAddress.contains(pattern)
             }
-
             if (senderMatch) return true
 
-            val hasCurrency = body.contains("Rs", ignoreCase = true) ||
-                    body.contains("INR", ignoreCase = true) ||
-                    body.contains("₹")
-
-            if (!hasCurrency) return false
-
-            val hasKeyword = transactionKeywords.any { keyword ->
+            return transactionKeywords.any { keyword ->
                 body.contains(keyword, ignoreCase = true)
             }
-
-            return hasKeyword
         }
     }
 
@@ -162,20 +164,9 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                 notificationEventSink = events
                 TransactionNotificationListener.eventSink = events
 
-                // Process cached notifications on startup
-                val context = applicationContext
-                if (context != null && events != null) {
-                    val pendingList = EncryptedNotificationCache.popPendingNotifications(context)
-                    for (data in pendingList) {
-                        Handler(Looper.getMainLooper()).post {
-                            try {
-                                events.success(data)
-                            } catch (e: Exception) {
-                                SafeLog.e(TAG, "Failed to deliver cached notification to EventSink: ${e.message}")
-                            }
-                        }
-                    }
-                }
+                // Cached notifications are NOT pushed here: Dart drains them via
+                // peekPendingNotifications + acknowledgeNotificationIds, so an
+                // item is only removed after it has been stored.
             }
             override fun onCancel(arguments: Any?) {
                 notificationEventSink = null
@@ -204,9 +195,8 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                 result.success(messages)
             }
             "getSentSms" -> {
-                val lookbackMillis = call.argument<Number>("lookbackMillis")?.toLong()
-                val messages = readSms("content://sms/sent", lookbackMillis)
-                result.success(messages)
+                // Sent-box access removed for privacy; kept for channel compatibility.
+                result.success(emptyList<Map<String, Any?>>())
             }
             "getAllSms" -> {
                 val lookbackMillis = call.argument<Number>("lookbackMillis")?.toLong()
@@ -291,6 +281,19 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                     result.success(emptyList<Map<String, Any?>>())
                 }
             }
+            "acknowledgeNotificationIds" -> {
+                val ctx = applicationContext
+                val ids = call.argument<List<String>>("ids") ?: emptyList()
+                result.success(
+                    if (ctx != null) EncryptedNotificationCache.acknowledgeByIds(ctx, ids) else false
+                )
+            }
+            "clearPendingNotifications" -> {
+                val ctx = applicationContext
+                result.success(
+                    if (ctx != null) EncryptedNotificationCache.clearAll(ctx) else false
+                )
+            }
             "acknowledgeNotifications" -> {
                 val ctx = applicationContext
                 val count = call.argument<Number>("count")?.toInt() ?: 0
@@ -310,7 +313,7 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     /**
      * Reads SMS messages from the specified content URI using the system ContentResolver.
      *
-     * @param contentUri  "content://sms/inbox" or "content://sms/sent"
+     * @param contentUri  "content://sms/inbox"
      * @param lookbackMillis Only return SMS newer than this many milliseconds ago.
      * @return List of maps with keys: address, body, date, type
      */
@@ -381,11 +384,11 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     }
 
     /**
-     * Reads ALL SMS (inbox + sent) from content://sms with type column.
+     * Reads received SMS only (inbox). Kept under the legacy "getAllSms" name.
      * This is useful for comprehensive scanning on first install.
      */
     private fun readAllSms(lookbackMillis: Long?): List<Map<String, Any?>> {
-        return readSms("content://sms", lookbackMillis)
+        return readSms("content://sms/inbox", lookbackMillis)
     }
 
     /**
@@ -414,7 +417,7 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             now - (fallbackDays.toLong().coerceIn(1, 365) * 24 * 60 * 60 * 1000L)
         }
 
-        val uri: Uri = Uri.parse("content://sms")
+        val uri: Uri = Uri.parse("content://sms/inbox")
         // Include date_sent for server timestamp (more accurate than receive time)
         val projection = arrayOf("address", "body", "date", "date_sent", "type")
         val selection = "date > ?"
@@ -465,103 +468,19 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     }
 
 
-    // ─── Live SMS Listener via BroadcastReceiver ────────────────────
+    // ─── Live SMS Listener ──────────────────────────────────────────
 
     /**
-     * Registers a BroadcastReceiver for android.provider.Telephony.SMS_RECEIVED.
-     *
-     * This broadcast is sent to ALL apps with RECEIVE_SMS permission,
-     * NOT just the default SMS app.
+     * Live SMS delivery is handled solely by the manifest-declared
+     * [SmsBroadcastReceiver], which forwards to [eventSink]. A second,
+     * dynamically registered receiver used to deliver every SMS twice and
+     * caused duplicate transactions, so these are intentionally no-ops
+     * (kept for MethodChannel compatibility).
      */
-    private fun registerSmsReceiver() {
-        if (smsReceiver != null) return
-
-        val context = applicationContext ?: return
-
-        smsReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                if (intent?.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
-
-                val bundle = intent.extras ?: return
-                val pdus = bundle.get("pdus") as? Array<*> ?: return
-                val format = bundle.getString("format") ?: ""
-
-                // Group PDU fragments by originating address to handle
-                // multi-part SMS correctly. Each part shares the same
-                // originating address; concatenate them before dispatching.
-                val messagesByAddress = mutableMapOf<String, StringBuilder>()
-                val timestampByAddress = mutableMapOf<String, Long>()
-
-                for (pdu in pdus) {
-                    if (pdu !is ByteArray) continue
-
-                    val smsMessage: SmsMessage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        SmsMessage.createFromPdu(pdu, format)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        SmsMessage.createFromPdu(pdu)
-                    }
-
-                    val address = smsMessage.displayOriginatingAddress ?: ""
-                    val bodyPart = smsMessage.displayMessageBody ?: ""
-
-                    messagesByAddress.getOrPut(address) { StringBuilder() }.append(bodyPart)
-                    // Keep the earliest timestamp for this address
-                    if (!timestampByAddress.containsKey(address)) {
-                        timestampByAddress[address] = smsMessage.timestampMillis
-                    }
-                }
-
-                // Dispatch the concatenated message for each sender
-                for ((address, bodyBuilder) in messagesByAddress) {
-                    val body = bodyBuilder.toString()
-                    if (body.isBlank()) continue
-
-                    // Apply native pre-filter before sending to Dart
-                    if (isLikelyBankSms(address, body)) {
-                        val messageData = mapOf(
-                            "address" to address,
-                            "body" to body,
-                            "date" to (timestampByAddress[address] ?: System.currentTimeMillis()),
-                            "type" to 1  // incoming = inbox type
-                        )
-                        val sink = eventSink
-                        if (sink != null) {
-                            Handler(Looper.getMainLooper()).post {
-                                try {
-                                    sink.success(messageData)
-                                } catch (e: Exception) {
-                                    SafeLog.e(TAG, "Failed to deliver SMS to EventSink: ${e.message}")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION)
-        // Standard non-aggressive priority (100) to comply with Google Play developer policy
-        // guidelines while ensuring reliable real-time broadcast delivery.
-        filter.priority = 100
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(smsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            context.registerReceiver(smsReceiver, filter)
-        }
-    }
+    private fun registerSmsReceiver() {}
 
     private fun unregisterSmsReceiver() {
-        val context = applicationContext ?: return
-        smsReceiver?.let {
-            try {
-                context.unregisterReceiver(it)
-            } catch (_: IllegalArgumentException) {
-                // Receiver was not registered
-            }
-            smsReceiver = null
-        }
+        smsReceiver = null
     }
 
     // ─── EventChannel StreamHandler ─────────────────────────────────

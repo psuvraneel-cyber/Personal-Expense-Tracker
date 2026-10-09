@@ -1,3 +1,4 @@
+import 'package:pet/config/app_links.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'dart:async';
 
@@ -355,12 +356,45 @@ class _GoogleSignInScreenState extends State<GoogleSignInScreen>
 
                   const SizedBox(height: 16),
                   Text(
-                    'By signing in you agree to our Terms of Service.\nYour financial data is stored securely in your Google account.',
+                    'Signing in with Google backs up your transactions to '
+                    'P.E.T\'s secure cloud (Google Firebase). Guest mode '
+                    'keeps everything on this device only.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppTheme.textTertiary,
                           fontSize: 11,
                         ),
+                  ),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        'By continuing you agree to the',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textTertiary,
+                              fontSize: 11,
+                            ),
+                      ),
+                      TextButton(
+                        onPressed: () => AppLinks.open(context, AppLinks.terms),
+                        child:
+                            const Text('Terms', style: TextStyle(fontSize: 11)),
+                      ),
+                      Text(
+                        'and',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textTertiary,
+                              fontSize: 11,
+                            ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            AppLinks.open(context, AppLinks.privacyPolicy),
+                        child: const Text('Privacy Policy',
+                            style: TextStyle(fontSize: 11)),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 32),
                 ],

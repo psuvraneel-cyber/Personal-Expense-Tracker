@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -52,7 +54,8 @@ class ExportService {
 
     // Simple CSV generation — escape fields containing commas/quotes
     final csvString = rows.map((row) {
-      return row.map((field) {
+      return row.map((rawField) {
+        final field = neutralizeFormula(rawField);
         if (field.contains(',') ||
             field.contains('"') ||
             field.contains('\n')) {
@@ -90,7 +93,8 @@ class ExportService {
       }
     }
 
-    final pdf = pw.Document();
+    // The default PDF font has no "₹" glyph; embed the bundled Poppins.
+    final pdf = pw.Document(theme: await _pdfTheme());
     final dateRange = startDate != null && endDate != null
         ? '${_dateFormat.format(startDate)} – ${_dateFormat.format(endDate)}'
         : 'All time';
@@ -211,12 +215,49 @@ class ExportService {
     return file;
   }
 
+  static Future<pw.ThemeData?> _pdfTheme() async {
+    try {
+      final regular = await rootBundle.load(
+        'assets/google_fonts/Poppins-Regular.ttf',
+      );
+      final bold =
+          await rootBundle.load('assets/google_fonts/Poppins-Bold.ttf');
+      return pw.ThemeData.withFont(
+        base: pw.Font.ttf(regular),
+        bold: pw.Font.ttf(bold),
+      );
+    } catch (e) {
+      AppLogger.debug('[Export] Could not load PDF font: $e');
+      return null;
+    }
+  }
+
+  /// Spreadsheet apps execute cells starting with = + - @ (and tab/CR) as
+  /// formulas. Merchant names come from SMS text, so an attacker-crafted SMS
+  /// could inject one ("CSV injection"); prefix such cells with an apostrophe.
+  @visibleForTesting
+  static String neutralizeFormula(String field) {
+    if (field.isEmpty) return field;
+    const triggers = {'=', '+', '-', '@', '\t', '\r'};
+    // Plain negative numbers are data, not formulas.
+    if (field.startsWith('-') && double.tryParse(field) != null) return field;
+    return triggers.contains(field[0]) ? "'$field" : field;
+  }
+
   String _fileTimestamp() =>
       DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
 
   Future<void> _shareFile(File file, String subject) async {
-    await SharePlus.instance.share(
-      ShareParams(files: [XFile(file.path)], subject: subject),
-    );
+    try {
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], subject: subject),
+      );
+    } finally {
+      // The share sheet has been dismissed: don't leave financial data in
+      // the app's temp directory.
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
   }
 }

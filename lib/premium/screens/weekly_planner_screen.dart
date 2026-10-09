@@ -55,6 +55,7 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
         backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
         actions: [
           IconButton(
+            tooltip: 'Edit',
             onPressed: () => _showSetLimit(context, isDark),
             icon: Container(
               padding: const EdgeInsets.all(6),
@@ -504,6 +505,7 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
     String? limitError;
 
     await showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(

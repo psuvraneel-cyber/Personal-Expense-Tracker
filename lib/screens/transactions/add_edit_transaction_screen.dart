@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/core/utils/amount_input.dart';
 import 'package:provider/provider.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
@@ -62,7 +63,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
     super.initState();
     if (_isEditing) {
       final txn = widget.transaction!;
-      _amountController.text = txn.amount.toStringAsFixed(0);
+      _amountController.text = AmountInput.format(txn.amount);
       _noteController.text = txn.note;
       _type = txn.type;
       _selectedCategoryId = txn.categoryId;
@@ -73,7 +74,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
           txn.recurringFrequency ?? RecurringFrequency.monthly;
       _taxCategory = txn.taxCategory;
     } else if (widget.prefillAmount != null) {
-      _amountController.text = widget.prefillAmount!.toStringAsFixed(0);
+      _amountController.text = AmountInput.format(widget.prefillAmount!);
       if (widget.prefillType != null) {
         _type = TransactionType.fromJson(widget.prefillType);
       }
@@ -101,6 +102,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
         actions: [
           if (_isEditing)
             IconButton(
+              tooltip: 'Delete',
               onPressed: _deleteTransaction,
               icon: const Icon(
                 Icons.delete_outline,
@@ -130,7 +132,9 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _amountController,
-                  keyboardType: TextInputType.number,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: AmountInput.formatters,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         color: _type == TransactionType.expense
                             ? AppTheme.expenseRed
@@ -149,9 +153,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) return 'Enter amount';
-                    final num = double.tryParse(value);
-                    if (num == null || num <= 0) return 'Enter a valid amount';
-                    return null;
+                    return AmountInput.validate(value);
                   },
                 ),
                 const SizedBox(height: 24),
@@ -636,7 +638,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
           if (!proceed) return; // user chose to stay in focus mode
           await spendPauseProvider.recordOverride(
             categoryId: _selectedCategoryId!,
-            amount: double.tryParse(_amountController.text) ?? 0.0,
+            amount: AmountInput.parse(_amountController.text) ?? 0.0,
             categoryName: catName,
           );
         }
@@ -644,7 +646,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    final amount = double.parse(_amountController.text);
+    final amount = AmountInput.parse(_amountController.text)!;
 
     try {
       if (_isEditing) {
@@ -802,6 +804,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
   Future<bool> _showFocusModeWarning(String categoryName) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final result = await showModalBottomSheet<bool>(
+      useSafeArea: true,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(

@@ -375,8 +375,9 @@ void main() {
       expect(transactions, isEmpty); // Wiped completely since it is local cache
 
       final queue = await db.query('transaction_sync_queue');
-      expect(queue.length, equals(1)); // Guest action preserved!
-      expect(queue.first['userId'], equals('guest_user'));
+      // The whole queue is wiped: leftover guest actions would otherwise
+      // upload the deleted user's data into the next account (audit P1-7).
+      expect(queue, isEmpty);
 
       // Verify persistent in-progress state is cleared/unset at the end
       final prefs = await SharedPreferences.getInstance();

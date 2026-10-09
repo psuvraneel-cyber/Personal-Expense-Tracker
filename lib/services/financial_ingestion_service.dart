@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/models/enums.dart';
@@ -11,6 +13,7 @@ import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/services/merchant_normalizer.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/services/canonical_identity_resolver.dart';
+import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/category_mapper.dart';
 import 'package:pet/services/classification_rule_engine.dart';
 import 'package:pet/services/ingestion_diagnostics.dart';
@@ -46,25 +49,64 @@ class FinancialIngestionService {
       RecurringPaymentRepository();
   static const Uuid _uuid = Uuid();
 
-  bool _isNotificationCallbackRegistered = false;
+  /// Incremented whenever automatic ingestion (or a review decision) changes
+  /// the `transactions` ledger, so in-memory UI state can reload.
+  static final ValueNotifier<int> ledgerRevision = ValueNotifier<int>(0);
 
-  void ensureNotificationCallbackRegistered() {
-    if (_isNotificationCallbackRegistered) return;
-    _isNotificationCallbackRegistered = true;
-    NotificationService.onActionReceived = (actionId, payload) async {
-      if (payload.startsWith('obs:')) {
-        final observationId = payload.substring(4);
-        if (actionId == 'confirm') {
-          await confirmObservation(observationId: observationId);
-        } else if (actionId == 'ignore') {
-          await rejectObservation(
-            observationId: observationId,
-            reason: 'notification_action_ignore',
-          );
-        }
+  /// Incremented when the pending-review queue changes.
+  static final ValueNotifier<int> reviewRevision = ValueNotifier<int>(0);
+
+  /// Tail of the in-isolate work queue. Every ingestion / review mutation runs
+  /// strictly one after another so concurrent events (live SMS + notification
+  /// + inbox scan) cannot race past the dedup checks. Cross-isolate races
+  /// (background worker) are stopped by the UNIQUE index on
+  /// `transactions.sourceFingerprint`.
+  Future<void> _tail = Future<void>.value();
+
+  Future<T> _serialized<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _tail = _tail.then((_) async {
+      try {
+        completer.complete(await action());
+      } catch (e, st) {
+        completer.completeError(e, st);
       }
+    });
+    return completer.future;
+  }
+
+  /// Owner for queued cloud-sync actions. Rows queued as `guest_user` are
+  /// re-assigned to the signed-in account by
+  /// `TransactionRepository.migrateGuestSyncActions` on the next load.
+  static String _syncUserId() {
+    try {
+      final sync = FirestoreSyncService();
+      if (sync.isAuthenticated) return sync.currentUserId;
+    } catch (_) {}
+    return 'guest_user';
+  }
+
+  static Map<String, Object?> _syncQueueRow(
+    String transactionId,
+    String action, {
+    TransactionRecord? record,
+  }) {
+    return {
+      'id': _uuid.v4(),
+      'transactionId': transactionId,
+      'action': action,
+      'payload': record == null ? null : jsonEncode(record.toMap()),
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'userId': _syncUserId(),
+      'retryCount': 0,
+      'lastAttemptAt': 0,
+      'lastError': null,
     };
   }
+
+  /// Kept for API compatibility. Notification actions are now handled by
+  /// `handleTransactionNotificationAction` (works in background isolates too).
+  void ensureNotificationCallbackRegistered() {}
 
   /// Minimum confidence threshold for automatic promotion to the core ledger.
   static const double autoAcceptConfidenceThreshold = 0.80;
@@ -77,7 +119,12 @@ class FinancialIngestionService {
   /// Ingests a raw [NativeSmsMessage] from SMS or push notification.
   /// Returns the promoted [TransactionRecord] if auto-promoted, or `null`
   /// if rejected, uncertain (placed in review), or duplicate.
-  Future<TransactionRecord?> ingestMessage(NativeSmsMessage msg) async {
+  Future<TransactionRecord?> ingestMessage(NativeSmsMessage msg) =>
+      _serialized(() => _ingestMessageUnlocked(msg));
+
+  Future<TransactionRecord?> _ingestMessageUnlocked(
+    NativeSmsMessage msg,
+  ) async {
     final body = msg.body;
     final sender = msg.address;
     final timestamp = msg.dateTime;
@@ -459,6 +506,8 @@ class FinancialIngestionService {
         ),
       );
 
+      reviewRevision.value++;
+
       // Interactive notification for review (Confirm, Edit, Ignore)
       await NotificationService.showTransactionDetectedNotification(
         observationId: observationId,
@@ -513,18 +562,69 @@ class FinancialIngestionService {
       canonicalTransactionId: txnId,
     );
 
+    String? duplicateOfTxnId;
     await db.transaction((txn) async {
-      // 1. Insert canonical transaction into core ledger
-      await txn.insert(
+      // 1. Insert canonical transaction into core ledger. Re-check the
+      //    fingerprint inside the transaction and verify the row afterwards:
+      //    a concurrent writer (e.g. the background isolate) may have won the
+      //    race, in which case the UNIQUE index silently ignores this insert.
+      final existing = await txn.query(
         'transactions',
-        promotedTxn.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.ignore,
+        columns: ['id'],
+        where: 'sourceFingerprint = ?',
+        whereArgs: [fingerprint],
+        limit: 1,
+      );
+      if (existing.isEmpty) {
+        await txn.insert(
+          'transactions',
+          promotedTxn.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+      final mine = await txn.query(
+        'transactions',
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [txnId],
+        limit: 1,
+      );
+      if (mine.isEmpty) {
+        duplicateOfTxnId = existing.isNotEmpty
+            ? existing.first['id'] as String
+            : (await txn.query(
+                'transactions',
+                columns: ['id'],
+                where: 'sourceFingerprint = ?',
+                whereArgs: [fingerprint],
+                limit: 1,
+              ))
+                .map((r) => r['id'] as String)
+                .firstOrNull;
+        await txn.insert(
+          'financial_observations',
+          _minimise(
+            observation.copyWith(
+              state: FinancialObservationState.linked,
+              stateReason: 'cross_source_duplicate_of_$duplicateOfTxnId',
+              canonicalTransactionId: duplicateOfTxnId,
+            ),
+          ).toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        return;
+      }
+
+      // 1b. Queue the new ledger row for cloud sync in the same transaction.
+      await txn.insert(
+        'transaction_sync_queue',
+        _syncQueueRow(txnId, 'create', record: promotedTxn),
       );
 
-      // 2. Insert observation record
+      // 2. Insert observation record (minimised — see [_minimise])
       await txn.insert(
         'financial_observations',
-        observation.toMap(),
+        _minimise(observation).toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
@@ -568,6 +668,15 @@ class FinancialIngestionService {
       );
     });
 
+    if (duplicateOfTxnId != null) {
+      _diagnostics.recordCrossSourceMerge();
+      AppLogger.debug(
+        '[IngestionService] Concurrent duplicate collapsed into $duplicateOfTxnId',
+      );
+      return null;
+    }
+
+    ledgerRevision.value++;
     AppLogger.info(
       '[IngestionService] Promoted ₹$amount at $merchant to Core Ledger ($txnId)',
     );
@@ -601,7 +710,8 @@ class FinancialIngestionService {
       );
 
       final promotedTransactions = <TransactionRecord>[];
-      int processedCount = 0;
+      final processedIds = <String>[];
+      var legacyCount = 0;
 
       for (final msg in pendingMessages) {
         try {
@@ -609,22 +719,26 @@ class FinancialIngestionService {
           if (txn != null) {
             promotedTransactions.add(txn);
           }
-          processedCount++;
         } catch (e) {
+          // A poison-pill item is still acknowledged so it cannot loop forever.
           AppLogger.error(
               '[IngestionService] Error ingesting single notification',
               error: e);
-          // Still increment count so a poison pill notification does not loop indefinitely
-          processedCount++;
+        }
+        if (msg.cacheId != null) {
+          processedIds.add(msg.cacheId!);
+        } else {
+          legacyCount++;
         }
       }
 
-      // Durably acknowledge processed count only after SQLite transactions succeed
-      if (processedCount > 0) {
-        await _nativeReader.acknowledgeNotifications(processedCount);
-        AppLogger.info(
-          '[IngestionService] Acknowledged $processedCount notifications from encrypted cache',
-        );
+      // Acknowledge exactly what was processed, only after it was stored.
+      if (processedIds.isNotEmpty) {
+        await _nativeReader.acknowledgeNotificationIds(processedIds);
+      }
+      // Items cached by older builds have no id; they sit at the head.
+      if (legacyCount > 0 && processedIds.isEmpty) {
+        await _nativeReader.acknowledgeNotifications(legacyCount);
       }
 
       return promotedTransactions;
@@ -702,6 +816,23 @@ class FinancialIngestionService {
     String? overrideCategoryId,
     String? overrideMerchant,
     TransactionType? overrideType,
+  }) =>
+      _serialized(
+        () => _confirmObservationUnlocked(
+          observationId: observationId,
+          overrideAmount: overrideAmount,
+          overrideCategoryId: overrideCategoryId,
+          overrideMerchant: overrideMerchant,
+          overrideType: overrideType,
+        ),
+      );
+
+  Future<TransactionRecord?> _confirmObservationUnlocked({
+    required String observationId,
+    double? overrideAmount,
+    String? overrideCategoryId,
+    String? overrideMerchant,
+    TransactionType? overrideType,
   }) async {
     final db = await _dbHelper.database;
     final obsRows = await db.query(
@@ -760,20 +891,73 @@ class FinancialIngestionService {
       sourceFingerprint: fingerprint,
     );
 
-    await db.transaction((txn) async {
-      await txn.insert(
-        'transactions',
-        txnRecord.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+    if (!finalAmount.isFinite || finalAmount <= 0) {
+      AppLogger.debug(
+        '[IngestionService] confirmObservation: no valid amount for $observationId',
       );
+      return null;
+    }
+
+    var linkedTo = txnId;
+    await db.transaction((txn) async {
+      // If another source already recorded this event, link instead of
+      // creating a duplicate ledger row.
+      final dup = await txn.query(
+        'transactions',
+        columns: ['id'],
+        where: 'sourceFingerprint = ? AND id != ?',
+        whereArgs: [fingerprint, txnId],
+        limit: 1,
+      );
+      if (dup.isNotEmpty) {
+        linkedTo = dup.first['id'] as String;
+      } else {
+        await txn.insert(
+          'transactions',
+          txnRecord.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        await txn.insert(
+          'transaction_sync_queue',
+          _syncQueueRow(txnId, 'create', record: txnRecord),
+        );
+        // Keep the legacy SMS list in sync with the ledger.
+        await txn.insert(
+          'sms_transactions',
+          SmsTransaction(
+            id: observationId,
+            amount: finalAmount,
+            merchantName: finalMerchant,
+            bankName: classified?.bankName ?? 'Unknown Bank',
+            transactionType:
+                finalType == TransactionType.income ? 'credit' : 'debit',
+            timestamp: observation.sourceTimestamp,
+            rawSmsBody: SmsService.redactSensitiveData(observation.body),
+            smsSender: observation.sender ?? observation.sourceIdentifier,
+            smsHash: observation.observationHash,
+            category: classified?.category ?? 'Uncategorized',
+            referenceId: classified?.referenceId,
+            upiId: classified?.upiId,
+            confidence: 1.0,
+            isVerified: true,
+            source:
+                observation.source == FinancialObservationSource.notification
+                    ? 'notification'
+                    : 'sms',
+          ).toMap(),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
 
       await txn.update(
         'financial_observations',
         {
-          'state': FinancialObservationState.promoted.name,
+          'state': dup.isNotEmpty
+              ? FinancialObservationState.linked.name
+              : FinancialObservationState.promoted.name,
           'stateReason': 'user_confirmed',
           'confidence': 1.0,
-          'canonicalTransactionId': txnId,
+          'canonicalTransactionId': linkedTo,
         },
         where: 'observationId = ?',
         whereArgs: [observationId],
@@ -813,11 +997,81 @@ class FinancialIngestionService {
       AppLogger.debug('[IngestionService] Error learning merchant rule: $e');
     }
 
-    return txnRecord;
+    ledgerRevision.value++;
+    reviewRevision.value++;
+    return linkedTo == txnId ? txnRecord : null;
   }
 
-  /// User rejects an observation — records persistent tombstone to prevent resurrection.
+  /// Re-categorises the ledger transaction created from an SMS/notification
+  /// (category picked on the SMS screen), queues the change for cloud sync,
+  /// and remembers the choice for this merchant.
+  Future<void> recategorizeFromSms({
+    required String observationId,
+    required String parserCategory,
+  }) =>
+      _serialized(() async {
+        final db = await _dbHelper.database;
+        final rows = await db.query(
+          'transactions',
+          where: 'sourceObservationId = ?',
+          whereArgs: [observationId],
+        );
+        if (rows.isEmpty) return;
+        for (final row in rows) {
+          final current = TransactionRecord.fromMap(row);
+          final categoryId = CategoryMapper.mapToCategoryId(
+            parserCategory: parserCategory,
+            merchantName: current.merchantName ?? '',
+            isIncome: current.type == TransactionType.income,
+          );
+          final updated = current.copyWith(
+            categoryId: categoryId,
+            updatedAt: DateTime.now(),
+          );
+          await db.transaction((txn) async {
+            await txn.update(
+              'transactions',
+              updated.toMap(),
+              where: 'id = ?',
+              whereArgs: [updated.id],
+            );
+            await txn.insert(
+              'transaction_sync_queue',
+              _syncQueueRow(updated.id, 'update', record: updated),
+            );
+          });
+          final merchant = current.merchantName;
+          if (merchant != null &&
+              merchant.isNotEmpty &&
+              merchant != 'Unknown') {
+            try {
+              await _merchantRuleService.learnRule(
+                identifier: merchant,
+                learnedMerchantName: merchant,
+                categoryId: categoryId,
+              );
+            } catch (_) {}
+          }
+        }
+        ledgerRevision.value++;
+      });
+
+  /// User rejects an observation (false positive, "Ignore" action, or
+  /// deleting an auto-detected transaction). Records a persistent tombstone so
+  /// the message is never re-imported, **and removes any ledger transaction
+  /// created from it** (queuing a cloud delete).
   Future<void> rejectObservation({
+    required String observationId,
+    String? reason,
+  }) =>
+      _serialized(
+        () => _rejectObservationUnlocked(
+          observationId: observationId,
+          reason: reason,
+        ),
+      );
+
+  Future<void> _rejectObservationUnlocked({
     required String observationId,
     String? reason,
   }) async {
@@ -828,34 +1082,71 @@ class FinancialIngestionService {
       whereArgs: [observationId],
       limit: 1,
     );
-    if (obsRows.isEmpty) return;
-
-    final obs = FinancialObservation.fromMap(obsRows.first);
+    final obs =
+        obsRows.isEmpty ? null : FinancialObservation.fromMap(obsRows.first);
     final nowIso = DateTime.now().toIso8601String();
+    var ledgerChanged = false;
 
     await db.transaction((txn) async {
-      await txn.update(
-        'financial_observations',
-        {
-          'state': FinancialObservationState.rejected.name,
-          'stateReason': reason ?? 'user_rejected',
-        },
-        where: 'observationId = ?',
+      if (obs != null) {
+        await txn.update(
+          'financial_observations',
+          {
+            'state': FinancialObservationState.rejected.name,
+            'stateReason': reason ?? 'user_rejected',
+            'canonicalTransactionId': null,
+            // Rejected messages keep only their hash (see _minimise).
+            'title': null,
+            'body': '',
+            'normalizedText': '',
+          },
+          where: 'observationId = ?',
+          whereArgs: [observationId],
+        );
+
+        await txn.insert(
+          'sms_processing_state',
+          {
+            'id': observationId,
+            'smsHash': obs.observationHash,
+            'status': 'rejected',
+            'processedAt': nowIso,
+            'reason': reason ?? 'user_rejected',
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      // Remove ledger rows created from this message (auto-promoted,
+      // user-confirmed, or migrated by the v18 backfill).
+      final ids = <String>{
+        if (obs?.canonicalTransactionId != null) obs!.canonicalTransactionId!,
+        ...(await txn.query(
+          'transactions',
+          columns: ['id'],
+          where: 'sourceObservationId = ?',
+          whereArgs: [observationId],
+        ))
+            .map((r) => r['id'] as String),
+      };
+      for (final id in ids) {
+        final deleted =
+            await txn.delete('transactions', where: 'id = ?', whereArgs: [id]);
+        if (deleted > 0) {
+          ledgerChanged = true;
+          await txn.insert(
+              'transaction_sync_queue', _syncQueueRow(id, 'delete'));
+        }
+      }
+      await txn.delete(
+        'sms_transactions',
+        where: 'id = ?',
         whereArgs: [observationId],
       );
-
-      await txn.insert(
-        'sms_processing_state',
-        {
-          'id': observationId,
-          'smsHash': obs.observationHash,
-          'status': 'rejected',
-          'processedAt': nowIso,
-          'reason': reason ?? 'user_rejected',
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
     });
+
+    if (ledgerChanged) ledgerRevision.value++;
+    reviewRevision.value++;
   }
 
   // ─── Internal Helpers ──────────────────────────────────────────────
@@ -863,8 +1154,49 @@ class FinancialIngestionService {
   Future<void> _recordObservation(Database db, FinancialObservation obs) async {
     await db.insert(
       'financial_observations',
-      obs.toMap(),
+      _minimise(obs).toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
+
+  /// Data minimisation applied before any observation is persisted.
+  ///
+  /// - Rejected (non-financial / low-confidence) messages keep **only** their
+  ///   hash (for dedup and "never resurrect" tombstones) — the message text is
+  ///   never stored, because it may be a personal message.
+  /// - Everything else is stored with account, card and phone numbers redacted.
+  /// - Raw text of resolved observations is purged after
+  ///   [DatabaseHelper.observationTextRetention] by
+  ///   [DatabaseHelper.purgeExpiredSensitiveData].
+  static FinancialObservation _minimise(FinancialObservation obs) {
+    if (obs.state == FinancialObservationState.rejected) {
+      return FinancialObservation(
+        observationId: obs.observationId,
+        source: obs.source,
+        sourceIdentifier: obs.sourceIdentifier,
+        sender: obs.sender,
+        packageName: obs.packageName,
+        title: null,
+        body: '',
+        normalizedText: '',
+        receivedAt: obs.receivedAt,
+        sourceTimestamp: obs.sourceTimestamp,
+        observationHash: obs.observationHash,
+        sourceFingerprint: obs.sourceFingerprint,
+        state: obs.state,
+        stateReason: obs.stateReason,
+        confidence: obs.confidence,
+      );
+    }
+    return obs.copyWith(
+      title:
+          obs.title == null ? null : SmsService.redactSensitiveData(obs.title!),
+      body: SmsService.redactSensitiveData(obs.body),
+      normalizedText: SmsService.redactSensitiveData(obs.normalizedText),
+    );
+  }
+
+  @visibleForTesting
+  static FinancialObservation minimiseForTesting(FinancialObservation obs) =>
+      _minimise(obs);
 }

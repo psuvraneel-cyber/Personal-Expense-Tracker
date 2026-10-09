@@ -61,6 +61,7 @@ class _GoalsScreenState extends State<GoalsScreen>
         backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
         actions: [
           IconButton(
+            tooltip: 'Add',
             onPressed: () => _showAddGoal(context),
             icon: Container(
               padding: const EdgeInsets.all(6),
@@ -705,6 +706,7 @@ class _GoalsScreenState extends State<GoalsScreen>
   ) async {
     final controller = TextEditingController();
     await showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -844,6 +846,7 @@ class _GoalsScreenState extends State<GoalsScreen>
     String? amountError;
 
     await showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -1041,6 +1044,7 @@ class _GoalsScreenState extends State<GoalsScreen>
     String? amountError;
 
     await showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -1066,6 +1070,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                     style: Theme.of(ctx).textTheme.titleLarge,
                   ),
                   IconButton(
+                    tooltip: 'Close',
                     icon: const Icon(Icons.close_rounded),
                     onPressed: () => Navigator.pop(ctx),
                   ),

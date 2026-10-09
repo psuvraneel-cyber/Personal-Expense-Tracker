@@ -444,6 +444,7 @@ class RecurringTransactionsScreen extends StatelessWidget {
     RecurringFrequency selectedFreq = rule.frequency;
 
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -476,6 +477,7 @@ class RecurringTransactionsScreen extends StatelessWidget {
                           ),
                     ),
                     IconButton(
+                      tooltip: 'Close',
                       icon: const Icon(Icons.close),
                       onPressed: () => Navigator.pop(ctx),
                     ),

@@ -259,6 +259,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           _buildMonthChip(context, txnProvider, isDark),
                           const SizedBox(width: 10),
                           _buildIconButton(
+                            tooltip: 'Calculator',
                             Icons.calculate_outlined,
                             isDark,
                             onTap: () => Navigator.push(
@@ -490,8 +491,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildIconButton(IconData icon, bool isDark, {VoidCallback? onTap}) {
-    return GestureDetector(
+  Widget _buildIconButton(
+    IconData icon,
+    bool isDark, {
+    VoidCallback? onTap,
+    String? tooltip,
+  }) {
+    final button = GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(8),
@@ -505,6 +511,12 @@ class _DashboardScreenState extends State<DashboardScreen>
           color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
         ),
       ),
+    );
+    if (tooltip == null) return button;
+    // Screen readers announce it as a labelled button.
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(button: true, label: tooltip, child: button),
     );
   }
 
@@ -539,7 +551,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final ringColor = PETColors.budgetRingColor(percent);
     final remaining = budget - spent;
 
-    return Container(
+    final chart = Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.cardDark : Colors.white,
@@ -624,6 +636,16 @@ class _DashboardScreenState extends State<DashboardScreen>
         ],
       ),
     );
+    // One clear announcement instead of the ring's unlabelled segments.
+    return Semantics(
+      label: budget > 0
+          ? 'Budget: ${_formatter.format(spent)} spent of '
+              '${_formatter.format(budget)}, ${(percent * 100).round()} percent. '
+              '${remaining >= 0 ? '${_formatter.format(remaining)} left' : '${_formatter.format(-remaining)} over budget'}.'
+          : 'No budget set. ${_formatter.format(spent)} spent.',
+      excludeSemantics: true,
+      child: chart,
+    );
   }
 
   Widget _buildCategoryBars(
@@ -680,6 +702,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   void _showMonthPicker(BuildContext context, TransactionProvider txnProvider) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       backgroundColor: isDark ? AppTheme.cardDark : Colors.white,
       shape: const RoundedRectangleBorder(
@@ -1006,6 +1029,29 @@ class _DashboardScreenState extends State<DashboardScreen>
             ? 'Month'
             : 'Year';
 
+    // Spoken summary for screen readers (the chart itself is not readable).
+    final total = values.fold<double>(0, (a, b) => a + b);
+    final peakIndex = values.isEmpty ? -1 : values.indexOf(maxValue);
+    final summary = values.isEmpty
+        ? 'Spending trend: no data'
+        : 'Spending trend over ${values.length} periods. Total '
+            '₹${total.toStringAsFixed(0)}. Highest ₹${maxValue.toStringAsFixed(0)}'
+            '${peakIndex >= 0 && peakIndex < labels.length ? ' in ${labels[peakIndex]}' : ''}.';
+
+    return Semantics(
+      label: summary,
+      excludeSemantics: true,
+      child: _lineChartBody(values, labels, isDark, maxSpending, labelPrefix),
+    );
+  }
+
+  Widget _lineChartBody(
+    List<double> values,
+    List<String> labels,
+    bool isDark,
+    double maxSpending,
+    String labelPrefix,
+  ) {
     return Container(
       height: 200,
       padding: const EdgeInsets.only(right: 8),
@@ -1120,7 +1166,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           ],
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
-              tooltipRoundedRadius: 12,
+              tooltipBorderRadius: BorderRadius.circular(12),
               tooltipPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 8,

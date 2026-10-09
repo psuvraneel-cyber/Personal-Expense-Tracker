@@ -134,6 +134,7 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
         backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
         actions: [
           IconButton(
+            tooltip: 'Add',
             onPressed: () => _showAddOrEditBillSheet(context),
             icon: Container(
               padding: const EdgeInsets.all(6),
@@ -876,6 +877,7 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
     final isCancelled = bill.status == RecurringStatus.cancelled;
 
     await showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: isDark ? AppTheme.cardDark : Colors.white,
@@ -1275,6 +1277,7 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
     if (!context.mounted) return;
 
     await showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: isDark ? AppTheme.cardDark : Colors.white,
@@ -1390,6 +1393,7 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
     bool isAutopay = existingBill?.isAutopay ?? false;
 
     await showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(

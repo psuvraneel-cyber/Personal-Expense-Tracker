@@ -204,6 +204,7 @@ class _NotificationPermissionBannerState
                   if (widget.isDismissible) ...[
                     const SizedBox(width: 4),
                     IconButton(
+                      tooltip: 'Close',
                       icon: const Icon(Icons.close, size: 16),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),

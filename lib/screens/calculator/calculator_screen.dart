@@ -10,6 +10,7 @@ class CalculatorScreen extends StatefulWidget {
   /// Show the calculator as a modal bottom sheet from anywhere in the app.
   static Future<double?> showAsSheet(BuildContext context) {
     return showModalBottomSheet<double>(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -54,6 +55,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
       backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
       appBar: AppBar(
         leading: IconButton(
+          tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
@@ -731,6 +733,7 @@ class _CalculatorBodyState extends State<_CalculatorBody> {
       return;
     }
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) {

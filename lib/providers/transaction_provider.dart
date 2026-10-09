@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show FirebaseException, Timestamp;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +13,7 @@ import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
 import 'package:pet/services/recurring_transaction_service.dart';
+import 'package:pet/services/financial_ingestion_service.dart';
 import 'package:pet/premium/services/alert_evaluation_coordinator.dart';
 import 'package:uuid/uuid.dart';
 
@@ -38,10 +40,45 @@ class TransactionProvider extends ChangeNotifier {
         _firestoreSync = firestoreSync ?? FirestoreSyncService(),
         _recurringService = recurringService {
     _loadLastSyncAt();
+    FinancialIngestionService.ledgerRevision.addListener(_onLedgerChanged);
+  }
+
+  Timer? _ledgerReloadDebounce;
+
+  /// Auto-detected transactions are written straight to SQLite by the
+  /// ingestion engine; reload so the dashboard, budgets and lists update
+  /// without an app restart (debounced for inbox-scan bursts).
+  void _onLedgerChanged() {
+    _ledgerReloadDebounce?.cancel();
+    _ledgerReloadDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => reloadFromLocal(),
+    );
+  }
+
+  /// Re-reads the local ledger (no Firestore resubscription) and pushes any
+  /// queued changes to the cloud. Called after background/automatic writes
+  /// and when the app returns to the foreground.
+  Future<void> reloadFromLocal() async {
+    if (kIsWeb) return;
+    try {
+      _transactions = await _repository.getAllTransactions();
+      _invalidateAggregates();
+      _applyFiltersAndSort();
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error('reloadFromLocal failed',
+          error: e, label: 'TransactionProvider');
+    }
+    unawaited(triggerSyncQueue());
   }
 
   List<TransactionRecord> _transactions = [];
   List<TransactionRecord> _filteredTransactions = [];
+
+  /// Resolves a category id to its display name so search can match it
+  /// (wired up in main.dart from CategoryProvider).
+  String? Function(String categoryId)? categoryNameLookup;
   bool _isLoading = false;
   String _searchQuery = '';
   String? _filterCategoryId;
@@ -161,11 +198,6 @@ class TransactionProvider extends ChangeNotifier {
           await _repository
               .migrateGuestSyncActions('guest_user', currentUserId)
               .catchError((Object e) {
-            debugPrint('[Sync] Failed to migrate guest sync actions: $e');
-          });
-          await _repository
-              .migrateGuestSyncActions('guest_user', currentUserId)
-              .catchError((Object e) {
             AppLogger.error('Failed to migrate guest sync actions',
                 error: e, label: 'Sync');
           });
@@ -222,9 +254,6 @@ class TransactionProvider extends ChangeNotifier {
   /// Idempotent — cancels any existing subscription first.
   Future<void> _subscribeToFirestoreStream() async {
     if (AccountDeletionService.isDeletionInProgress) {
-      debugPrint(
-        '[Sync] Skip subscribing to Firestore streams: account deletion in progress',
-      );
       AppLogger.warn(
           'Skip subscribing to Firestore streams: account deletion in progress',
           label: 'Sync');
@@ -465,6 +494,9 @@ class TransactionProvider extends ChangeNotifier {
     if (AccountDeletionService.isDeletionInProgress) {
       throw StateError('Account deletion in progress');
     }
+    if (!amount.isFinite || amount <= 0) {
+      throw ArgumentError.value(amount, 'amount', 'must be a positive number');
+    }
     final transaction = TransactionRecord(
       id: _uuid.v4(),
       amount: amount,
@@ -537,6 +569,10 @@ class TransactionProvider extends ChangeNotifier {
   Future<void> updateTransaction(TransactionRecord transaction) async {
     if (AccountDeletionService.isDeletionInProgress) {
       throw StateError('Account deletion in progress');
+    }
+    if (!transaction.amount.isFinite || transaction.amount <= 0) {
+      throw ArgumentError.value(
+          transaction.amount, 'amount', 'must be a positive number');
     }
     final updatedTxn = transaction.copyWith(updatedAt: DateTime.now());
     final index = _transactions.indexWhere((t) => t.id == updatedTxn.id);
@@ -669,11 +705,6 @@ class TransactionProvider extends ChangeNotifier {
       SharedPreferences.getInstance().then((prefs) {
         prefs.setString('lastSyncAt', _lastSyncAt!.toIso8601String());
       }).catchError((Object e) {
-        debugPrint('[Sync] Failed to save lastSyncTime: $e');
-      });
-      SharedPreferences.getInstance().then((prefs) {
-        prefs.setString('lastSyncAt', _lastSyncAt!.toIso8601String());
-      }).catchError((Object e) {
         AppLogger.error('Failed to save lastSyncTime', error: e, label: 'Sync');
       });
     } else if (status == SyncStatus.error) {
@@ -749,6 +780,19 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  static DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  bool _matchesSearch(TransactionRecord t, String query) {
+    bool has(String? value) =>
+        value != null && value.toLowerCase().contains(query);
+    return has(t.note) ||
+        has(t.merchantName) ||
+        has(t.paymentMethod.displayName) ||
+        has(categoryNameLookup?.call(t.categoryId)) ||
+        t.amount.toString().contains(query) ||
+        t.amount.toStringAsFixed(0).contains(query);
+  }
+
   void _applyFiltersAndSort() {
     final bool hasSearch = _searchQuery.isNotEmpty;
     final String? query = hasSearch ? _searchQuery.toLowerCase() : null;
@@ -767,23 +811,21 @@ class TransactionProvider extends ChangeNotifier {
     } else {
       filtered = <TransactionRecord>[];
       for (final t in _transactions) {
-        if (query != null &&
-            !t.note.toLowerCase().contains(query) &&
-            !t.paymentMethod.displayName.toLowerCase().contains(query) &&
-            !t.amount.toString().contains(query)) {
+        if (query != null && !_matchesSearch(t, query)) {
           continue;
         }
         if (_filterCategoryId != null && t.categoryId != _filterCategoryId) {
           continue;
         }
+        // Inclusive calendar-day range: [start 00:00, day after end 00:00).
         if (_filterStartDate != null &&
-            !t.date.isAfter(
-              _filterStartDate!.subtract(const Duration(days: 1)),
-            )) {
+            t.date.isBefore(_startOfDay(_filterStartDate!))) {
           continue;
         }
         if (_filterEndDate != null &&
-            !t.date.isBefore(_filterEndDate!.add(const Duration(days: 1)))) {
+            !t.date.isBefore(
+              _startOfDay(_filterEndDate!).add(const Duration(days: 1)),
+            )) {
           continue;
         }
         if (_filterMinAmount != null && t.amount < _filterMinAmount!) continue;
@@ -879,9 +921,6 @@ class TransactionProvider extends ChangeNotifier {
 
       if (txnsToUpsert.isNotEmpty) {
         await _repository.insertTransactionsBatch(txnsToUpsert);
-        debugPrint(
-          '[Sync] Restored/updated ${txnsToUpsert.length} transactions from Firestore',
-        );
         AppLogger.info(
             'Restored/updated ${txnsToUpsert.length} transactions from Firestore',
             label: 'Sync');
@@ -1096,11 +1135,24 @@ class TransactionProvider extends ChangeNotifier {
             AppLogger.info('Action ($act) synced successfully',
                 label: 'SyncQueue');
           } catch (e) {
+            if (isPermanentSyncError(e)) {
+              // Retrying can never succeed (e.g. rejected by security rules
+              // or a corrupt payload). Drop it so it cannot block every later
+              // change from syncing; the row stays in the local ledger.
+              AppLogger.error(
+                'Dropping permanently failing sync action ($act) for $tId',
+                error: e,
+                label: 'SyncQueue',
+              );
+              await _repository.deleteSyncAction(actionId);
+              continue;
+            }
             AppLogger.error('Action ($act) sync failed',
                 error: e, label: 'SyncQueue');
             await _repository.incrementSyncRetry(actionId, e.toString());
             _setSyncStatus(SyncStatus.error, error: e.toString());
-            // Stop processing subsequent actions in the queue to observe order and allow backoff
+            // Transient (network/server) failure: stop to preserve ordering
+            // and let backoff apply.
             processedAny = false;
             break;
           }
@@ -1125,8 +1177,24 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
+  /// Errors that will fail identically on every retry.
+  @visibleForTesting
+  static bool isPermanentSyncError(Object e) {
+    if (e is FirebaseException) {
+      return const {
+        'permission-denied',
+        'invalid-argument',
+        'failed-precondition',
+        'out-of-range',
+      }.contains(e.code);
+    }
+    return e is FormatException || e is StateError || e is TypeError;
+  }
+
   @override
   void dispose() {
+    FinancialIngestionService.ledgerRevision.removeListener(_onLedgerChanged);
+    _ledgerReloadDebounce?.cancel();
     _firestoreSubscription?.cancel();
     _tombstoneSubscription?.cancel();
     super.dispose();

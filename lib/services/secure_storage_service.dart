@@ -3,6 +3,17 @@ import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pet/core/utils/app_logger.dart';
 
+/// Thrown when the local database exists but its encryption key cannot be
+/// read (Keystore error) or is missing. The key must NOT be regenerated in
+/// this case — that would make the existing database permanently unreadable.
+class DatabaseKeyUnavailableException implements Exception {
+  final String message;
+  final Object? cause;
+  DatabaseKeyUnavailableException(this.message, [this.cause]);
+  @override
+  String toString() => 'DatabaseKeyUnavailableException: $message';
+}
+
 /// Service for managing secrets and encryption keys securely.
 ///
 /// Uses `flutter_secure_storage` to write, read, and delete sensitive data at rest
@@ -12,7 +23,13 @@ class SecureStorageService {
   static final SecureStorageService instance = SecureStorageService._();
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(
+      // Never silently wipe secrets on a decryption error: that would destroy
+      // the database key. Errors surface as DatabaseKeyUnavailableException
+      // and the app offers an explicit recovery instead.
+      resetOnError: false,
+      migrateOnAlgorithmChange: true,
+    ),
   );
 
   static const String _kDbEncryptionKey = 'db_encryption_key';
@@ -65,18 +82,42 @@ class SecureStorageService {
     }
   }
 
-  /// Retrieve or generate the cryptographically secure 256-bit database encryption key.
-  Future<String> getDatabaseEncryptionKey() async {
-    var key = await read(_kDbEncryptionKey);
-    if (key == null || key.isEmpty) {
-      AppLogger.info(
-        '[SecureStorage] No existing database key found. Generating new secure key.',
+  /// Retrieve or generate the cryptographically secure 256-bit database
+  /// encryption key.
+  ///
+  /// A new key is generated **only** when no encrypted database exists yet
+  /// ([databaseExists] is false). If storage throws, or the key is missing
+  /// while a database exists, [DatabaseKeyUnavailableException] is thrown so
+  /// the app can offer recovery instead of silently destroying access.
+  Future<String> getDatabaseEncryptionKey({bool databaseExists = false}) async {
+    String? key;
+    try {
+      key = await _storage.read(key: _kDbEncryptionKey);
+    } catch (e) {
+      throw DatabaseKeyUnavailableException(
+        'Secure storage could not be read',
+        e,
       );
-      key = _generateSecureRandomKey();
-      await write(_kDbEncryptionKey, key);
     }
+    if (key != null && key.isNotEmpty) return key;
+
+    if (databaseExists) {
+      throw DatabaseKeyUnavailableException(
+        'Encryption key missing for an existing database',
+      );
+    }
+
+    AppLogger.info(
+      '[SecureStorage] No existing database key found. Generating new secure key.',
+    );
+    key = _generateSecureRandomKey();
+    await _storage.write(key: _kDbEncryptionKey, value: key);
     return key;
   }
+
+  /// Removes the database key (used only by the explicit "reset local data"
+  /// recovery action, together with deleting the database file).
+  Future<void> deleteDatabaseEncryptionKey() => delete(_kDbEncryptionKey);
 
   /// Generates a cryptographically strong 256-bit (32-byte) key.
   String _generateSecureRandomKey() {

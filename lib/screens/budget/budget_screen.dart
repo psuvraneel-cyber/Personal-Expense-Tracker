@@ -213,6 +213,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   IconButton(
+                    tooltip: 'Add',
                     onPressed: () => _showAddBudgetDialog(
                       context,
                       catProvider,
@@ -275,6 +276,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         IconButton(
+          tooltip: 'Previous',
           onPressed: () {
             int m = budgetProvider.currentMonth - 1;
             int y = budgetProvider.currentYear;
@@ -294,6 +296,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         IconButton(
+          tooltip: 'Next',
           onPressed: () {
             int m = budgetProvider.currentMonth + 1;
             int y = budgetProvider.currentYear;

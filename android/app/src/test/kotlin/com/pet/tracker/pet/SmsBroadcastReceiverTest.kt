@@ -31,7 +31,7 @@ class SmsBroadcastReceiverTest {
 
     @Test
     fun testIsLikelyBankSms_RecognizesBankSenders() {
-        assertTrue(SmsReaderPlugin.isLikelyBankSms("AD-HDFCBK", "Your account has been debited"))
+        assertTrue(SmsReaderPlugin.isLikelyBankSms("AD-HDFCBK", "Your account has been debited by Rs.250"))
         assertTrue(SmsReaderPlugin.isLikelyBankSms("VM-ICICIB", "Rs 500 paid at Starbucks"))
         assertTrue(SmsReaderPlugin.isLikelyBankSms("SBIINB", "INR 1,200.00 debited"))
         assertTrue(SmsReaderPlugin.isLikelyBankSms("AXISBK", "₹2,500 transferred to John"))
@@ -41,8 +41,7 @@ class SmsBroadcastReceiverTest {
 
     @Test
     fun testIsLikelyBankSms_RecognizesFinancialKeywordsWithCurrency() {
-        // Unknown sender but contains transaction keywords and currency indicator
-        assertTrue(SmsReaderPlugin.isLikelyBankSms("+919876543210", "Rs 500 spent at Grocery Store on card ending 1234"))
+        // Unknown (non-phone) sender but contains transaction keywords and a currency amount
         assertTrue(SmsReaderPlugin.isLikelyBankSms("123456", "INR 1000 deposited to your account successfully"))
         assertTrue(SmsReaderPlugin.isLikelyBankSms("INFO", "₹450 debited for UPI ref 998877"))
     }
@@ -58,6 +57,17 @@ class SmsBroadcastReceiverTest {
         // Empty message
         assertFalse(SmsReaderPlugin.isLikelyBankSms("AD-HDFCBK", ""))
         assertFalse(SmsReaderPlugin.isLikelyBankSms("AD-HDFCBK", "   "))
+    }
+
+    @Test
+    fun testIsLikelyBankSms_NeverForwardsPersonalMessages() {
+        // Personal phone-number senders are never forwarded, even with an amount
+        assertFalse(SmsReaderPlugin.isLikelyBankSms("+919876543210", "Rs 500 spent at Grocery Store on card ending 1234"))
+        assertFalse(SmsReaderPlugin.isLikelyBankSms("98765 43210", "Sent you Rs 200 for lunch"))
+        // "rs" inside ordinary words is not a currency marker
+        assertFalse(SmsReaderPlugin.isLikelyBankSms("JX-PROMOS", "Thanks, I sent yours. See you in 2 hours"))
+        // Bank sender without any amount (OTP / promo)
+        assertFalse(SmsReaderPlugin.isLikelyBankSms("AD-HDFCBK", "Your OTP is valid for 10 minutes"))
     }
 
     @Test

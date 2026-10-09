@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:pet/premium/services/ai_rate_limiter.dart';
+import 'package:pet/services/app_bootstrap.dart';
 
 /// A single chat turn sent to / received from the Groq API.
 class _ChatTurn {
@@ -213,6 +215,30 @@ class AiCopilotService {
   /// Clears the conversation history (e.g. when starting a fresh session).
   void clearHistory() => _history.clear();
 
+  /// Records a user report about an AI-generated reply (Google Play
+  /// AI-Generated Content policy). Stored under the reporter's own Firestore
+  /// tree (`users/{uid}/ai_reports`) for review; deleted with the account.
+  static Future<void> reportResponse({
+    required String reply,
+    required String prompt,
+    required String reason,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('Sign in to report a response.');
+    }
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('ai_reports')
+        .add({
+      'reply': reply.length > 5000 ? reply.substring(0, 5000) : reply,
+      'prompt': prompt.length > 2000 ? prompt.substring(0, 2000) : prompt,
+      'reason': reason,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
@@ -229,12 +255,14 @@ class AiCopilotService {
       throw Exception('Failed to get authentication token.');
     }
 
+    final appCheckToken = await AppBootstrap.appCheckToken();
     final response = await http
         .post(
           Uri.parse(_baseUrl),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $idToken',
+            if (appCheckToken != null) 'X-Firebase-AppCheck': appCheckToken,
           },
           body: jsonEncode({
             'model': model,
@@ -414,6 +442,7 @@ class AiCopilotService {
   }
 
   String _fmt(double v) {
+    if (v < 0) return '-${_fmt(-v)}';
     final str = v.toStringAsFixed(0);
     if (str.length <= 3) return str;
     final last3 = str.substring(str.length - 3);

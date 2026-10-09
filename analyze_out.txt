@@ -1,6 +1,0 @@
-Analyzing settings_screen.dart...                               
-
-   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\settings\settings_screen.dart:1046:37 - use_build_context_synchronously
-   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\settings\settings_screen.dart:1047:34 - use_build_context_synchronously
-   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\settings\settings_screen.dart:1048:32 - use_build_context_synchronously
-

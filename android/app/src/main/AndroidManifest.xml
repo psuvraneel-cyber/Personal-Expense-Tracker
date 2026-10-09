@@ -9,9 +9,11 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
-    <!-- Foreground Service permissions for Android 14+ (API 34+) WorkManager background sync -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- No foreground services are used (background work runs as normal or
+         expedited WorkManager jobs). Explicitly strip FGS-type permissions a
+         library might merge in, so no Play "Foreground service" declaration
+         is required. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" tools:node="remove" />
 
     <!-- Required for posting local notifications on Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -21,7 +23,10 @@
 
     <!-- Biometric authentication (fingerprint / face unlock) -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
-    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
+
+    <!-- SMS permissions imply a telephony requirement; SMS detection is
+         optional, so let tablets/Wi-Fi-only devices install the app too. -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <application
         android:label="P.E.T"
@@ -64,11 +69,11 @@
             </intent-filter>
         </service>
 
-        <!-- WorkManager Foreground Service Override for Android 14+ (API 34/35) -->
-        <service
-            android:name="androidx.work.impl.foreground.SystemForegroundService"
-            android:foregroundServiceType="dataSync"
-            tools:node="merge" />
+        <!-- flutter_local_notifications: required for notification action buttons
+             (Confirm / Ignore on detected transactions) -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false" />
 
         <!-- flutter_local_notifications receivers for scheduled alarms & boot restoration -->
         <receiver
@@ -107,6 +112,15 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- url_launcher: open the privacy policy / terms / support pages -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

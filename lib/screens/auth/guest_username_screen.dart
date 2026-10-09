@@ -72,6 +72,7 @@ class _GuestUsernameScreenState extends State<GuestUsernameScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Back',
           icon: Icon(
             Icons.arrow_back,
             color: isDark ? Colors.white : Colors.black,

@@ -6,7 +6,18 @@
     "public": "docs",
     "ignore": [
       "firebase.json",
-      "**/.*"
-    ]
+      "**/.*",
+      "**/*.md",
+      "play-store-audit.html"
+    ],
+    "cleanUrls": false
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    }
   }
 }

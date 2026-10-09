@@ -1,23 +1,22 @@
 import 'dart:async';
+import 'dart:convert' show jsonEncode;
 import 'dart:io' show Directory, File;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:meta/meta.dart';
 import 'package:pet/core/utils/app_logger.dart';
-import 'package:pet/services/platform_stub.dart'
-    if (dart.library.io) 'package:pet/services/platform_native.dart'
-    as platform;
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart' hide databaseFactory;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart'
-    show databaseFactory, databaseFactoryFfi, sqfliteFfiInit;
+import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:pet/core/constants/categories.dart';
 import 'package:pet/data/models/enums.dart';
+import 'package:pet/data/models/transaction.dart';
 import 'package:pet/services/canonical_identity_resolver.dart';
 import 'package:pet/services/category_mapper.dart';
 import 'package:pet/services/recurrence_calculator.dart';
 import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
+
+/// Current SQLite schema version.
+const int kDatabaseVersion = 21;
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -96,21 +95,21 @@ class DatabaseHelper {
     await db.execute("DETACH DATABASE encrypted");
     await db.close();
 
+    // Crash-safe swap: keep the original as a backup until the encrypted copy
+    // is in place, so an interruption can never leave no database at all.
     final file = File(path);
     final tempFile = File(tempPath);
-    if (await file.exists()) {
-      await file.delete();
-    }
+    final backup = File('$path.bak');
+    if (await backup.exists()) await backup.delete();
+    if (await file.exists()) await file.rename(backup.path);
     await tempFile.rename(path);
+    if (await backup.exists()) await backup.delete();
   }
 
   Future<Database> _initDatabase() async {
-    // Use FFI for Windows/Linux/macOS desktop (not needed on web or mobile)
-    if (!kIsWeb &&
-        (platform.isWindows || platform.isLinux || platform.isMacOS)) {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-    }
+    // Android-only app: SQLCipher via sqflite_sqlcipher. (The desktop FFI
+    // factory was removed — it bundled an extra libsqlite3.so in the APK.
+    // Tests install the FFI factory themselves.)
 
     final Directory documentsDirectory =
         await getApplicationDocumentsDirectory();
@@ -119,7 +118,8 @@ class DatabaseHelper {
     final cipherSupported = await isSqlCipherSupported();
     if (cipherSupported) {
       final File dbFile = File(path);
-      if (await dbFile.exists() && await _isDatabasePlaintext(path)) {
+      final existedBefore = await dbFile.exists();
+      if (existedBefore && await _isDatabasePlaintext(path)) {
         try {
           final password =
               await SecureStorageService.instance.getDatabaseEncryptionKey();
@@ -131,31 +131,83 @@ class DatabaseHelper {
         }
       }
 
-      final password =
-          await SecureStorageService.instance.getDatabaseEncryptionKey();
-      return await openDatabase(
-        path,
-        version: 20,
-        password: password,
-        onCreate: _onCreate,
-        onUpgrade: _onUpgrade,
-        onOpen: (db) async {
-          // Enable foreign key constraint enforcement for every connection.
-          await db.execute('PRAGMA foreign_keys = ON');
-        },
-      );
+      final password = await SecureStorageService.instance
+          .getDatabaseEncryptionKey(databaseExists: await dbFile.exists());
+      return await _openEncrypted(path, password);
     } else {
       return await openDatabase(
         path,
-        version: 20,
+        version: kDatabaseVersion,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
+        onConfigure: _configureConnection,
         onOpen: (db) async {
           // Enable foreign key constraint enforcement for every connection.
           await db.execute('PRAGMA foreign_keys = ON');
         },
       );
     }
+  }
+
+  /// The UI isolate and WorkManager isolates each hold their own connection
+  /// to this file. WAL lets readers and a writer proceed concurrently, and
+  /// the busy timeout makes a second writer wait instead of failing with
+  /// "database is locked".
+  static Future<void> _configureConnection(Database db) async {
+    try {
+      await db.rawQuery('PRAGMA busy_timeout = 5000');
+      await db.rawQuery('PRAGMA journal_mode = WAL');
+    } catch (e) {
+      AppLogger.warn('Could not configure connection: $e', label: 'DB');
+    }
+  }
+
+  /// Opens the encrypted database; a wrong key surfaces as
+  /// [DatabaseKeyUnavailableException] so the app can offer recovery.
+  Future<Database> _openEncrypted(String path, String password) async {
+    try {
+      final db = await openDatabase(
+        path,
+        version: kDatabaseVersion,
+        password: password,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+        onConfigure: _configureConnection,
+        onOpen: (db) async {
+          // Enable foreign key constraint enforcement for every connection.
+          await db.execute('PRAGMA foreign_keys = ON');
+        },
+      );
+      // Touch the schema so a wrong key fails here, not later.
+      await db.rawQuery('SELECT count(*) FROM sqlite_master');
+      return db;
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('not a database') || msg.contains('file is encrypted')) {
+        throw DatabaseKeyUnavailableException(
+          'Database could not be decrypted with the stored key',
+          e,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Recovery action: permanently deletes the local database and its key so
+  /// a fresh one can be created (cloud data is restored after sign-in).
+  Future<void> resetLocalDatabase() async {
+    try {
+      await _database?.close();
+    } catch (_) {}
+    _database = null;
+    _dbCompleter = null;
+    final dir = await getApplicationDocumentsDirectory();
+    final path = join(dir.path, 'pet_tracker.db');
+    for (final suffix in ['', '-journal', '-wal', '-shm']) {
+      final f = File('$path$suffix');
+      if (await f.exists()) await f.delete();
+    }
+    await SecureStorageService.instance.deleteDatabaseEncryptionKey();
   }
 
   /// Run SQLite integrity check on startup.
@@ -226,6 +278,8 @@ class DatabaseHelper {
       CREATE INDEX IF NOT EXISTS idx_txn_source_fingerprint
       ON transactions (sourceFingerprint)
     ''');
+
+    await _createLedgerUniquenessIndex(db);
 
     // Create categories table
     await db.execute('''
@@ -453,6 +507,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 20 && newVersion >= 20) {
       await _migrateToV20(db);
+    }
+    if (oldVersion < 21 && newVersion >= 21) {
+      await _migrateToV21(db);
     }
   }
 
@@ -721,6 +778,9 @@ class DatabaseHelper {
     } catch (e) {
       AppLogger.error('Failed to run v16 database migration',
           error: e, label: 'DB');
+      // Rethrow: sqflite rolls the upgrade back and keeps the old version,
+      // instead of recording a version whose schema is incomplete.
+      rethrow;
     }
   }
 
@@ -796,6 +856,9 @@ class DatabaseHelper {
     } catch (e) {
       AppLogger.error('Failed to run v17 database migration',
           error: e, label: 'DB');
+      // Rethrow: sqflite rolls the upgrade back and keeps the old version,
+      // instead of recording a version whose schema is incomplete.
+      rethrow;
     }
   }
 
@@ -1052,6 +1115,9 @@ class DatabaseHelper {
     } catch (e) {
       AppLogger.error('Failed to run v18 database migration',
           error: e, label: 'DB');
+      // Rethrow: sqflite rolls the upgrade back and keeps the old version,
+      // instead of recording a version whose schema is incomplete.
+      rethrow;
     }
   }
 
@@ -1102,6 +1168,9 @@ class DatabaseHelper {
     } catch (e) {
       AppLogger.error('Failed to run v19 database migration',
           error: e, label: 'DB');
+      // Rethrow: sqflite rolls the upgrade back and keeps the old version,
+      // instead of recording a version whose schema is incomplete.
+      rethrow;
     }
   }
 
@@ -1182,7 +1251,75 @@ class DatabaseHelper {
     } catch (e) {
       AppLogger.error('Failed to run v20 database migration',
           error: e, label: 'DB');
+      // Rethrow: sqflite rolls the upgrade back and keeps the old version,
+      // instead of recording a version whose schema is incomplete.
+      rethrow;
     }
+  }
+
+  /// One real-world event → at most one ledger row. Auto-imported rows carry a
+  /// canonical fingerprint; manual and recurring rows have NULL (unaffected).
+  Future<void> _createLedgerUniquenessIndex(Database db) async {
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_fingerprint_unique
+      ON transactions (sourceFingerprint)
+      WHERE sourceFingerprint IS NOT NULL
+    ''');
+  }
+
+  /// Migrate to v21: remove duplicate auto-imported ledger rows, enforce
+  /// fingerprint uniqueness, and queue auto-imported rows (never synced by
+  /// earlier versions) for their first cloud upload.
+  Future<void> _migrateToV21(Database db) async {
+    // 1. Collapse duplicates created by the old concurrent-ingestion race.
+    //    Only auto-imported rows are touched; the earliest row is kept.
+    await db.execute('''
+      DELETE FROM transactions
+      WHERE sourceFingerprint IS NOT NULL
+        AND source IN ('sms', 'notification')
+        AND rowid NOT IN (
+          SELECT MIN(rowid) FROM transactions
+          WHERE sourceFingerprint IS NOT NULL
+          GROUP BY sourceFingerprint
+        )
+    ''');
+
+    // 2. Enforce uniqueness going forward.
+    try {
+      await _createLedgerUniquenessIndex(db);
+    } catch (e) {
+      AppLogger.error('v21: could not create fingerprint unique index',
+          error: e, label: 'DB');
+    }
+
+    // 3. Backfill the sync queue for auto-imported rows. Queued as
+    //    'guest_user'; reassigned to the signed-in account on next load.
+    final rows = await db.rawQuery('''
+      SELECT * FROM transactions
+      WHERE source IN ('sms', 'notification')
+        AND id NOT IN (SELECT transactionId FROM transaction_sync_queue)
+    ''');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final batch = db.batch();
+    for (final row in rows) {
+      final id = row['id'] as String;
+      batch.insert(
+        'transaction_sync_queue',
+        {
+          'id': 'v21_backfill_$id',
+          'transactionId': id,
+          'action': 'create',
+          'payload': jsonEncode(TransactionRecord.fromMap(row).toMap()),
+          'timestamp': now,
+          'userId': 'guest_user',
+          'retryCount': 0,
+          'lastAttemptAt': 0,
+          'lastError': null,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<void> _createPremiumTables(Database db) async {
@@ -1569,43 +1706,91 @@ class DatabaseHelper {
     ''');
   }
 
-  /// Atomically wipe all user financial data across all tables during sign-out or account deletion.
-  /// Preserves system/metadata seed definitions like default categories and seed rules.
+  /// How long the (redacted) text of resolved SMS/notification observations
+  /// is kept. Extracted fields (amount, merchant, date) are kept; only the
+  /// message text is cleared.
+  static const Duration observationTextRetention = Duration(days: 90);
+
+  /// How long unparsed-format diagnostic logs are kept.
+  static const Duration unknownLogRetention = Duration(days: 30);
+
+  /// Enforces the retention promises in the privacy policy. Safe to call on
+  /// every app start and from background workers.
+  Future<void> purgeExpiredSensitiveData({Database? db, DateTime? now}) async {
+    final targetDb = db ?? await database;
+    final reference = now ?? DateTime.now();
+    final textCutoff =
+        reference.subtract(observationTextRetention).toIso8601String();
+    final logCutoff =
+        reference.subtract(unknownLogRetention).millisecondsSinceEpoch;
+
+    try {
+      await targetDb.transaction((txn) async {
+        // Rejected messages never keep text (covers rows stored by old builds).
+        await txn.rawUpdate('''
+          UPDATE financial_observations
+          SET body = '', normalizedText = '', title = NULL, rawPayload = NULL
+          WHERE state = 'rejected' AND (body != '' OR normalizedText != '')
+        ''');
+        // Unreviewed items expire and lose their text.
+        await txn.rawUpdate('''
+          UPDATE financial_observations
+          SET state = 'rejected', stateReason = 'expired_unreviewed',
+              body = '', normalizedText = '', title = NULL, rawPayload = NULL
+          WHERE state = 'uncertain' AND receivedAt < ?
+        ''', [textCutoff]);
+        // Resolved items keep their extracted fields but drop the text.
+        await txn.rawUpdate('''
+          UPDATE financial_observations
+          SET body = '', normalizedText = '', title = NULL, rawPayload = NULL
+          WHERE receivedAt < ? AND (body != '' OR normalizedText != '')
+        ''', [textCutoff]);
+        await txn.delete(
+          'unknown_format_logs',
+          where: 'COALESCE(created_at, 0) < ?',
+          whereArgs: [logCutoff],
+        );
+      });
+    } catch (e) {
+      AppLogger.error('Retention purge failed', error: e, label: 'DB');
+    }
+  }
+
+  /// Tables that hold no user data and must survive a wipe.
+  static const Set<String> _systemTables = {
+    'android_metadata',
+    'sqlite_sequence',
+    'categories', // handled separately: custom rows removed, defaults kept
+  };
+
+  /// Atomically wipe ALL user data from every table (sign-out, account
+  /// deletion, post-deletion startup). Tables are enumerated from
+  /// `sqlite_master`, so newly added tables are covered automatically.
+  /// Custom categories are removed and the default categories re-seeded.
   Future<void> wipeAllUserData({Database? db}) async {
     final targetDb = db ?? await database;
+    final allTables = (await targetDb.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' "
+      "AND name NOT LIKE 'sqlite_%'",
+    ))
+        .map((r) => r['name'] as String)
+        .toList();
+    final tables = allTables.where((t) => !_systemTables.contains(t)).toList();
+    final hasCategories = allTables.contains('categories');
+
     await targetDb.transaction((txn) async {
-      const tablesToClear = [
-        'user_feedback',
-        'unknown_format_logs',
-        'sms_transactions',
-        'sms_processing_state',
-        'tax_categories',
-        'linked_accounts',
-        'family_members',
-        'alerts',
-        'recurring_payment_history',
-        'recurring_payments',
-        'recurring_occurrences',
-        'recurring_rules',
-        'saving_goals',
-        'goal_history',
-        'weekly_limits',
-        'transactions',
-        'budgets',
-        'transaction_sync_queue',
-        'financial_observations',
-      ];
-
-      for (final table in tablesToClear) {
-        try {
-          await txn.delete(table);
-        } catch (_) {}
+      for (final table in tables) {
+        await txn.delete(table);
       }
-
-      // Clear custom categories, preserve system defaults
-      try {
-        await txn.delete('categories', where: 'isCustom = 1');
-      } catch (_) {}
+      if (!hasCategories) return;
+      await txn.delete('categories', where: 'isCustom = 1');
+      for (final category in defaultCategories) {
+        await txn.insert(
+          'categories',
+          category.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
     });
   }
 

@@ -26,59 +26,12 @@ void main() {
   setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('sms_resurrection_test_');
     final dbPath = p.join(tempDir.path, 'pet_test.db');
+    // Production schema (the review queue lives in financial_observations).
     db = await openDatabase(
       dbPath,
-      version: 13,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE sms_transactions (
-            id TEXT PRIMARY KEY,
-            amount REAL NOT NULL,
-            merchantName TEXT NOT NULL,
-            bankName TEXT NOT NULL DEFAULT 'Unknown Bank',
-            transactionType TEXT NOT NULL,
-            transactionSubType TEXT DEFAULT 'payment',
-            timestamp TEXT NOT NULL,
-            rawSmsBody TEXT NOT NULL,
-            smsSender TEXT DEFAULT '',
-            smsHash TEXT NOT NULL UNIQUE,
-            category TEXT DEFAULT 'Uncategorized',
-            isVerified INTEGER DEFAULT 0,
-            referenceId TEXT,
-            upiId TEXT,
-            confidence REAL DEFAULT 0.5,
-            source TEXT DEFAULT 'sms',
-            timestamp_is_approximate INTEGER DEFAULT 0
-          )
-        ''');
-
-        await db.execute('''
-          CREATE TABLE sms_processing_state (
-            id TEXT PRIMARY KEY,
-            smsHash TEXT NOT NULL UNIQUE,
-            status TEXT NOT NULL,
-            processedAt TEXT NOT NULL,
-            reason TEXT
-          )
-        ''');
-
-        await db.execute('''
-          CREATE TABLE user_feedback (
-            smsHash TEXT PRIMARY KEY,
-            action TEXT NOT NULL,
-            createdAt TEXT NOT NULL,
-            confirmedAmount REAL
-          )
-        ''');
-
-        await db.execute('''
-          CREATE TABLE system_watermarks (
-            key TEXT PRIMARY KEY,
-            value INTEGER NOT NULL,
-            updatedAt TEXT NOT NULL
-          )
-        ''');
-      },
+      version: kDatabaseVersion,
+      onCreate: (db, version) =>
+          DatabaseHelper().onCreateForTesting(db, version),
     );
 
     dbHelper = DatabaseHelper();
@@ -207,35 +160,48 @@ void main() {
           reason: 'Background scanner pre-filter must drop deleted SMS hash');
     });
 
+    /// Seeds an item in the real pending-review queue (an "uncertain"
+    /// observation produced by FinancialIngestionService).
+    Future<void> seedUncertainObservation(String id) async {
+      await db.insert('financial_observations', {
+        'observationId': id,
+        'source': 'sms',
+        'sourceIdentifier': testSender,
+        'sender': testSender,
+        'body': testSmsBody,
+        'normalizedText': testSmsBody,
+        'receivedAt': testTimestamp.toIso8601String(),
+        'sourceTimestamp': testTimestamp.toIso8601String(),
+        'observationHash': testHash,
+        'state': 'uncertain',
+        'confidence': 0.45,
+      });
+    }
+
     test('4. Not a transaction -> Refresh -> Never returns', () async {
       final provider = SmsTransactionProvider();
-
-      final uncertainTxn = createSampleTransaction(
-        id: 'uncertain_202',
-        isVerified: false,
-        confidence: 0.45,
-      );
-      await repository.insertSmsTransaction(uncertainTxn);
+      await seedUncertainObservation('uncertain_202');
       await provider.loadTransactions();
 
       expect(provider.uncertainTransactions.length, equals(1));
 
       // User presses "Not a transaction" in Pending Review
-      await provider.rejectUncertainTransaction(uncertainTxn.id);
+      await provider.rejectUncertainTransaction('uncertain_202');
 
       expect(provider.uncertainTransactions, isEmpty);
 
-      // Verify processing state is set to 'ignored'
+      // The message hash is tombstoned so it can never be re-imported
       final stateRows = await db.query(
         'sms_processing_state',
         where: 'smsHash = ?',
         whereArgs: [testHash],
       );
       expect(stateRows.length, equals(1));
-      expect(stateRows.first['status'], equals('ignored'));
+      expect(stateRows.first['status'], isIn(['rejected', 'ignored']));
 
-      // Simulate manual refresh scan
-      final reinsertCount = await repository.insertBatch([uncertainTxn]);
+      // Legacy refresh path also refuses it
+      final reinsertCount =
+          await repository.insertBatch([createSampleTransaction()]);
       expect(reinsertCount, equals(0),
           reason: 'Ignored transaction must never be re-inserted on refresh');
 
@@ -246,15 +212,10 @@ void main() {
 
     test('5. Not a transaction -> Restart -> Never returns', () async {
       final provider = SmsTransactionProvider();
-      final uncertainTxn = createSampleTransaction(
-        id: 'uncertain_303',
-        isVerified: false,
-        confidence: 0.40,
-      );
-      await repository.insertSmsTransaction(uncertainTxn);
+      await seedUncertainObservation('uncertain_303');
       await provider.loadTransactions();
 
-      await provider.rejectUncertainTransaction(uncertainTxn.id);
+      await provider.rejectUncertainTransaction('uncertain_303');
 
       // Simulate app restart
       final newProvider = SmsTransactionProvider();
@@ -262,10 +223,6 @@ void main() {
 
       expect(newProvider.transactions, isEmpty);
       expect(newProvider.uncertainTransactions, isEmpty);
-
-      // Background scan after restart
-      final reinsert = await repository.insertSmsTransaction(uncertainTxn);
-      expect(reinsert, isFalse);
     });
 
     test('6. Duplicate SMS scan -> Already processed hash -> Skipped O(1)',

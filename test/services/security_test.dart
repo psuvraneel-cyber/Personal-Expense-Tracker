@@ -95,6 +95,19 @@ void main() {
         expect(key1, equals(key2));
       },
     );
+
+    test(
+      'P1-11: never generates a new key when an encrypted database exists',
+      () async {
+        await expectLater(
+          SecureStorageService.instance
+              .getDatabaseEncryptionKey(databaseExists: true),
+          throwsA(isA<DatabaseKeyUnavailableException>()),
+        );
+        expect(secureStorageMap.containsKey('db_encryption_key'), isFalse,
+            reason: 'Overwriting the key would brick the existing database');
+      },
+    );
   });
 
   group('FirebaseAuthService Secure Migration Tests', () {

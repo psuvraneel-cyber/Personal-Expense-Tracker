@@ -78,6 +78,7 @@ class TransactionNotificationListener : NotificationListenerService() {
                 _sinkVersion = 0L
                 listenerContext = null
             }
+            synchronized(this) { recentKeys.clear() }
         }
 
         /**
@@ -97,26 +98,27 @@ class TransactionNotificationListener : NotificationListenerService() {
             "net.one97.paytm",                           // Paytm
             "in.org.npci.upiapp",                        // BHIM
             "in.amazon.mShop.android.shopping",          // Amazon Pay
-            "com.whatsapp",                              // WhatsApp Pay
-            "com.whatsapp.w4b",                          // WhatsApp Business Pay
+            // Messaging apps (e.g. WhatsApp) are deliberately excluded: their
+            // notifications are personal conversations, not payment alerts.
 
             // Major bank apps
             "com.csam.icici.bank.imobile",               // ICICI iMobile
             "com.snapwork.hdfc",                         // HDFC Mobile Banking
-            "com.sbi.SBIFreedomPlus",                    // SBI YONO
+            "com.sbi.SBIFreedomPlus",                    // YONO Lite SBI
+            "com.sbi.lotusintouch",                      // YONO SBI
             "com.axis.mobile",                           // Axis Mobile
             "com.msf.kbank.mobile",                      // Kotak 811
-            "com.maborosoftware.pnb",                    // PNB ONE
-            "com.bob.bobmobilebanking",                  // BOB World
-            "com.canaaboroSoftware.mobilebanking",       // Canara ai1
+            "com.Version1",                              // PNB ONE
+            "com.bankofbaroda.mconnect",                 // bob World
+            "com.canarabank.mobility",                   // Canara ai1
             "com.fss.uboi",                              // Union Bank
             "com.idbibank.abhay",                        // IDBI Abhay
             "com.upi.axispay",                           // Axis Pay
             "com.infrasofttech.indianBankMobile",        // Indian Bank
 
             // Fintech apps
-            "com.slice",                                  // Slice
-            "com.jupiter.money",                          // Jupiter
+            "indwin.c3.shareapp",                         // slice
+            "money.jupiter",                              // Jupiter
             "com.epifi.paisa",                           // Fi Money
             "com.dreamplug.androidapp",                   // CRED
             "com.naviapp",                                // Navi
@@ -127,6 +129,20 @@ class TransactionNotificationListener : NotificationListenerService() {
             "com.myairtelapp",                            // Airtel Thanks
             "com.mobikwik_new",                           // MobiKwik
         )
+
+        /** Recently captured notifications (key + content) to drop re-posts/updates. */
+        private val recentKeys = object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) = size > 200
+        }
+
+        /** Returns true the first time a given notification content is seen. */
+        @Synchronized
+        @VisibleForTesting
+        fun markFirstSeen(dedupKey: String): Boolean {
+            if (recentKeys.containsKey(dedupKey)) return false
+            recentKeys[dedupKey] = true
+            return true
+        }
 
         /**
          * Check if notification access is granted.
@@ -178,7 +194,7 @@ class TransactionNotificationListener : NotificationListenerService() {
 
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     WORK_NAME_EXPEDITED_NOTIF,
-                    ExistingWorkPolicy.REPLACE,
+                    ExistingWorkPolicy.APPEND_OR_REPLACE, // never cancel an in-flight import
                     workRequest
                 )
                 SafeLog.d(TAG, "Enqueued expedited WorkManager task ($WORK_NAME_EXPEDITED_NOTIF)")
@@ -220,9 +236,9 @@ class TransactionNotificationListener : NotificationListenerService() {
         val combinedText = "$title $body"
 
         // Require currency or amount indicator
-        val hasCurrencyOrAmount = combinedText.contains("Rs", ignoreCase = true) ||
-                combinedText.contains("INR", ignoreCase = true) ||
-                combinedText.contains("₹")
+        // Currency marker followed by a number ("₹500", "Rs. 1,200"); a bare
+        // "rs" substring would match ordinary words like "hours" or "yours".
+        val hasCurrencyOrAmount = SmsReaderPlugin.currencyAmountRegex.containsMatchIn(combinedText)
 
         // Comprehensive financial verbs to avoid false negatives
         val hasTransactionVerb = combinedText.contains("paid", ignoreCase = true) ||
@@ -256,6 +272,16 @@ class TransactionNotificationListener : NotificationListenerService() {
 
         if (isNegativePromoOrOtp) return
 
+        // Apps re-post/update the same notification (progress, grouping);
+        // only the first copy of a given content is captured.
+        // Same notification (key) + same `when` + same text = a re-post or
+        // progress update, not a new payment. Distinct payments get distinct
+        // keys or `when` values, so they are never merged here.
+        val notificationKey = runCatching { sbn.key }.getOrNull()
+            ?: System.identityHashCode(sbn).toString()
+        val postedWhen = runCatching { notification.`when` }.getOrDefault(0L)
+        if (!markFirstSeen("$notificationKey|$postedWhen|${combinedText.hashCode()}")) return
+
         SafeLog.d(TAG, "Financial notification captured from $packageName")
 
         val data = mapOf(
@@ -264,7 +290,9 @@ class TransactionNotificationListener : NotificationListenerService() {
             "package" to packageName,
             "title" to title,
             "body" to body,
-            "date" to System.currentTimeMillis(),
+            // When the payment app posted it — stable across re-deliveries.
+            "date" to (runCatching { sbn.postTime }.getOrNull()?.takeIf { it > 0 }
+                ?: System.currentTimeMillis()),
             "type" to 1  // Treat as inbox-type
         )
 

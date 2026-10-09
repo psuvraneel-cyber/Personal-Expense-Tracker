@@ -935,3 +935,108 @@ test("Enforces daily rate limit at exactly 200 requests", async () => {
   assert.match(data.error, /Daily quota reached/);
 });
 
+
+// ── Account deletion request endpoint (audit P1-12) ──────────────────────────
+test("deletion-request stores a valid request in KV", async () => {
+  const kv = new MockKV();
+  const req = new Request("https://example.com/deletion-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "CF-Connecting-IP": "1.1.1.1" },
+    body: JSON.stringify({ email: "User@Example.com", reason: "leaving" }),
+  });
+  const res = await worker.fetch(req, { ...mockEnv, KV_LIMITS: kv });
+  assert.strictEqual(res.status, 200);
+  const stored = [...kv.store.entries()].find(([k]) => k.startsWith("deletion:"));
+  assert.ok(stored, "request should be stored");
+  assert.strictEqual(JSON.parse(stored[1]).email, "user@example.com");
+});
+
+test("deletion-request rejects invalid email and ignores honeypot", async () => {
+  const kv = new MockKV();
+  const bad = await worker.fetch(new Request("https://example.com/deletion-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "CF-Connecting-IP": "2.2.2.2" },
+    body: JSON.stringify({ email: "not-an-email" }),
+  }), { ...mockEnv, KV_LIMITS: kv });
+  assert.strictEqual(bad.status, 400);
+
+  const bot = await worker.fetch(new Request("https://example.com/deletion-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "CF-Connecting-IP": "3.3.3.3" },
+    body: JSON.stringify({ email: "a@b.co", website: "spam" }),
+  }), { ...mockEnv, KV_LIMITS: kv });
+  assert.strictEqual(bot.status, 200);
+  assert.ok(![...kv.store.keys()].some((k) => k.startsWith("deletion:")));
+});
+
+test("deletion-request answers CORS preflight", async () => {
+  const res = await worker.fetch(new Request("https://example.com/deletion-request", {
+    method: "OPTIONS",
+    headers: { Origin: "https://personal-expense-tracker-6891b.web.app" },
+  }), mockEnv);
+  assert.strictEqual(res.status, 204);
+  assert.strictEqual(
+    res.headers.get("Access-Control-Allow-Origin"),
+    "https://personal-expense-tracker-6891b.web.app",
+  );
+});
+
+test("App Check is enforced only when REQUIRE_APP_CHECK is true", async () => {
+  const token = createToken({
+    payload: {
+      aud: MOCK_PROJECT_ID,
+      iss: `https://securetoken.google.com/${MOCK_PROJECT_ID}`,
+      sub: "user_appcheck",
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    },
+  });
+  const req = new Request("https://example.com/api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ messages: [{ role: "user", content: "hi" }] }),
+  });
+  const res = await worker.fetch(req, {
+    ...mockEnv,
+    REQUIRE_APP_CHECK: "true",
+    FIREBASE_PROJECT_NUMBER: "123",
+  });
+  assert.strictEqual(res.status, 401);
+  assert.strictEqual((await res.json()).errorCode, "APP_CHECK_FAILED");
+});
+
+test("Malformed requests do not consume rate-limit quota (audit P2-15)", async () => {
+  setupFetchMock([googleJwksHandler, premiumRevenueCatHandler, groqHandler]);
+  const kv = new MockKV();
+  const env = { ...mockEnv, KV_LIMITS: kv };
+  const req = new Request("https://example.com/api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({ messages: [] }),
+  });
+  const res = await worker.fetch(req, env);
+  assert.strictEqual(res.status, 400);
+  assert.ok(![...kv.store.keys()].some((k) => k.startsWith("limit:")));
+});
+
+test("Premium status is cached between requests (audit P2-15)", async () => {
+  let rcCalls = 0;
+  const countingRc = {
+    matches: premiumRevenueCatHandler.matches,
+    handle: (url, opts) => {
+      rcCalls++;
+      return premiumRevenueCatHandler.handle(url, opts);
+    },
+  };
+  setupFetchMock([googleJwksHandler, countingRc, groqHandler]);
+  const kv = new MockKV();
+  const env = { ...mockEnv, KV_LIMITS: kv };
+  const make = () => new Request("https://example.com/api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({ messages: [{ role: "user", content: "hi" }] }),
+  });
+  await worker.fetch(make(), env);
+  await worker.fetch(make(), env);
+  assert.strictEqual(rcCalls, 1);
+});

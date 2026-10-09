@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pet/firebase_options.example.dart';
+import 'package:pet/firebase_options.dart';
 import 'package:pet/services/secure_storage_service.dart';
 
 // Conditional import: on web this resolves to a stub; on mobile/desktop it
@@ -28,11 +29,24 @@ class FirebaseAuthService {
   FirebaseAuth get _firebaseAuth =>
       _customFirebaseAuth ?? FirebaseAuth.instance;
 
+  /// Whether Firebase was initialised successfully (or a test double is set).
+  /// Every Firebase-backed getter checks this so a failed `initializeApp`
+  /// degrades to signed-out/offline behaviour instead of throwing
+  /// `[core/no-app]` during startup.
+  bool get isFirebaseReady {
+    if (_customFirebaseAuth != null) return true;
+    try {
+      return Firebase.apps.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @visibleForTesting
   set firebaseAuth(FirebaseAuth auth) => _customFirebaseAuth = auth;
 
-  /// Lazily created and only used on mobile — never instantiated on web.
-  GoogleSignIn? _mobileGoogleSignIn;
+  /// google_sign_in 7 (Android Credential Manager) must be initialised once.
+  Future<void>? _googleInit;
 
   factory FirebaseAuthService() => _instance;
 
@@ -45,7 +59,7 @@ class FirebaseAuthService {
 
   // ── Getters ─────────────────────────────────────────────────────────
 
-  User? get currentUser => _firebaseAuth.currentUser;
+  User? get currentUser => isFirebaseReady ? _firebaseAuth.currentUser : null;
   String? get currentUserId => _isLocalGuest ? 'guest_user' : currentUser?.uid;
   bool get isLoggedIn => currentUser != null || _isLocalGuest;
   String? get userName => _localGuestName ?? currentUser?.displayName;
@@ -113,21 +127,16 @@ class FirebaseAuthService {
     }
 
     try {
-      final googleSignIn = _getOrCreateGoogleSignIn();
-      final googleUser = await googleSignIn.signInSilently();
+      final googleSignIn = await _googleSignIn();
+      final googleUser = await googleSignIn.attemptLightweightAuthentication();
       if (googleUser == null) {
         AppLogger.debug(
-          '[AUTH] signInSilently returned null — user needs to sign in interactively',
+          '[AUTH] Lightweight auth returned null — interactive sign-in needed',
         );
         return false;
       }
 
-      AppLogger.debug('[AUTH] signInSilently succeeded: ${googleUser.email}');
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
+      final credential = _credentialFor(googleUser);
       final result = await _firebaseAuth.signInWithCredential(credential);
       AppLogger.debug('[AUTH] Firebase session restored: ${result.user?.uid}');
       return result.user != null;
@@ -203,17 +212,11 @@ class FirebaseAuthService {
         await _firebaseAuth.currentUser?.reauthenticateWithPopup(provider);
         return true;
       } else {
-        final googleUser = await _getOrCreateGoogleSignIn().signIn();
+        final googleUser = await _authenticateInteractively();
         if (googleUser == null) return false;
 
-        final googleAuth = await googleUser.authentication;
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-
         await _firebaseAuth.currentUser?.reauthenticateWithCredential(
-          credential,
+          _credentialFor(googleUser),
         );
         return true;
       }
@@ -224,8 +227,10 @@ class FirebaseAuthService {
   }
 
   Future<void> signOut() async {
-    if (!kIsWeb) {
-      await _mobileGoogleSignIn?.signOut();
+    if (!kIsWeb && _googleInit != null) {
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (_) {}
     }
     await _firebaseAuth.signOut();
     _isLocalGuest = false;
@@ -241,7 +246,9 @@ class FirebaseAuthService {
     await prefs.remove('isLocalGuest');
   }
 
-  Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
+  Stream<User?> authStateChanges() => isFirebaseReady
+      ? _firebaseAuth.authStateChanges()
+      : Stream<User?>.value(null);
 
   // ── Private Methods ──────────────────────────────────────────────────
 
@@ -258,16 +265,12 @@ class FirebaseAuthService {
   }
 
   Future<UserCredential?> _signInWithGoogleMobile() async {
-    final googleUser = await _getOrCreateGoogleSignIn().signIn();
+    final googleUser = await _authenticateInteractively();
     if (googleUser == null) return null; // user cancelled
 
-    final googleAuth = await googleUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
+    final userCredential = await _firebaseAuth.signInWithCredential(
+      _credentialFor(googleUser),
     );
-
-    final userCredential = await _firebaseAuth.signInWithCredential(credential);
     await _cacheUserInfo(
       name: userCredential.user?.displayName ?? '',
       email: userCredential.user?.email ?? '',
@@ -275,15 +278,32 @@ class FirebaseAuthService {
     return userCredential;
   }
 
-  /// Returns or creates the shared GoogleSignIn instance.
-  GoogleSignIn _getOrCreateGoogleSignIn() {
-    _mobileGoogleSignIn ??= GoogleSignIn(
+  /// Returns the initialised GoogleSignIn singleton (google_sign_in 7 uses
+  /// Android Credential Manager instead of the deprecated legacy API).
+  Future<GoogleSignIn> _googleSignIn() async {
+    _googleInit ??= GoogleSignIn.instance.initialize(
       // serverClientId = web/server client ID (type 3). Required to get an
       // ID token that Firebase Auth can verify server-side.
       serverClientId: DefaultFirebaseOptions.webClientId,
     );
-    return _mobileGoogleSignIn!;
+    await _googleInit;
+    return GoogleSignIn.instance;
   }
+
+  /// Interactive Google sign-in. Returns null if the user cancelled.
+  Future<GoogleSignInAccount?> _authenticateInteractively() async {
+    final googleSignIn = await _googleSignIn();
+    try {
+      return await googleSignIn.authenticate();
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) return null;
+      rethrow;
+    }
+  }
+
+  /// Firebase only needs the Google ID token.
+  AuthCredential _credentialFor(GoogleSignInAccount account) =>
+      GoogleAuthProvider.credential(idToken: account.authentication.idToken);
 
   Future<void> _cacheUserInfo({
     required String name,

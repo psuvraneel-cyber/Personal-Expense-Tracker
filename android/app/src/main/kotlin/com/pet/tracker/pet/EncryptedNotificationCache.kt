@@ -48,6 +48,7 @@ object EncryptedNotificationCache {
     private const val FALLBACK_PREF_NAME = "pet_notification_cache_v2_fallback"
     private const val ENCRYPTED_PREF_NAME = "pet_notification_cache_v2"
     private const val KEY_PENDING = "pending_notifications"
+    const val KEY_CACHE_ID = "cacheId"
 
     /**
      * Maximum capacity for the in-memory fallback queue.
@@ -244,7 +245,11 @@ object EncryptedNotificationCache {
      *    - Never writes plaintext to disk.
      */
     @Synchronized
-    fun saveNotification(context: Context, data: Map<String, Any?>) {
+    fun saveNotification(context: Context, payload: Map<String, Any?>) {
+        // Every cached item gets a unique id so consumers acknowledge exactly
+        // the items they processed (never "the first N").
+        val data = if (payload.containsKey(KEY_CACHE_ID)) payload
+            else payload + (KEY_CACHE_ID to java.util.UUID.randomUUID().toString())
         try {
             val prefs = getPrefs(context)
             if (prefs != null) {
@@ -348,6 +353,30 @@ object EncryptedNotificationCache {
     }
 
     /**
+     * Removes exactly the cached items whose [KEY_CACHE_ID] is in [ids].
+     * Safe with multiple consumers (UI + background worker).
+     */
+    @Synchronized
+    fun acknowledgeByIds(context: Context, ids: Collection<String>): Boolean {
+        if (ids.isEmpty()) return true
+        val idSet = ids.toHashSet()
+        inMemoryQueue.removeAll { idSet.contains(it[KEY_CACHE_ID] as? String) }
+        return try {
+            val prefs = getPrefs(context) ?: return true
+            val jsonArray = JSONArray(prefs.getString(KEY_PENDING, "[]") ?: "[]")
+            val kept = JSONArray()
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                if (!idSet.contains(obj.optString(KEY_CACHE_ID))) kept.put(obj)
+            }
+            prefs.edit().putString(KEY_PENDING, kept.toString()).commit()
+        } catch (e: Exception) {
+            SafeLog.e(TAG, "Error acknowledging notifications by id: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Retrieve and clear all pending cached notifications.
      *
      * Preserves strict FIFO insertion order across in-memory queue and encrypted storage.
@@ -360,6 +389,22 @@ object EncryptedNotificationCache {
             acknowledgeNotifications(context, results.size)
         }
         return results
+    }
+
+    /**
+     * Permanently removes every pending notification (sign-out / account
+     * deletion). Clears the encrypted store and the in-memory buffer.
+     */
+    @Synchronized
+    fun clearAll(context: Context): Boolean {
+        inMemoryQueue.clear()
+        return try {
+            val prefs = getPrefs(context)
+            prefs?.edit()?.remove(KEY_PENDING)?.commit() ?: true
+        } catch (e: Exception) {
+            SafeLog.e(TAG, "Error clearing notification cache: ${e.message}")
+            false
+        }
     }
 
     /**

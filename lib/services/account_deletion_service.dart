@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/data/database/database_helper.dart';
+import 'package:pet/services/firestore_sync_service.dart';
+import 'package:pet/services/local_data_wiper.dart';
 import 'package:pet/premium/services/premium_entitlement_service.dart';
 
 enum DeletionStep {
@@ -100,17 +102,9 @@ class AccountDeletionService {
 
       // ── Step 5: Delete premium and recurring data collections
       _progressController.add(DeletionStep.deletingCloudPremiumData);
-      for (final collection in [
-        'saving_goals',
-        'recurring_payments',
-        'recurring_payment_history',
-        'recurring_rules',
-        'recurring_occurrences',
-        'alerts',
-        'family_members',
-        'linked_accounts',
-        'tax_categories',
-      ]) {
+      const handled = {'transactions', 'budgets', 'categories', 'tombstones'};
+      for (final collection in FirestoreSyncService.userCollections) {
+        if (handled.contains(collection)) continue;
         await _deleteFirestoreCollection(uid, collection);
       }
 
@@ -137,23 +131,19 @@ class AccountDeletionService {
 
   Future<void> _runLocalCleanup(String uid) async {
     // ── Step 8: Clear local SQLite data (scoped queue actions)
+    // Every table is wiped, including the whole sync queue: leftover queued
+    // actions would otherwise upload this user's data into the next account.
     _progressController.add(DeletionStep.clearingLocalData);
     try {
-      await _clearLocalDatabase(uid);
+      await DatabaseHelper().wipeAllUserData(db: await _dbHelper.database);
     } catch (e) {
       AppLogger.debug('[AccountDeletion] Local SQLite cleanup failed: $e');
     }
 
-    // ── Step 9: Clear SharedPreferences
+    // ── Step 9: Workers, notifications, native cache, secure storage, prefs
     _progressController.add(DeletionStep.clearingPreferences);
-    AppLogger.debug('[AccountDeletion] calling _clearPreferences');
-    try {
-      await _clearPreferences();
-      AppLogger.debug('[AccountDeletion] _clearPreferences returned');
-    } catch (e) {
-      AppLogger.debug(
-        '[AccountDeletion] Local SharedPreferences cleanup failed: $e',
-      );
+    if (!isTesting) {
+      await LocalDataWiper.wipe(dbHelper: _dbHelper);
     }
 
     // ── Step 10: RevenueCat logout
@@ -206,69 +196,6 @@ class AccountDeletionService {
         '[AccountDeletion] Deleted ${snapshot.docs.length} docs from $collection',
       );
     } while (snapshot.docs.length == batchSize);
-  }
-
-  /// Wipe all user data from every SQLite table
-  Future<void> _clearLocalDatabase(String uid) async {
-    final db = await _dbHelper.database;
-
-    // Tables to wipe — ordered to respect foreign key constraints
-    const tablesToClear = [
-      'user_feedback',
-      'unknown_format_logs',
-      'classification_rules',
-      'sms_transactions',
-      'sms_processing_state',
-      'tax_categories',
-      'linked_accounts',
-      'family_members',
-      'alerts',
-      'recurring_payment_history',
-      'recurring_payments',
-      'recurring_occurrences',
-      'recurring_rules',
-      'saving_goals',
-      'transactions',
-      'budgets',
-      'categories',
-      'ce', // event log table
-    ];
-
-    await db.transaction((txn) async {
-      // Scoped deletion: only clear queue entries belonging to this UID
-      try {
-        await txn.delete(
-          'transaction_sync_queue',
-          where: 'userId = ?',
-          whereArgs: [uid],
-        );
-        AppLogger.debug(
-          '[AccountDeletion] Scoped transaction_sync_queue cleared for $uid',
-        );
-      } catch (e) {
-        AppLogger.debug('[AccountDeletion] Could not clear sync queue: $e');
-      }
-
-      for (final table in tablesToClear) {
-        try {
-          await txn.delete(table);
-          AppLogger.debug('[AccountDeletion] Cleared table: $table');
-        } catch (e) {
-          // Table may not exist in older schema versions — continue
-          AppLogger.debug('[AccountDeletion] Could not clear $table: $e');
-        }
-      }
-    });
-  }
-
-  /// Clear all SharedPreferences
-  Future<void> _clearPreferences() async {
-    AppLogger.debug(
-      '[AccountDeletion] _clearPreferences entered, isTesting=$isTesting',
-    );
-    if (isTesting) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
   }
 
   void dispose() {

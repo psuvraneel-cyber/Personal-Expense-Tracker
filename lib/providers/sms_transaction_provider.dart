@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -11,9 +13,37 @@ import 'package:pet/services/reconciliation_service.dart';
 import 'package:pet/services/sms_parser/user_feedback_store.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/services/financial_ingestion_service.dart';
+import 'package:pet/services/classification_rule_engine.dart';
+import 'package:pet/data/models/financial_observation.dart';
 
 /// Provider for managing SMS-parsed transactions and the SMS scanning lifecycle.
 class SmsTransactionProvider extends ChangeNotifier {
+  SmsTransactionProvider() {
+    FinancialIngestionService.ledgerRevision.addListener(_onIngestionChanged);
+    FinancialIngestionService.reviewRevision.addListener(_onIngestionChanged);
+  }
+
+  Timer? _reloadDebounce;
+
+  void _onIngestionChanged() {
+    if (!isSupported) return;
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => loadTransactions(),
+    );
+  }
+
+  @override
+  void dispose() {
+    FinancialIngestionService.ledgerRevision
+        .removeListener(_onIngestionChanged);
+    FinancialIngestionService.reviewRevision
+        .removeListener(_onIngestionChanged);
+    _reloadDebounce?.cancel();
+    super.dispose();
+  }
+
   final SmsTransactionRepository _repository = SmsTransactionRepository();
   final SmsService _smsService = SmsService();
   final ReconciliationService _reconciliationService = ReconciliationService();
@@ -99,6 +129,10 @@ class SmsTransactionProvider extends ChangeNotifier {
     // Load user feedback from DB into memory
     await _loadUserFeedback();
 
+    if (!_smsFeatureEnabled && _notificationAccessGranted) {
+      await loadTransactions();
+    }
+
     if (_smsFeatureEnabled) {
       await loadTransactions();
 
@@ -144,14 +178,12 @@ class SmsTransactionProvider extends ChangeNotifier {
       // before the in-batch deduplication fix (idempotent — no-op if clean).
       await _repository.deduplicateExisting();
 
-      final all = await _repository.getAllSmsTransactions();
-      _transactions =
-          all.where((t) => t.isVerified || t.confidence >= 0.55).toList();
-      _uncertainTransactions = all
-          .where(
-            (t) => !t.isVerified && t.confidence < 0.55 && t.confidence >= 0.35,
-          )
-          .toList();
+      // Every row in sms_transactions is already in the ledger (it is written
+      // only on auto-promotion or user confirmation), so show them all.
+      _transactions = await _repository.getAllSmsTransactions();
+      // Items awaiting review live in the ingestion engine's observation
+      // queue, not in sms_transactions.
+      _uncertainTransactions = await _loadPendingReview();
       _invalidateComputedCache();
       _lastSyncTimestamp = await _reconciliationService.getLastSyncTimestamp();
     } catch (e) {
@@ -160,6 +192,53 @@ class SmsTransactionProvider extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Re-checks notification access (e.g. after returning from Settings).
+  Future<void> refreshNotificationAccess() async {
+    if (!isSupported) return;
+    final granted = await _smsService.checkNotificationAccess();
+    if (granted != _notificationAccessGranted) {
+      _notificationAccessGranted = granted;
+      notifyListeners();
+    }
+  }
+
+  /// Maps observations in the "uncertain" state to [SmsTransaction] view
+  /// models (re-parsing the stored, redacted text) for the review UI.
+  Future<List<SmsTransaction>> _loadPendingReview() async {
+    final observations =
+        await FinancialIngestionService().getPendingReviewObservations();
+    final result = <SmsTransaction>[];
+    for (final obs in observations) {
+      final sender = obs.sender ?? obs.sourceIdentifier;
+      final parsed = await ClassificationRuleEngine.classify(
+        obs.normalizedText,
+        sender,
+        obs.sourceTimestamp,
+      );
+      result.add(
+        SmsTransaction(
+          id: obs.observationId,
+          amount: parsed?.amount ?? 0,
+          merchantName: parsed?.merchantName ?? 'Unknown',
+          bankName: parsed?.bankName ?? obs.accountHint ?? 'Unknown Bank',
+          transactionType: parsed?.transactionType ?? 'debit',
+          timestamp: parsed?.parsedDate ?? obs.sourceTimestamp,
+          rawSmsBody: obs.body,
+          smsSender: sender,
+          smsHash: obs.observationHash,
+          category: parsed?.category ?? 'Uncategorized',
+          referenceId: parsed?.referenceId,
+          upiId: parsed?.upiId,
+          confidence: obs.confidence,
+          source: obs.source == FinancialObservationSource.notification
+              ? 'notification'
+              : 'sms',
+        ),
+      );
+    }
+    return result;
   }
 
   Future<void> requestNotificationAccess() async {
@@ -284,6 +363,15 @@ class SmsTransactionProvider extends ChangeNotifier {
   /// Update the category of a transaction.
   Future<void> updateCategory(String id, String category) async {
     await _repository.updateCategory(id, category);
+    // Keep the ledger (dashboard, budgets, exports, cloud) consistent.
+    try {
+      await FinancialIngestionService().recategorizeFromSms(
+        observationId: id,
+        parserCategory: category,
+      );
+    } catch (e) {
+      AppLogger.debug('[PET-SMS] Ledger recategorisation failed: $e');
+    }
     final index = _transactions.indexWhere((t) => t.id == id);
     if (index != -1) {
       _transactions = List<SmsTransaction>.from(_transactions)
@@ -334,15 +422,8 @@ class SmsTransactionProvider extends ChangeNotifier {
       confidence: 1.0,
     );
 
-    await _repository.updateDetails(
-      id,
-      amount: overrideAmount,
-      merchantName: overrideMerchant,
-      category: overrideCategoryId,
-      transactionType: overrideType,
-    );
-
-    // Promote observation to canonical core ledger
+    // Promote observation to canonical core ledger (also writes the
+    // sms_transactions row shown in the SMS list).
     try {
       await FinancialIngestionService().confirmObservation(
         observationId: id,

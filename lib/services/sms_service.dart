@@ -47,24 +47,17 @@ class SmsService {
 
   // ─── Permission Handling ──────────────────────────────────────────
 
-  /// Request SMS permissions (READ_SMS and RECEIVE_SMS).
+  /// Request the SMS permission group (READ_SMS and RECEIVE_SMS).
   /// Returns `true` if permissions are granted.
   ///
   /// Uses permission_handler directly for reliability.
   Future<bool> requestPermissions() async {
     if (!isSupported) return false;
 
-    // Request both permissions using permission_handler (independent of
-    // default SMS app settings).
-    final statuses = await [Permission.sms, Permission.phone].request();
-
-    final smsGranted = statuses[Permission.sms]?.isGranted ?? false;
-    final phoneGranted = statuses[Permission.phone]?.isGranted ?? false;
-
-    AppLogger.debug(
-      '[PET-SMS] Permissions — SMS: $smsGranted, Phone: $phoneGranted',
-    );
-
+    // Only the SMS group (READ_SMS / RECEIVE_SMS) is needed. Requesting
+    // anything else would be an undeclared permission request.
+    final smsGranted = (await Permission.sms.request()).isGranted;
+    AppLogger.debug('[PET-SMS] SMS permission granted: $smsGranted');
     return smsGranted;
   }
 
@@ -245,6 +238,9 @@ class SmsService {
     AppLogger.debug(
       '[PET-SMS] Started listening for incoming SMS via native reader',
     );
+
+    // Process notifications captured while the app was closed.
+    unawaited(processPendingNotifications());
   }
 
   /// Parses, deduplicates, and ingests a single notification message using FinancialIngestionService.
