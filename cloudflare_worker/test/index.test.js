@@ -34,6 +34,9 @@ class MockKV {
   async put(key, value, options) {
     this.store.set(key, value);
   }
+  async delete(key) {
+    this.store.delete(key);
+  }
 }
 
 const mockEnv = {
@@ -42,6 +45,9 @@ const mockEnv = {
   FIREBASE_PROJECT_ID: MOCK_PROJECT_ID,
   KV_LIMITS: new MockKV()
 };
+
+// FREE_AI_QUESTIONS_PER_MONTH = 0 turns the free allowance off.
+const premiumOnlyEnv = { ...mockEnv, FREE_AI_QUESTIONS_PER_MONTH: "0" };
 
 // Helper to sign JWT using Node crypto
 function createToken({ payload, kid = "test-kid-123", key = privateKey }) {
@@ -304,7 +310,7 @@ test("Rejects missing subject", async () => {
 // Tests - RevenueCat Premium entitlement
 // ─────────────────────────────────────────────────────────────────────────────
 
-test("Rejects non-Premium subscriber (empty entitlements)", async () => {
+test("Premium-only mode rejects non-Premium subscriber (empty entitlements)", async () => {
   setupFetchMock([
     googleJwksHandler,
     {
@@ -334,13 +340,13 @@ test("Rejects non-Premium subscriber (empty entitlements)", async () => {
     body: JSON.stringify({ messages: [{ role: "user", content: "hello" }] })
   });
 
-  const res = await worker.fetch(req, mockEnv);
+  const res = await worker.fetch(req, premiumOnlyEnv);
   assert.strictEqual(res.status, 403);
   const data = await res.json();
   assert.match(data.error, /Premium/);
 });
 
-test("Rejects expired Premium subscriber", async () => {
+test("Premium-only mode rejects expired Premium subscriber", async () => {
   setupFetchMock([
     googleJwksHandler,
     {
@@ -377,7 +383,7 @@ test("Rejects expired Premium subscriber", async () => {
     body: JSON.stringify({ messages: [{ role: "user", content: "hello" }] })
   });
 
-  const res = await worker.fetch(req, mockEnv);
+  const res = await worker.fetch(req, premiumOnlyEnv);
   assert.strictEqual(res.status, 403);
 });
 
@@ -1039,4 +1045,240 @@ test("Premium status is cached between requests (audit P2-15)", async () => {
   await worker.fetch(make(), env);
   await worker.fetch(make(), env);
   assert.strictEqual(rcCalls, 1);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests - Free AI allowance
+// ─────────────────────────────────────────────────────────────────────────────
+
+const freeRevenueCatHandler = {
+  matches: (url) => url.includes("api.revenuecat.com"),
+  handle: () => new Response(JSON.stringify({ subscriber: { entitlements: {} } }), { status: 200 }),
+};
+
+function freeUserToken(sub = "free-user", provider = "google.com") {
+  return createToken({
+    payload: {
+      iss: `https://securetoken.google.com/${MOCK_PROJECT_ID}`,
+      aud: MOCK_PROJECT_ID,
+      sub,
+      iat: Math.floor(Date.now() / 1000) - 10,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      firebase: { sign_in_provider: provider },
+    },
+  });
+}
+
+function chatRequest(token, path = "/") {
+  return new Request(`https://example.com${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ messages: [{ role: "user", content: "hi" }] }),
+  });
+}
+
+test("Free users get 3 questions a month, then FREE_QUOTA_EXHAUSTED", async () => {
+  setupFetchMock([googleJwksHandler, freeRevenueCatHandler, groqHandler]);
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+  const token = freeUserToken();
+
+  const remaining = [];
+  for (let i = 0; i < 3; i++) {
+    const res = await worker.fetch(chatRequest(token), env);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.quota.plan, "free");
+    remaining.push(data.quota.remaining);
+  }
+  assert.deepStrictEqual(remaining, [2, 1, 0]);
+
+  const res = await worker.fetch(chatRequest(token), env);
+  assert.strictEqual(res.status, 403);
+  const data = await res.json();
+  assert.strictEqual(data.errorCode, "FREE_QUOTA_EXHAUSTED");
+  assert.strictEqual(data.quota.remaining, 0);
+  assert.ok(Date.parse(data.quota.resetsAt) > Date.now());
+});
+
+test("Free allowance size comes from FREE_AI_QUESTIONS_PER_MONTH", async () => {
+  setupFetchMock([googleJwksHandler, freeRevenueCatHandler, groqHandler]);
+  const env = { ...mockEnv, KV_LIMITS: new MockKV(), FREE_AI_QUESTIONS_PER_MONTH: "1" };
+  const token = freeUserToken();
+  assert.strictEqual((await worker.fetch(chatRequest(token), env)).status, 200);
+  assert.strictEqual((await worker.fetch(chatRequest(token), env)).status, 403);
+});
+
+test("Failed AI calls do not use up a free question", async () => {
+  setupFetchMock([
+    googleJwksHandler,
+    freeRevenueCatHandler,
+    { matches: (url) => url.includes("groq.com"), handle: () => new Response("{}", { status: 500 }) },
+  ]);
+  const kv = new MockKV();
+  const env = { ...mockEnv, KV_LIMITS: kv };
+  const res = await worker.fetch(chatRequest(freeUserToken()), env);
+  assert.strictEqual(res.status, 502);
+  assert.ok(![...kv.store.keys()].some((k) => k.startsWith("free:")));
+});
+
+test("Anonymous (guest) accounts must sign in to use the free allowance", async () => {
+  setupFetchMock([googleJwksHandler, freeRevenueCatHandler, groqHandler]);
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+  const res = await worker.fetch(chatRequest(freeUserToken("guest-1", "anonymous")), env);
+  assert.strictEqual(res.status, 403);
+  assert.strictEqual((await res.json()).errorCode, "SIGN_IN_REQUIRED");
+});
+
+test("/quota reports the free allowance without calling the AI", async () => {
+  let groqCalls = 0;
+  setupFetchMock([
+    googleJwksHandler,
+    freeRevenueCatHandler,
+    { matches: (url) => url.includes("groq.com"), handle: () => { groqCalls++; return groqHandler.handle(); } },
+  ]);
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+  const token = freeUserToken();
+  await worker.fetch(chatRequest(token), env);
+
+  const res = await worker.fetch(chatRequest(token, "/quota"), env);
+  assert.strictEqual(res.status, 200);
+  const data = await res.json();
+  assert.deepStrictEqual([data.quota.plan, data.quota.limit, data.quota.remaining], ["free", 3, 2]);
+  assert.strictEqual(groqCalls, 1);
+});
+
+test("Premium users are unlimited by the free allowance and /quota says premium", async () => {
+  setupFetchMock([googleJwksHandler, premiumRevenueCatHandler, groqHandler]);
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+  const chat = await worker.fetch(chatRequest(validToken), env);
+  assert.strictEqual((await chat.json()).quota.plan, "premium");
+  const quota = await worker.fetch(chatRequest(validToken, "/quota"), env);
+  assert.deepStrictEqual((await quota.json()).quota, { plan: "premium" });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests - Referrals
+// ─────────────────────────────────────────────────────────────────────────────
+
+function referralFetchMock({ firstSeenDaysAgo = 1, grantStatus = 200, grants = [] } = {}) {
+  setupFetchMock([
+    googleJwksHandler,
+    {
+      matches: (url, opts) => url.includes("/promotional") && opts?.method === "POST",
+      handle: (url) => {
+        grants.push(decodeURIComponent(url.split("/subscribers/")[1].split("/")[0]));
+        return new Response("{}", { status: grantStatus });
+      },
+    },
+    {
+      matches: (url) => url.includes("api.revenuecat.com/v1/subscribers/"),
+      handle: () => new Response(JSON.stringify({
+        subscriber: {
+          first_seen: new Date(Date.now() - firstSeenDaysAgo * 86400000).toISOString(),
+          entitlements: {},
+        },
+      }), { status: 200 }),
+    },
+  ]);
+}
+
+function referralRequest(token, path, body = {}) {
+  return new Request(`https://example.com${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+}
+
+async function inviteCode(env, token) {
+  const res = await worker.fetch(referralRequest(token, "/referral/code"), env);
+  assert.strictEqual(res.status, 200);
+  return (await res.json()).code;
+}
+
+test("Referral code is stable per user and 8 characters", async () => {
+  referralFetchMock();
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+  const token = freeUserToken("inviter");
+  const code = await inviteCode(env, token);
+  assert.match(code, /^[A-Z2-9]{8}$/);
+  assert.strictEqual(await inviteCode(env, token), code);
+});
+
+test("Redeeming a code gives both people a free month, once", async () => {
+  const grants = [];
+  referralFetchMock({ grants });
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+  const code = await inviteCode(env, freeUserToken("inviter"));
+
+  const redeemer = freeUserToken("new-user");
+  const res = await worker.fetch(
+    referralRequest(redeemer, "/referral/redeem", { code: code.toLowerCase() }), env);
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(await res.json(), { granted: "monthly", referrerRewarded: true });
+  assert.deepStrictEqual(grants.sort(), ["inviter", "new-user"]);
+
+  const again = await worker.fetch(referralRequest(redeemer, "/referral/redeem", { code }), env);
+  assert.strictEqual(again.status, 409);
+  assert.strictEqual((await again.json()).errorCode, "ALREADY_REDEEMED");
+});
+
+test("Referral rejects own code, unknown codes, guests and existing users", async () => {
+  referralFetchMock({ firstSeenDaysAgo: 90 });
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+  const inviter = freeUserToken("inviter");
+  const code = await inviteCode(env, inviter);
+
+  const own = await worker.fetch(referralRequest(inviter, "/referral/redeem", { code }), env);
+  assert.strictEqual((await own.json()).errorCode, "OWN_CODE");
+
+  const unknown = await worker.fetch(
+    referralRequest(freeUserToken("x"), "/referral/redeem", { code: "ZZZZZZZZ" }), env);
+  assert.strictEqual((await unknown.json()).errorCode, "INVALID_CODE");
+
+  const guest = await worker.fetch(
+    referralRequest(freeUserToken("g", "anonymous"), "/referral/redeem", { code }), env);
+  assert.strictEqual((await guest.json()).errorCode, "SIGN_IN_REQUIRED");
+
+  const old = await worker.fetch(
+    referralRequest(freeUserToken("old-user"), "/referral/redeem", { code }), env);
+  assert.strictEqual(old.status, 403);
+  assert.strictEqual((await old.json()).errorCode, "NOT_NEW_USER");
+});
+
+test("Inviter rewards stop at the yearly cap; new users still get theirs", async () => {
+  const grants = [];
+  referralFetchMock({ grants });
+  const env = { ...mockEnv, KV_LIMITS: new MockKV(), REFERRAL_MAX_PER_YEAR: "1" };
+  const code = await inviteCode(env, freeUserToken("inviter"));
+
+  await worker.fetch(referralRequest(freeUserToken("a"), "/referral/redeem", { code }), env);
+  const second = await worker.fetch(referralRequest(freeUserToken("b"), "/referral/redeem", { code }), env);
+  assert.deepStrictEqual(await second.json(), { granted: "monthly", referrerRewarded: false });
+  assert.deepStrictEqual(grants.filter((g) => g === "inviter").length, 1);
+  assert.ok(grants.includes("b"));
+});
+
+test("A failed grant does not use up the redeemer's one redemption", async () => {
+  referralFetchMock({ grantStatus: 500 });
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+  const code = await inviteCode(env, freeUserToken("inviter"));
+  const res = await worker.fetch(referralRequest(freeUserToken("n"), "/referral/redeem", { code }), env);
+  assert.strictEqual(res.status, 502);
+  assert.strictEqual(await env.KV_LIMITS.get("refredeemed:n"), null);
+});
+
+test("/referral/forget removes the user's referral records (account deletion)", async () => {
+  referralFetchMock();
+  const kv = new MockKV();
+  const env = { ...mockEnv, KV_LIMITS: kv };
+  const code = await inviteCode(env, freeUserToken("inviter"));
+  await worker.fetch(referralRequest(freeUserToken("n"), "/referral/redeem", { code }), env);
+
+  const res = await worker.fetch(referralRequest(freeUserToken("inviter"), "/referral/forget"), env);
+  assert.strictEqual(res.status, 200);
+  assert.ok(![...kv.store.keys()].some((k) => k.includes("inviter") || k === `refcode:${code}`));
+
+  await worker.fetch(referralRequest(freeUserToken("n"), "/referral/forget"), env);
+  assert.strictEqual(await kv.get("refredeemed:n"), null);
 });

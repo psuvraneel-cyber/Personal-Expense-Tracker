@@ -14,6 +14,13 @@ REQUIRE_APP_CHECK = "false"
 # LLM used for all Copilot replies. Check https://console.groq.com/docs/models
 # and update here if Groq deprecates it.
 GROQ_MODEL = "llama-3.3-70b-versatile"
+# Free Copilot questions per signed-in (non-guest) user per calendar month
+# (UTC). "0" makes the Copilot premium-only.
+FREE_AI_QUESTIONS_PER_MONTH = "3"
+# Referral programme: invite codes are for accounts first seen in the last
+# N days; each inviter is rewarded at most this many times per year.
+REFERRAL_NEW_USER_DAYS = "30"
+REFERRAL_MAX_PER_YEAR = "12"
 
 # ─── Required Secrets (set via `wrangler secret put <NAME>`) ─────────────────
 # Do NOT put secret values here or in source control.
