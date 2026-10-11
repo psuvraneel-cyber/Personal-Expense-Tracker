@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/premium/services/premium_teasers.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
@@ -123,6 +124,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
       body: PremiumGate(
         title: 'Alerts Centre',
         subtitle: 'Budget, anomaly, and bill alerts in one place.',
+        showPreview: true,
+        teaser: (context) =>
+            PremiumTeasers.alerts(context.watch<AlertProvider>().activeCount),
         child: Consumer<AlertProvider>(
           builder: (context, provider, _) {
             return RefreshIndicator(

@@ -22,8 +22,8 @@ enum NotificationCategory {
   ),
   weeklyReport(
     'weeklyReport',
-    'Weekly Report',
-    'Weekly financial insights and report summaries',
+    'Weekly & Monthly Reports',
+    'Monday spending recap and your monthly Money Wrap',
   ),
   goalProgress(
     'goalProgress',

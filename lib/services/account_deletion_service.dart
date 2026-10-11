@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/services/firestore_sync_service.dart';
+import 'package:pet/services/household_service.dart';
+import 'package:pet/services/referral_service.dart';
 import 'package:pet/services/local_data_wiper.dart';
 import 'package:pet/premium/services/premium_entitlement_service.dart';
 
@@ -14,6 +16,7 @@ enum DeletionStep {
   deletingCloudCategories,
   deletingCloudTombstones,
   deletingCloudPremiumData,
+  leavingHouseholds,
   deletingUserProfile,
   deletingAuthAccount,
   clearingLocalData,
@@ -25,6 +28,8 @@ class AccountDeletionService {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
   final DatabaseHelper _dbHelper;
+  final Future<void> Function(String uid) _leaveHouseholds;
+  final Future<bool> Function() _forgetServerRecords;
 
   static bool isDeletionInProgress = false;
   bool isTesting = false;
@@ -33,9 +38,15 @@ class AccountDeletionService {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     required DatabaseHelper dbHelper,
+    Future<void> Function(String uid)? leaveHouseholds,
+    Future<bool> Function()? forgetServerRecords,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
         _auth = auth ?? FirebaseAuth.instance,
-        _dbHelper = dbHelper;
+        _dbHelper = dbHelper,
+        _leaveHouseholds = leaveHouseholds ??
+            HouseholdService(firestore: firestore ?? FirebaseFirestore.instance)
+                .removeUserEverywhere,
+        _forgetServerRecords = forgetServerRecords ?? ReferralService.forgetMe;
 
   /// Stream of deletion progress for UI display
   final _progressController = StreamController<DeletionStep>.broadcast();
@@ -106,6 +117,18 @@ class AccountDeletionService {
       for (final collection in FirestoreSyncService.userCollections) {
         if (handled.contains(collection)) continue;
         await _deleteFirestoreCollection(uid, collection);
+      }
+
+      // ── Step 5b: Leave shared households (deleting those the user owns)
+      // and remove their shared totals and invite codes.
+      _progressController.add(DeletionStep.leavingHouseholds);
+      await _leaveHouseholds(uid);
+
+      // Referral and free-AI records on our Worker (needs the ID token, so
+      // before the auth account goes). Best effort: these are keyed only by
+      // the account ID, which no longer maps to anyone once it's deleted.
+      if (!await _forgetServerRecords()) {
+        AppLogger.debug('[AccountDeletion] Worker records not removed');
       }
 
       // ── Step 6: Delete user profile document

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/premium/services/premium_teasers.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/core/theme/app_theme.dart';
@@ -150,7 +151,11 @@ class _RecurringBillsScreenState extends State<RecurringBillsScreen> {
       ),
       body: PremiumGate(
         title: 'Bills & Subscriptions',
-        subtitle: 'Track upcoming payments and recurring commitments.',
+        subtitle: 'See every subscription and bill, get reminders before '
+            'they are due, and spot price rises.',
+        showPreview: true,
+        teaser: (context) => PremiumTeasers.recurring(
+            context.watch<RecurringProvider>().recurring),
         child: Consumer<RecurringProvider>(
           builder: (context, provider, _) {
             if (provider.isLoading) {

@@ -1,7 +1,12 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/core/l10n/app_language.dart';
 import 'package:pet/data/database/database_helper.dart';
+import 'package:pet/services/analytics_service.dart';
+import 'package:pet/services/engagement_tracker.dart';
+import 'package:pet/services/home_widget_service.dart';
+import 'package:pet/services/household_service.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/services/secure_storage_service.dart';
@@ -18,6 +23,7 @@ import 'package:pet/services/sms_service.dart';
 ///  - the native encrypted notification cache
 ///  - cached profile values in secure storage
 ///  - user-specific SharedPreferences (device settings are kept)
+///  - the home-screen widget's numbers
 class LocalDataWiper {
   LocalDataWiper._();
 
@@ -29,6 +35,10 @@ class LocalDataWiper {
     'biometricTimeout',
     'onboardingCompleted',
     'crashReportsEnabled',
+    kAnalyticsPrefKey,
+    kAnalyticsConsentAskedKey,
+    kAppLanguagePrefKey,
+    ...EngagementTracker.deviceStateKeys,
   };
 
   static Future<void> wipe({DatabaseHelper? dbHelper}) async {
@@ -58,6 +68,8 @@ class LocalDataWiper {
       await SecureStorageService.instance.delete('userEmail');
     });
     await step('clear preferences', clearUserPreferences);
+    await step('clear home-screen widget', HomeWidgetService.clear);
+    HouseholdSync.reset();
   }
 
   /// Clears all SharedPreferences except [deviceSettingKeys].

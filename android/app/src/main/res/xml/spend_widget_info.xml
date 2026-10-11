@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- updatePeriodMillis: 30 min (the minimum) keeps "today" correct after
+     midnight; the app pushes fresh numbers whenever transactions change. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/spend_widget"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:previewLayout="@layout/spend_widget"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

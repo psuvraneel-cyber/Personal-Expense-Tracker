@@ -1,5 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/l10n/app_localizations.dart';
+import 'package:pet/core/widgets/analytics_consent_sheet.dart';
+import 'package:pet/services/analytics_service.dart';
+import 'package:pet/services/biometric_service.dart';
+import 'package:pet/services/engagement_tracker.dart';
+import 'package:pet/services/financial_ingestion_service.dart';
+import 'package:pet/services/home_widget_service.dart';
+import 'package:pet/services/household_service.dart';
 import 'package:pet/screens/dashboard/dashboard_screen.dart';
 import 'package:pet/screens/transactions/transactions_screen.dart';
 import 'package:pet/screens/transactions/add_edit_transaction_screen.dart';
@@ -35,9 +45,15 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _transactions = TransactionsScreen();
   static const _budget = BudgetScreen();
 
+  Timer? _engagementTimer;
+  AppLifecycleListener? _lifecycle;
+
   @override
   void initState() {
     super.initState();
+    if (!widget.showDeletionImmediately) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startEngagement());
+    }
     if (widget.showDeletionImmediately) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showModalBottomSheet(
@@ -51,6 +67,48 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _engagementTimer?.cancel();
+    _lifecycle?.dispose();
+    FinancialIngestionService.ledgerRevision
+        .removeListener(_scheduleEngagementCheck);
+    super.dispose();
+  }
+
+  /// Asks for analytics consent once, then keeps funnel milestones and the
+  /// review prompt up to date as transactions are imported.
+  Future<void> _startEngagement() async {
+    if (!mounted) return;
+    if (await AnalyticsService.shouldAskForConsent() && mounted) {
+      await showAnalyticsConsentSheet(context);
+    }
+    if (!mounted) return;
+    FinancialIngestionService.ledgerRevision
+        .addListener(_scheduleEngagementCheck);
+    _lifecycle = AppLifecycleListener(
+      onResume: _scheduleEngagementCheck,
+      // Leaving the app: push fresh numbers (incl. budget or lock changes)
+      // to the home-screen widget.
+      onHide: HomeWidgetService.refresh,
+    );
+    _scheduleEngagementCheck();
+  }
+
+  void _scheduleEngagementCheck() {
+    _engagementTimer?.cancel();
+    // Let imports settle and the screen become idle before any prompt.
+    _engagementTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      // Only prompt while the user is on the home screen itself, unlocked.
+      final canPrompt = (ModalRoute.of(context)?.isCurrent ?? true) &&
+          !BiometricService.instance.isLocked;
+      EngagementTracker.instance.evaluate(allowReviewPrompt: canPrompt);
+      HomeWidgetService.refresh();
+      HouseholdSync.publishMine();
+    });
   }
 
   @override
@@ -75,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(index: _currentIndex, children: screens),
       floatingActionButton: _currentIndex < 2
           ? Semantics(
-              label: 'Add new transaction',
+              label: AppLocalizations.of(context).addTransactionSemantics,
               button: true,
               child: Container(
                 decoration: BoxDecoration(
@@ -119,9 +177,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   icon: const Icon(Icons.add_rounded, size: 22),
-                  label: const Text(
-                    'Add',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                  label: Text(
+                    AppLocalizations.of(context).addTransactionShort,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -178,28 +236,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 index: 0,
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_rounded,
-                label: 'Home',
+                label: AppLocalizations.of(context).navHome,
                 isDark: isDark,
               ),
               _navItem(
                 index: 1,
                 icon: Icons.swap_horiz_rounded,
                 activeIcon: Icons.swap_horiz_rounded,
-                label: 'History',
+                label: AppLocalizations.of(context).navHistory,
                 isDark: isDark,
               ),
               _navItem(
                 index: 2,
                 icon: Icons.pie_chart_outline_rounded,
                 activeIcon: Icons.pie_chart_rounded,
-                label: 'Budget',
+                label: AppLocalizations.of(context).navBudget,
                 isDark: isDark,
               ),
               _navItem(
                 index: 3,
                 icon: Icons.settings_outlined,
                 activeIcon: Icons.settings_rounded,
-                label: 'Settings',
+                label: AppLocalizations.of(context).navSettings,
                 isDark: isDark,
               ),
             ],
@@ -219,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isActive = _currentIndex == index;
     return Expanded(
       child: Semantics(
-        label: 'Navigate to $label tab',
+        label: AppLocalizations.of(context).navTabSemantics(label),
         selected: isActive,
         child: GestureDetector(
           onTap: () => setState(() => _currentIndex = index),

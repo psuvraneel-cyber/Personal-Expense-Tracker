@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:pet/premium/services/premium_entitlement_service.dart';
+import 'package:pet/services/analytics_service.dart';
 
 class PremiumProvider extends ChangeNotifier {
   bool _isPremium = false;
@@ -40,8 +41,15 @@ class PremiumProvider extends ChangeNotifier {
         customerInfo.entitlements.all["P.E.T Premium"]?.isActive == true;
     if (_isPremium != newPremiumState) {
       _isPremium = newPremiumState;
+      _reportPremiumStatus();
       notifyListeners();
     }
+  }
+
+  /// Lets analytics segment funnels by free vs premium users.
+  void _reportPremiumStatus() {
+    AnalyticsService.instance
+        .setUserProperty('is_premium', _isPremium ? 'true' : 'false');
   }
 
   /// Initialize RevenueCat SDK and check entitlement.
@@ -62,6 +70,8 @@ class PremiumProvider extends ChangeNotifier {
       );
       _experimentalEnabled =
           await PremiumEntitlementService.isExperimentalEnabled();
+      _reportPremiumStatus();
+      await AnalyticsService.instance.linkRevenueCat();
     } catch (e) {
       AppLogger.error('load() failed', error: e, label: 'PremiumProvider');
       // Ensure premium defaults to false on unrecoverable errors

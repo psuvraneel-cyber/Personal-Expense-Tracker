@@ -23,6 +23,8 @@ import 'package:pet/core/widgets/metric_pill_row.dart';
 import 'package:pet/core/widgets/category_progress_bar_new.dart';
 import 'package:pet/core/widgets/spend_health_card.dart';
 import 'package:pet/core/widgets/ai_copilot_teaser_card.dart';
+import 'package:pet/core/widgets/subscriptions_found_card.dart';
+import 'package:pet/core/widgets/money_wrap_entry_card.dart';
 import 'package:pet/core/widgets/expense_card.dart';
 import 'package:pet/services/auth_service.dart';
 import 'package:pet/services/spend_health_service.dart';
@@ -426,6 +428,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                         // ── Recent UPI Activity
                         _buildRecentUpiSection(context, isDark, formatter),
+
+                        // ── Last month's Money Wrap (first week of the month)
+                        const MoneyWrapEntryCard(),
+
+                        // ── Subscriptions found (moment-of-value insight)
+                        const SubscriptionsFoundCard(),
 
                         // ── Spend Health Score
                         _buildSectionHeader('Spend Health', isDark),

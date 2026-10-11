@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_title">P.E.T</string>
+    <string name="widget_description">Today\'s spending and what\'s left in your budget</string>
+    <string name="widget_spent_today">spent today</string>
+    <string name="widget_left_today">%1$s left to spend today</string>
+    <string name="widget_no_budget">Set a budget to see what\'s left</string>
+    <string name="widget_open_app">Open P.E.T to start</string>
+    <string name="widget_locked">Unlock P.E.T to view</string>
+</resources>

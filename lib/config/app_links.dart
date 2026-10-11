@@ -19,6 +19,10 @@ class AppLinks {
 
   static const String packageName = 'com.pet.tracker.pet';
 
+  /// Public Play Store listing (used in shared Money Wrap cards).
+  static const String playStoreListing =
+      'https://play.google.com/store/apps/details?id=$packageName';
+
   /// Google Play subscription management for this app.
   static const String manageSubscriptions =
       'https://play.google.com/store/account/subscriptions?package=$packageName';

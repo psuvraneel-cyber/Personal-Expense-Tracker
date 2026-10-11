@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/l10n/app_localizations.dart';
 import 'package:pet/config/app_links.dart';
 import 'package:pet/core/theme/app_theme.dart';
 
@@ -39,6 +40,11 @@ class _NotificationAccessDisclosureSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
+    final apps = [
+      ...kNotificationSourceApps.take(kNotificationSourceApps.length - 1),
+      l10n.notifAccessBankApps,
+    ];
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -46,39 +52,31 @@ class _NotificationAccessDisclosureSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Allow P.E.T to read payment notifications?',
-                style: textTheme.titleLarge),
+            Text(l10n.notifAccessTitle, style: textTheme.titleLarge),
             const SizedBox(height: 12),
             Text(
-              'Some payments only show up as app notifications, not bank SMS. '
-              'With your permission, P.E.T reads notifications from these '
-              'payment and banking apps to record transactions automatically:',
+              l10n.notifAccessIntro,
               style: textTheme.bodyMedium,
             ),
             const SizedBox(height: 8),
-            Text(kNotificationSourceApps.join(', '),
-                style: textTheme.bodySmall),
+            Text(apps.join(', '), style: textTheme.bodySmall),
             const SizedBox(height: 16),
-            const _Point(
+            _Point(
               icon: Icons.filter_alt_rounded,
-              text: 'Notifications from all other apps (including chat and '
-                  'social apps) are ignored and never stored.',
+              text: l10n.notifAccessOthersIgnored,
             ),
-            const _Point(
+            _Point(
               icon: Icons.phone_android_rounded,
-              text: 'The notification text is processed on this device. Only '
-                  'the extracted amount, merchant, date and category are '
-                  'saved — and synced to your account if you are signed in.',
+              text: l10n.notifAccessOnDevice,
             ),
-            const _Point(
+            _Point(
               icon: Icons.toggle_off_rounded,
-              text: 'You can turn this off any time in Android Settings → '
-                  'Notification access.',
+              text: l10n.notifAccessTurnOff,
             ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => AppLinks.open(context, AppLinks.privacyPolicy),
-              child: const Text('Read the Privacy Policy'),
+              child: Text(l10n.readPrivacyPolicy),
             ),
             const SizedBox(height: 8),
             Row(
@@ -86,7 +84,7 @@ class _NotificationAccessDisclosureSheet extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Not now'),
+                    child: Text(l10n.notNow),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -96,7 +94,7 @@ class _NotificationAccessDisclosureSheet extends StatelessWidget {
                       backgroundColor: AppTheme.accentPurple,
                     ),
                     onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Agree & continue'),
+                    child: Text(l10n.notifAccessAgree),
                   ),
                 ),
               ],

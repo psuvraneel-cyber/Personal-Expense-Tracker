@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_title">P.E.T</string>
+    <string name="widget_description">आज का खर्च और आपके बजट में बची राशि</string>
+    <string name="widget_spent_today">आज खर्च</string>
+    <string name="widget_left_today">आज %1$s और खर्च कर सकते हैं</string>
+    <string name="widget_no_budget">बची राशि देखने के लिए बजट तय करें</string>
+    <string name="widget_open_app">शुरू करने के लिए P.E.T खोलें</string>
+    <string name="widget_locked">देखने के लिए P.E.T अनलॉक करें</string>
+</resources>

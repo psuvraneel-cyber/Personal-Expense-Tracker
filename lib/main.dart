@@ -46,8 +46,14 @@ import 'package:pet/premium/screens/alerts_screen.dart';
 import 'package:pet/premium/screens/recurring_bills_screen.dart';
 import 'package:pet/premium/screens/goals_screen.dart';
 import 'package:pet/premium/screens/cashflow_screen.dart';
+import 'package:pet/screens/reports/money_wrap_screen.dart';
+import 'package:pet/services/report_notifier.dart';
 
 import 'package:pet/services/app_bootstrap.dart';
+import 'package:pet/core/l10n/app_language.dart';
+import 'package:pet/l10n/app_localizations.dart';
+import 'package:pet/services/analytics_service.dart';
+import 'package:pet/services/remote_config_service.dart';
 
 void main() async {
   // Global Privacy & Security Guard:
@@ -75,6 +81,9 @@ void main() async {
         prefs.getBool(kCrashReportsPrefKey) ?? true,
       );
     } catch (_) {}
+    // Opt-in only: stays off until the user agrees (see AnalyticsService).
+    await AnalyticsService.instance.init();
+    await RemoteConfigService.init();
     // Framework errors that reach here are real crashes of the UI.
     FlutterError.onError = (errorDetails) {
       FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
@@ -97,6 +106,9 @@ void main() async {
 
   // Initialize haptic feedback preference
   await HapticService.instance.init();
+
+  // Chosen app language (English unless Hindi was picked in Settings).
+  await AppLanguage.load();
 
   // Initialize biometric lock preference
   await BiometricService.instance.init();
@@ -132,6 +144,9 @@ void main() async {
     final recurringRepo = RecurringPaymentRepository();
     final recurringPayments = await recurringRepo.getAll();
     await BillReminderScheduler.scheduleReminders(recurringPayments);
+    // Weekly recap / monthly Money Wrap, if one is due and wasn't sent by
+    // the background task yet.
+    unawaited(ReportNotifier.maybeNotify());
   } catch (e) {
     AppLogger.debug('Notification init or reminder re-arm failed: $e');
   }
@@ -189,7 +204,11 @@ class PETApp extends StatefulWidget {
       case 'bill':
         return const RecurringBillsScreen();
       case 'budget':
+      case 'weekly':
         return const BudgetScreen();
+      case 'wrap':
+        final month = DateTime.tryParse('${observationId ?? ''}-01');
+        return MoneyWrapScreen(month: month ?? DateTime.now());
       case 'goal':
         return const GoalsScreen();
       case 'cashflow':
@@ -502,55 +521,61 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       // providers and all descendant screens are not recreated on toggle.
       child: ValueListenableBuilder<ThemeMode>(
         valueListenable: _themeMode,
-        builder: (context, themeMode, _) => ThemeModeNotifier(
-          themeMode: themeMode,
-          onThemeModeChanged: _setThemeMode,
-          child: MaterialApp(
-            title: 'P.E.T - Personal Expense Tracker',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
+        builder: (context, themeMode, _) => ValueListenableBuilder<Locale>(
+          valueListenable: AppLanguage.current,
+          builder: (context, locale, _) => ThemeModeNotifier(
             themeMode: themeMode,
-            // 200 ms feels instant but still has a subtle crossfade.
-            themeAnimationDuration: const Duration(milliseconds: 200),
-            themeAnimationCurve: Curves.easeOut,
-            navigatorKey: _navigatorKey,
-            builder: (context, child) {
-              // Biometric lock overlay sits above all navigation
-              // While locked, the app underneath is removed from the
-              // accessibility tree (TalkBack can't read balances) and can't
-              // receive touches.
-              return Stack(
-                children: [
-                  ExcludeSemantics(
-                    excluding: _showBiometricLock,
-                    child: AbsorbPointer(
-                      absorbing: _showBiometricLock,
-                      child: child ?? const SizedBox.shrink(),
+            onThemeModeChanged: _setThemeMode,
+            child: MaterialApp(
+              title: 'P.E.T - Personal Expense Tracker',
+              locale: locale,
+              supportedLocales: AppLocalizations.supportedLocales,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeMode,
+              // 200 ms feels instant but still has a subtle crossfade.
+              themeAnimationDuration: const Duration(milliseconds: 200),
+              themeAnimationCurve: Curves.easeOut,
+              navigatorKey: _navigatorKey,
+              builder: (context, child) {
+                // Biometric lock overlay sits above all navigation
+                // While locked, the app underneath is removed from the
+                // accessibility tree (TalkBack can't read balances) and can't
+                // receive touches.
+                return Stack(
+                  children: [
+                    ExcludeSemantics(
+                      excluding: _showBiometricLock,
+                      child: AbsorbPointer(
+                        absorbing: _showBiometricLock,
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     ),
-                  ),
-                  if (_showBiometricLock)
-                    BiometricLockScreen(onUnlocked: _onBiometricUnlocked),
-                ],
-              );
-            },
-            routes: {
-              '/': (_) => SplashScreen(
-                    onThemeToggle: () => _setThemeMode(
-                      themeMode == ThemeMode.dark
-                          ? ThemeMode.light
-                          : ThemeMode.dark,
+                    if (_showBiometricLock)
+                      BiometricLockScreen(onUnlocked: _onBiometricUnlocked),
+                  ],
+                );
+              },
+              routes: {
+                '/': (_) => SplashScreen(
+                      onThemeToggle: () => _setThemeMode(
+                        themeMode == ThemeMode.dark
+                            ? ThemeMode.light
+                            : ThemeMode.dark,
+                      ),
+                      onThemeModeChanged: _setThemeMode,
+                      themeMode: themeMode,
+                      isDarkMode: themeMode == ThemeMode.dark ||
+                          (themeMode == ThemeMode.system &&
+                              WidgetsBinding.instance.platformDispatcher
+                                      .platformBrightness ==
+                                  Brightness.dark),
                     ),
-                    onThemeModeChanged: _setThemeMode,
-                    themeMode: themeMode,
-                    isDarkMode: themeMode == ThemeMode.dark ||
-                        (themeMode == ThemeMode.system &&
-                            WidgetsBinding.instance.platformDispatcher
-                                    .platformBrightness ==
-                                Brightness.dark),
-                  ),
-            },
-            initialRoute: '/',
+              },
+              initialRoute: '/',
+            ),
           ),
         ),
       ),

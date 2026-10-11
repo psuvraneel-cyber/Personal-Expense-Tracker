@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/l10n/app_localizations.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/services/native_sms_reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -74,6 +75,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppTheme.primaryDark,
       body: SafeArea(
@@ -85,7 +87,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: TextButton(
                 onPressed: _skip,
                 child: Text(
-                  'Skip',
+                  l10n.onboardingSkip,
                   style: TextStyle(
                     color: AppTheme.textSecondary,
                     fontWeight: FontWeight.w600,
@@ -103,28 +105,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _buildStep(
                     icon: Icons.sms_rounded,
                     iconColor: AppTheme.accentTeal,
-                    title: 'Auto-Detect Transactions',
-                    subtitle:
-                        'P.E.T reads your bank SMS to automatically\ntrack your spending. No data ever leaves your device.',
-                    badge: '100% On-Device',
+                    title: l10n.onboardingAutoTitle,
+                    subtitle: l10n.onboardingAutoBody,
+                    badge: l10n.onboardingAutoBadge,
                     badgeIcon: Icons.lock_outline,
                   ),
                   _buildStep(
                     icon: Icons.pie_chart_rounded,
                     iconColor: AppTheme.accentPurple,
-                    title: 'Set Your Monthly Budget',
-                    subtitle:
-                        'Stay on top of your finances with customisable\nbudgets for each spending category.',
-                    badge: 'Smart Alerts',
+                    title: l10n.onboardingBudgetTitle,
+                    subtitle: l10n.onboardingBudgetBody,
+                    badge: l10n.onboardingBudgetBadge,
                     badgeIcon: Icons.notifications_active_outlined,
                   ),
                   _buildStep(
                     icon: Icons.category_rounded,
                     iconColor: AppTheme.incomeGreen,
-                    title: 'Personalise Your Categories',
-                    subtitle:
-                        'Add custom categories that match your lifestyle.\nFood, Travel, Subscriptions — you decide.',
-                    badge: 'Fully Customisable',
+                    title: l10n.onboardingCategoriesTitle,
+                    subtitle: l10n.onboardingCategoriesBody,
+                    badge: l10n.onboardingCategoriesBadge,
                     badgeIcon: Icons.palette_outlined,
                   ),
                   if (_isAggressiveOem) _buildOemStep(),
@@ -172,8 +171,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                       child: Text(
                         _currentStep == _totalSteps - 1
-                            ? 'Get Started'
-                            : 'Continue',
+                            ? l10n.onboardingGetStarted
+                            : l10n.onboardingContinue,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -272,6 +271,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildOemStep() {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -297,7 +297,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 32),
           Text(
-            'Background Sync Whitelist',
+            l10n.onboardingOemTitle,
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 24,
@@ -308,9 +308,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Your device ($_manufacturer) aggressively restricts background apps. '
-            'To ensure P.E.T auto-detects all transactions without missing any SMS, '
-            'please disable battery saver restrictions for P.E.T.',
+            l10n.onboardingOemBody(_manufacturer),
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -324,7 +322,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               await NativeSmsReader().openBatteryOptimizationSettings();
             },
             icon: const Icon(Icons.settings_outlined),
-            label: const Text('Open Battery Settings'),
+            label: Text(l10n.onboardingOemButton),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.amber,
               foregroundColor: Colors.black,

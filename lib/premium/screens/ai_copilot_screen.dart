@@ -5,7 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/config/app_links.dart';
 import 'package:intl/intl.dart';
 
-import 'package:pet/premium/widgets/premium_gate.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:pet/premium/providers/premium_provider.dart';
+import 'package:pet/premium/screens/purchase_screen.dart';
+import 'package:pet/services/analytics_service.dart';
 
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/data/models/enums.dart';
@@ -48,11 +51,31 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
 
   AiCopilotService? _service;
 
+  /// Free-plan allowance; null until the server has answered.
+  AiQuota? _quota;
+
   @override
   void initState() {
     super.initState();
     _initService();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadQuota());
   }
+
+  /// Guests can't use the free allowance (a reinstall would reset it).
+  bool get _isGuest => FirebaseAuth.instance.currentUser?.isAnonymous ?? true;
+
+  Future<void> _loadQuota() async {
+    if (!mounted || context.read<PremiumProvider>().isPremium || _isGuest) {
+      return;
+    }
+    final quota = await AiCopilotService.fetchQuota();
+    if (mounted && quota != null) setState(() => _quota = quota);
+  }
+
+  void _openPaywall(String source) => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PurchaseScreen(source: source)),
+      );
 
   void _initService() {
     _service = AiCopilotService(model: AppEnv.groqModel);
@@ -266,13 +289,16 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
             ),
         ],
       ),
-      body: PremiumGate(
-        title: 'Unlock AI Financial Copilot',
-        subtitle:
-            'Get personalized insights and answers about your spending habits.',
-        child: Column(
+      // Free users ask on a small monthly allowance enforced by the server.
+      body: Builder(builder: (context) {
+        final isPremium = context.watch<PremiumProvider>().isPremium;
+        final quota = isPremium ? null : _quota;
+        final locked = !isPremium && (_isGuest || quota?.canAsk == false);
+        return Column(
           children: [
-            if (_showSuggestions && _messages.isEmpty)
+            if (quota != null && quota.canAsk)
+              _buildAllowanceBanner(quota, isDark),
+            if (_showSuggestions && _messages.isEmpty && !locked)
               _buildSuggestions(isDark),
             Expanded(
               child: ListView.builder(
@@ -285,7 +311,95 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
               ),
             ),
             if (_isSending) _buildTypingIndicator(isDark),
-            _buildInputBar(isDark),
+            if (locked)
+              _buildLockedBar(quota, isDark)
+            else
+              _buildInputBar(isDark),
+          ],
+        );
+      }),
+    );
+  }
+
+  Widget _buildAllowanceBanner(AiQuota quota, bool isDark) {
+    final n = quota.remaining;
+    return Material(
+      color: AppTheme.accentPurple.withAlpha(isDark ? 40 : 22),
+      child: InkWell(
+        onTap: () => _openPaywall('AI Copilot allowance'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded,
+                  size: 16, color: AppTheme.accentPurple),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$n free question${n == 1 ? '' : 's'} left this month',
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Text(
+                'Go unlimited',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.accentPurple,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Replaces the input bar when the free allowance can't be used.
+  Widget _buildLockedBar(AiQuota? quota, bool isDark) {
+    final String message;
+    if (_isGuest) {
+      message = 'Sign in with Google (Settings → Account) to try '
+          'AI Copilot free each month, or go Premium for unlimited questions.';
+    } else if (quota != null && quota.limit > 0) {
+      final resets = quota.resetsAt == null
+          ? ''
+          : ' More free questions on ${DateFormat('d MMM').format(quota.resetsAt!)}.';
+      message = "You've used your ${quota.limit} free questions this month."
+          '$resets';
+    } else {
+      message = 'AI Copilot is part of P.E.T Premium.';
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
+        border: Border(
+          top: BorderSide(
+            color:
+                isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(7),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.accentPurple,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => _openPaywall('AI Copilot limit'),
+                icon: const Icon(Icons.workspace_premium_rounded),
+                label: const Text('Get unlimited questions'),
+              ),
+            ),
           ],
         ),
       ),
@@ -676,10 +790,31 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       );
       if (mounted) {
         setState(() {
+          final quota = service.lastQuota;
+          if (quota != null && !quota.isPremium) _quota = quota;
           _messages.add(
             CopilotMessage(
               role: 'assistant',
               content: reply,
+              createdAt: DateTime.now(),
+            ),
+          );
+        });
+      }
+    } on AiAccessException catch (e) {
+      if (e.quotaExhausted) {
+        AnalyticsService.instance.logEvent(AnalyticsEvents.aiQuotaExhausted);
+      }
+      if (mounted) {
+        setState(() {
+          _quota = e.quota ?? const AiQuota(isPremium: false);
+          _messages.add(
+            CopilotMessage(
+              role: 'assistant',
+              content: e.signInRequired
+                  ? '🔑 Sign in with Google to try AI Copilot free.'
+                  : "🔒 That's all the free questions for this month. "
+                      'Premium gives you unlimited questions.',
               createdAt: DateTime.now(),
             ),
           );

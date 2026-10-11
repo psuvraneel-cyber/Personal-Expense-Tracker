@@ -21,6 +21,14 @@
     <!-- Required for rescheduling notifications after device reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Firebase Analytics merges the advertising-ID and Privacy Sandbox
+         ad permissions. The app shows no ads and never uses the ad ID, so
+         remove them (Play Console: answer "No" to the advertising ID
+         question). -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" tools:node="remove" />
+
     <!-- Biometric authentication (fingerprint / face unlock) -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
@@ -99,6 +107,29 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
+
+        <!-- Home-screen widget: today's spend and budget left (SpendWidgetProvider). -->
+        <receiver
+            android:name=".SpendWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spend_widget_info" />
+        </receiver>
+
+        <!-- Analytics is opt-in: nothing is collected until the user agrees
+             (AnalyticsService turns collection on at runtime). Advertising
+             features stay off permanently. -->
+        <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+        <meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />
+        <meta-data android:name="google_analytics_ssaid_collection_enabled" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_analytics_storage" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_ad_storage" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_ad_user_data" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_ad_personalization_signals" android:value="false" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
