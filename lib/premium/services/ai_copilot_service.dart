@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:pet/premium/services/ai_rate_limiter.dart';
-import 'package:pet/services/app_bootstrap.dart';
+import 'package:pet/services/worker_api.dart';
 
 /// A single chat turn sent to / received from the Groq API.
 class _ChatTurn {
@@ -94,6 +94,58 @@ class ClientErrorException implements Exception {
   String toString() => message;
 }
 
+/// The user's Copilot allowance as reported by the server.
+class AiQuota {
+  const AiQuota({
+    required this.isPremium,
+    this.limit = 0,
+    this.remaining = 0,
+    this.resetsAt,
+  });
+
+  final bool isPremium;
+
+  /// Free questions per month and how many are left (free plan only).
+  final int limit;
+  final int remaining;
+  final DateTime? resetsAt;
+
+  bool get canAsk => isPremium || remaining > 0;
+
+  static AiQuota? fromJson(Object? json) {
+    if (json is! Map) return null;
+    if (json['plan'] == 'premium') return const AiQuota(isPremium: true);
+    if (json['plan'] != 'free') return null;
+    return AiQuota(
+      isPremium: false,
+      limit: (json['limit'] as num?)?.toInt() ?? 0,
+      remaining: (json['remaining'] as num?)?.toInt() ?? 0,
+      resetsAt: DateTime.tryParse('${json['resetsAt']}')?.toLocal(),
+    );
+  }
+}
+
+/// The server refused because the free allowance can't be used: the
+/// monthly questions are used up ([quotaExhausted]), the user is a guest
+/// ([signInRequired]), or the Copilot is premium-only.
+class AiAccessException implements Exception {
+  const AiAccessException(this.errorCode, this.message, {this.quota});
+
+  final String errorCode;
+  final String message;
+  final AiQuota? quota;
+
+  static const quotaExhaustedCode = 'FREE_QUOTA_EXHAUSTED';
+  static const signInRequiredCode = 'SIGN_IN_REQUIRED';
+  static const premiumRequiredCode = 'PREMIUM_REQUIRED';
+
+  bool get quotaExhausted => errorCode == quotaExhaustedCode;
+  bool get signInRequired => errorCode == signInRequiredCode;
+
+  @override
+  String toString() => message;
+}
+
 /// Exception thrown when the server returns a 401 authentication error.
 class AuthErrorException implements Exception {
   final int statusCode;
@@ -115,9 +167,6 @@ class AiCopilotService {
 
   final String model;
 
-  /// Production Cloudflare Worker that proxies requests to Groq.
-  static const _baseUrl = 'https://pet-ai-copilot.pet-app.workers.dev';
-
   /// Max response tokens — keeps replies concise and saves quota.
   static const _maxTokens = 400;
 
@@ -130,6 +179,9 @@ class AiCopilotService {
 
   // Rate limiter — one per service instance (= one per user session)
   final AiRateLimiter _limiter = AiRateLimiter();
+
+  /// Allowance reported with the latest answer (null until known).
+  AiQuota? lastQuota;
 
   /// Returns a human-readable quota summary string, e.g. "8/min · 44/hr · 144/day"
   String get quotaSummary => _limiter.quotaSummary();
@@ -189,6 +241,8 @@ class AiCopilotService {
       }
     } on ClientErrorException {
       rethrow;
+    } on AiAccessException {
+      rethrow;
     } on Exception {
       // Retry once after a brief pause — then surface the error.
       await Future.delayed(const Duration(seconds: 2));
@@ -243,34 +297,34 @@ class AiCopilotService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
+  /// Asks the server how many free questions are left, without asking
+  /// the AI anything. Returns null when signed out or offline.
+  static Future<AiQuota?> fetchQuota() async {
+    try {
+      final response = await _post('/quota', const {});
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      return decoded is Map ? AiQuota.fromJson(decoded['quota']) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<http.Response> _post(String path, Map<String, Object?> body,
+          {bool forceRefresh = false}) =>
+      WorkerApi.post(path, body, forceRefresh: forceRefresh);
+
   Future<String> _callApi(List<Map<String, String>> messages,
       {bool forceRefresh = false}) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception('Login required to use the AI Copilot.');
-    }
-
-    final idToken = await user.getIdToken(forceRefresh);
-    if (idToken == null) {
-      throw Exception('Failed to get authentication token.');
-    }
-
-    final appCheckToken = await AppBootstrap.appCheckToken();
-    final response = await http
-        .post(
-          Uri.parse(_baseUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $idToken',
-            if (appCheckToken != null) 'X-Firebase-AppCheck': appCheckToken,
-          },
-          body: jsonEncode({
-            'model': model,
-            'messages': messages,
-            'max_tokens': _maxTokens,
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
+    final response = await _post(
+      '',
+      {
+        'model': model,
+        'messages': messages,
+        'max_tokens': _maxTokens,
+      },
+      forceRefresh: forceRefresh,
+    );
 
     if (response.statusCode == 401) {
       // Parse structured error code if available
@@ -289,6 +343,14 @@ class AiCopilotService {
           errorCode: errorCode);
     }
 
+    if (response.statusCode == 403) {
+      final access = parseAccessError(response.body);
+      if (access != null) {
+        if (access.quota != null) lastQuota = access.quota;
+        throw access;
+      }
+    }
+
     if (response.statusCode >= 400 && response.statusCode < 500) {
       String errMsg = response.body;
       try {
@@ -305,9 +367,32 @@ class AiCopilotService {
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    lastQuota = AiQuota.fromJson(decoded['quota']) ?? lastQuota;
     return (decoded['choices'] as List?)?.firstOrNull?['message']?['content']
             as String? ??
         'No response.';
+  }
+
+  /// Maps a 403 body with a free-allowance error code to [AiAccessException].
+  @visibleForTesting
+  static AiAccessException? parseAccessError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is! Map) return null;
+      final code = decoded['errorCode']?.toString();
+      if (code != AiAccessException.quotaExhaustedCode &&
+          code != AiAccessException.signInRequiredCode &&
+          code != AiAccessException.premiumRequiredCode) {
+        return null;
+      }
+      return AiAccessException(
+        code!,
+        decoded['error']?.toString() ?? code,
+        quota: AiQuota.fromJson(decoded['quota']),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   @visibleForTesting

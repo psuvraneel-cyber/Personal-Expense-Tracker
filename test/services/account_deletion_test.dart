@@ -133,6 +133,22 @@ class FakeCollectionReference
     return FakeQuery(this, docs.take(limit).toList());
   }
 
+  // Household lookups during deletion: no households in these tests.
+  @override
+  Query<Map<String, dynamic>> where(Object field,
+          {Object? isEqualTo,
+          Object? isNotEqualTo,
+          Object? isLessThan,
+          Object? isLessThanOrEqualTo,
+          Object? isGreaterThan,
+          Object? isGreaterThanOrEqualTo,
+          Object? arrayContains,
+          Iterable<Object?>? arrayContainsAny,
+          Iterable<Object?>? whereIn,
+          Iterable<Object?>? whereNotIn,
+          bool? isNull}) =>
+      FakeQuery(this, const []);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -299,6 +315,7 @@ void main() {
       firestore: firestore,
       auth: auth,
       dbHelper: dbHelper,
+      forgetServerRecords: () async => true,
     )..isTesting = true;
   });
 
@@ -308,6 +325,31 @@ void main() {
   });
 
   group('Account Deletion Hardening Tests', () {
+    test('leaves households and clears Worker records before auth deletion',
+        () async {
+      final calls = <String>[];
+      final withHouseholds = AccountDeletionService(
+        firestore: firestore,
+        auth: auth,
+        dbHelper: dbHelper,
+        leaveHouseholds: (uid) async => calls.add('leave:$uid'),
+        forgetServerRecords: () async {
+          calls.add('forget');
+          return true;
+        },
+      )..isTesting = true;
+      final steps = <DeletionStep>[];
+      final sub = withHouseholds.progress.listen(steps.add);
+
+      await withHouseholds.deleteAccount(targetUid: 'test_uid_123');
+      await Future.delayed(Duration.zero);
+
+      expect(calls, ['leave:test_uid_123', 'forget']);
+      expect(steps.indexOf(DeletionStep.leavingHouseholds),
+          lessThan(steps.indexOf(DeletionStep.deletingAuthAccount)));
+      await sub.cancel();
+    });
+
     test('UID safety check validation', () async {
       // Trying to delete using mismatched target UID should fail
       expect(

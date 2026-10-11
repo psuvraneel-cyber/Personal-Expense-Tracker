@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.8
   meta: ^1.12.0
   sqflite_sqlcipher: ^3.4.0
@@ -29,6 +31,8 @@ dependencies:
   firebase_auth: ^6.7.0
   cloud_firestore: ^6.10.0
   firebase_crashlytics: ^5.4.0
+  firebase_analytics: ^12.6.0
+  firebase_remote_config: ^6.7.0
   google_sign_in: ^7.2.0
   connectivity_plus: ^7.3.1
   # SMS Transaction Auto-Detection (Android only)
@@ -47,6 +51,9 @@ dependencies:
   url_launcher: ^6.3.3
   flutter_timezone: ^5.1.1
   firebase_app_check: ^0.4.8
+  # Play in-app review prompt
+  in_app_review: ^2.0.12
+  home_widget: ^0.10.0
 
 dev_dependencies:
   flutter_test:
@@ -58,6 +65,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Generates lib/l10n/app_localizations*.dart from the ARB files (l10n.yaml).
+  generate: true
   assets:
     - assets/
     # Bundled Poppins (runtime font fetching is disabled in main.dart)

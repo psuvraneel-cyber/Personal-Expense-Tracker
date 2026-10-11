@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/l10n/app_localizations.dart';
 import 'package:pet/config/app_links.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -41,6 +42,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
   }
 
   Future<void> _handleGrantPermission() async {
+    final l10n = AppLocalizations.of(context);
     setState(() => _isRequesting = true);
 
     final provider = Provider.of<SmsTransactionProvider>(
@@ -54,8 +56,8 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
     if (granted) {
       // Start scanning and navigate to transactions screen
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('SMS access granted! Scanning your messages...'),
+        SnackBar(
+          content: Text(l10n.smsGranted),
           backgroundColor: AppTheme.incomeGreen,
         ),
       );
@@ -74,21 +76,19 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Permission Required'),
-            content: const Text(
-              'SMS permission is permanently denied. Please enable it in system settings to use auto-detect features.',
-            ),
+            title: Text(l10n.smsBlockedTitle),
+            content: Text(l10n.smsBlockedBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(l10n.cancel),
               ),
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
                   openAppSettings();
                 },
-                child: const Text('Open Settings'),
+                child: Text(l10n.openSettings),
               ),
             ],
           ),
@@ -96,10 +96,8 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'SMS permission denied. You can enable it from Settings.',
-              ),
+            SnackBar(
+              content: Text(l10n.smsDenied),
               backgroundColor: AppTheme.expenseRed,
             ),
           );
@@ -113,12 +111,13 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Auto-Detect Transactions'),
+        title: Text(l10n.smsScreenTitle),
         leading: IconButton(
-          tooltip: 'Back',
+          tooltip: l10n.back,
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
@@ -156,7 +155,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               const SizedBox(height: 32),
 
               Text(
-                'Auto-Detect UPI\nTransactions',
+                l10n.smsHeadline,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
@@ -169,8 +168,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               const SizedBox(height: 12),
 
               Text(
-                'P.E.T reads the SMS messages you receive to find bank and '
-                "UPI transaction alerts, so you don't have to type them in.",
+                l10n.smsIntro,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -185,39 +183,29 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               // Feature cards
               _FeatureCard(
                 icon: Icons.security_rounded,
-                title: 'Processed on your device',
-                description: 'Message text is analysed on this phone and never '
-                    'uploaded. Only the extracted amount, merchant, date and '
-                    'category are saved — and backed up to your account if '
-                    'you sign in with Google.',
+                title: l10n.smsOnDeviceTitle,
+                description: l10n.smsOnDeviceBody,
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
               _FeatureCard(
                 icon: Icons.auto_awesome_rounded,
-                title: 'Personal messages ignored',
-                description:
-                    'Messages from personal phone numbers and messages '
-                    'without a payment amount are discarded immediately. '
-                    'Non-transaction messages are never stored.',
+                title: l10n.smsPersonalTitle,
+                description: l10n.smsPersonalBody,
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
               _FeatureCard(
                 icon: Icons.notifications_active_rounded,
-                title: 'Real-Time Tracking',
-                description: 'New transactions are captured instantly when you '
-                    'receive a bank SMS, even in the background.',
+                title: l10n.smsRealtimeTitle,
+                description: l10n.smsRealtimeBody,
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
               _FeatureCard(
                 icon: Icons.filter_alt_rounded,
-                title: 'Masked & auto-deleted',
-                description:
-                    'Account, card and phone numbers are masked. Stored '
-                    'message text is deleted after 90 days. Turn this off any '
-                    'time in Settings.',
+                title: l10n.smsMaskedTitle,
+                description: l10n.smsMaskedBody,
                 isDark: isDark,
               ),
 
@@ -242,7 +230,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Permissions Required',
+                      l10n.smsPermissionsRequired,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -255,15 +243,14 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
                     _PermissionRow(
                       icon: Icons.mark_email_read_rounded,
                       label: 'READ_SMS',
-                      description: 'Read received messages (last 90 days) '
-                          'to find past transactions',
+                      description: l10n.smsReadSmsDescription,
                       isDark: isDark,
                     ),
                     const SizedBox(height: 8),
                     _PermissionRow(
                       icon: Icons.mark_email_unread_rounded,
                       label: 'RECEIVE_SMS',
-                      description: 'Detect new transactions in real-time',
+                      description: l10n.smsReceiveSmsDescription,
                       isDark: isDark,
                     ),
                   ],
@@ -273,7 +260,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               const SizedBox(height: 8),
               TextButton(
                 onPressed: () => AppLinks.open(context, AppLinks.privacyPolicy),
-                child: const Text('Read the Privacy Policy'),
+                child: Text(l10n.readPrivacyPolicy),
               ),
               const SizedBox(height: 16),
 
@@ -300,14 +287,15 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
                             color: Colors.white,
                           ),
                         )
-                      : const Row(
+                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.check_circle_outline_rounded, size: 20),
-                            SizedBox(width: 8),
+                            const Icon(Icons.check_circle_outline_rounded,
+                                size: 20),
+                            const SizedBox(width: 8),
                             Text(
-                              'Grant SMS Access',
-                              style: TextStyle(
+                              l10n.smsGrant,
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -323,7 +311,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen>
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: Text(
-                  'Maybe Later',
+                  l10n.maybeLater,
                   style: TextStyle(
                     color: isDark
                         ? AppTheme.textTertiary

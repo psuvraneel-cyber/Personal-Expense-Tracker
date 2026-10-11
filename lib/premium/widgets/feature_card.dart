@@ -11,6 +11,10 @@ class FeatureCard extends StatefulWidget {
   final String? badge; // e.g. "3 goals" or "₹4,200 saved"
   final List<Color>? gradientColors;
 
+  /// Premium feature viewed by a free user: still tappable (it opens a
+  /// preview), but marked with a lock and a "Premium" badge.
+  final bool locked;
+
   const FeatureCard({
     super.key,
     required this.icon,
@@ -20,6 +24,7 @@ class FeatureCard extends StatefulWidget {
     this.accentColor = AppTheme.accentPurple,
     this.badge,
     this.gradientColors,
+    this.locked = false,
   });
 
   @override
@@ -96,7 +101,7 @@ class _FeatureCardState extends State<FeatureCard>
               ),
               const Spacer(),
               Icon(
-                widget.onTap != null
+                widget.onTap != null && !widget.locked
                     ? Icons.chevron_right_rounded
                     : Icons.lock_outline_rounded,
                 size: 18,
@@ -113,7 +118,9 @@ class _FeatureCardState extends State<FeatureCard>
           ),
           const SizedBox(height: 3),
           Text(widget.subtitle, style: Theme.of(context).textTheme.bodySmall),
-          if (widget.badge != null || widget.onTap == null) ...[
+          if (widget.badge != null ||
+              widget.onTap == null ||
+              widget.locked) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -124,7 +131,7 @@ class _FeatureCardState extends State<FeatureCard>
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                widget.badge ?? 'Coming Soon',
+                widget.badge ?? (widget.locked ? 'Premium' : 'Coming Soon'),
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,

@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:pet/services/home_widget_service.dart';
+import 'package:pet/services/report_notifier.dart';
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:pet/core/utils/app_logger.dart';
@@ -200,6 +202,9 @@ void smsCallbackDispatcher() {
           }
         }
 
+        // Weekly recap and monthly Money Wrap notifications, when due.
+        await ReportNotifier.maybeNotify(now: now);
+
         AppLogger.debug(
           '[PET-BG] Background alert evaluation completed & re-armed bill reminders',
         );
@@ -207,6 +212,9 @@ void smsCallbackDispatcher() {
         AppLogger.debug('[PET-BG] Background alert evaluation error: $e');
       }
     }
+
+    // Imports above may have changed today's spending.
+    await HomeWidgetService.refresh();
 
     return Future.value(true);
   });

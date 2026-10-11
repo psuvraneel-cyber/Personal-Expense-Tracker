@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:pet/premium/services/premium_teasers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -100,6 +101,9 @@ class _CashflowScreenState extends State<CashflowScreen> {
       body: PremiumGate(
         title: 'Cash Flow Forecast',
         subtitle: 'See your future balance, safe-to-spend allowance & runway.',
+        showPreview: true,
+        teaser: (context) => PremiumTeasers.cashflow(
+            context.watch<TransactionProvider>().allTransactions.length),
         child: Consumer2<TransactionProvider, RecurringProvider>(
           builder: (context, provider, recurringProvider, _) {
             double goalReserves = 0.0;

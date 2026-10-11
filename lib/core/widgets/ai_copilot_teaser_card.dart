@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/typography.dart';
-import 'package:pet/premium/screens/premium_hub_screen.dart';
+import 'package:pet/premium/screens/ai_copilot_screen.dart';
 
 /// A soft "insight of the day" card that replaces the old premium CTA banner.
 ///
 /// Instead of showing a paywall, it demonstrates the AI Copilot feature
 /// by surfacing one contextual insight for free. Tapping it opens the
-/// Copilot screen in the Premium Hub.
+/// Copilot, where free users have a small monthly allowance of questions.
 class AiCopilotTeaserCard extends StatelessWidget {
   /// The insight message to display. If null, a default is shown.
   final String? insight;
@@ -25,7 +25,7 @@ class AiCopilotTeaserCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const PremiumHubScreen()),
+          MaterialPageRoute(builder: (_) => const AiCopilotScreen()),
         );
       },
       child: Container(

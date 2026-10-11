@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:pet/premium/services/premium_teasers.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -177,6 +178,11 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
       body: PremiumGate(
         title: 'Tax Buckets',
         subtitle: 'Track deductible expenses by IT section.',
+        showPreview: true,
+        teaser: (context) => PremiumTeasers.tax(
+            PremiumTeasers.deductibleThisFinancialYear(
+                context.watch<TransactionProvider>().allTransactions,
+                DateTime.now())),
         child: Consumer2<TransactionProvider, TaxProvider>(
           builder: (context, provider, taxProvider, _) {
             final sectionLimits = taxProvider.limits;

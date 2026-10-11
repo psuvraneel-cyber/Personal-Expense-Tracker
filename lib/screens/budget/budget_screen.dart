@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/screens/budget/shared_budgets_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/category_provider.dart';
@@ -56,7 +57,21 @@ class _BudgetScreenState extends State<BudgetScreen> {
             children: [
               // Month selector
               _buildMonthSelector(context, budgetProvider),
-              const SizedBox(height: 20),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SharedBudgetsScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.home_rounded, size: 18),
+                  label: const Text('Household budgets'),
+                ),
+              ),
+              const SizedBox(height: 8),
 
               // Overall budget summary
               if (budgets.isNotEmpty) ...[

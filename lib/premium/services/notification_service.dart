@@ -162,8 +162,8 @@ class NotificationService {
         ),
       NotificationCategory.weeklyReport => const AndroidNotificationChannel(
           'pet_weekly_insights',
-          'Weekly Insights',
-          description: 'Weekly financial insights and report summaries',
+          'Weekly & Monthly Reports',
+          description: 'Monday spending recap and your monthly Money Wrap',
           importance: Importance.low,
           playSound: false,
           enableVibration: false,

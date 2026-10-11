@@ -262,6 +262,7 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
       DeletionStep.deletingCloudTombstones:
           'Deleting cloud deletion tombstones...',
       DeletionStep.deletingCloudPremiumData: 'Deleting premium data...',
+      DeletionStep.leavingHouseholds: 'Leaving shared households...',
       DeletionStep.deletingUserProfile: 'Deleting user profile...',
       DeletionStep.deletingAuthAccount: 'Removing account...',
       DeletionStep.clearingLocalData: 'Removing local data...',

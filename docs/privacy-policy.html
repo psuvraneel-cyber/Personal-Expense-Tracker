@@ -18,7 +18,7 @@
 <body>
 <main>
 <h1>Privacy Policy</h1>
-<p class="note">P.E.T — Personal Expense Tracker (Android, package <code>com.pet.tracker.pet</code>)<br>Last updated: 7 October 2026</p>
+<p class="note">P.E.T — Personal Expense Tracker (Android, package <code>com.pet.tracker.pet</code>)<br>Last updated: 12 October 2026</p>
 
 <p>P.E.T helps you track your spending. This policy explains what data the app reads, what it stores, where it is sent, how long it is kept, and how you can delete it. The developer is Suvraneel Paul, India (contact details at the end).</p>
 
@@ -27,7 +27,9 @@
   <li>SMS and notification text is read and processed <strong>on your device</strong>. Message text is never uploaded to our servers.</li>
   <li>If you sign in with Google, the <strong>transactions and settings you create</strong> are backed up to our cloud database (Google Firebase) so you can restore them.</li>
   <li>The optional AI Copilot sends a <strong>spending summary and your chat messages</strong> to an AI provider (Groq) through our server, only when you use it.</li>
-  <li>We do not sell your data, show ads, or use your data for advertising.</li>
+  <li>If you join a shared household, its members see your <strong>monthly total per category</strong> — never your individual transactions.</li>
+  <li>Usage analytics are <strong>off unless you turn them on</strong>, and never include amounts, merchants, messages or anything you type.</li>
+  <li>We do not sell your data, show ads, or use your data for advertising. The app does not use your advertising ID.</li>
   <li>You can delete your account and data from inside the app or through our web form.</li>
 </ul>
 
@@ -53,45 +55,68 @@
   <li><strong>Guest mode:</strong> your data stays on this device only and is not backed up. The app may create an anonymous Firebase sign-in for the guest session; it contains no personal details.</li>
 </ul>
 
-<h2>6. AI Copilot (optional, Premium)</h2>
-<p>When you send a message to the AI Copilot, the app sends to our server (a Cloudflare Worker): your message, the earlier messages in the same chat, and a summary of your finances — this month's income and expense totals, top spending categories, budget usage, up to 10 recent transactions (amount, category, merchant or note), savings goals, weekly limits and the cash-flow forecast. Our server checks your sign-in and subscription, then forwards the request to Groq, Inc., which generates the reply. We do not store your chat messages. Our server logs only a hashed account identifier, the response status and timing for abuse prevention. Please do not include personal details (such as account numbers) in your questions. AI answers can be wrong and are not financial advice. You can report an inappropriate answer from inside the chat.</p>
+<h2>6. AI Copilot (optional)</h2>
+<p>When you send a message to the AI Copilot, the app sends to our server (a Cloudflare Worker): your message, the earlier messages in the same chat, and a summary of your finances — this month's income and expense totals, top spending categories, budget usage, up to 10 recent transactions (amount, category, merchant or note), savings goals, weekly limits and the cash-flow forecast. Our server checks your sign-in and subscription (or, without Premium, your free monthly allowance of questions), then forwards the request to Groq, Inc., which generates the reply. To enforce the free allowance, our server counts how many questions your account asked this month; the count is deleted after about 40 days. We do not store your chat messages. Our server logs only a hashed account identifier, the response status and timing for abuse prevention. Please do not include personal details (such as account numbers) in your questions. AI answers can be wrong and are not financial advice. You can report an inappropriate answer from inside the chat.</p>
 
-<h2>7. Service providers</h2>
+<h2>7. Usage analytics (optional)</h2>
+<p>The app asks once whether you want to share anonymous usage data, and you can change your answer at any time in Settings → Privacy → <em>Share usage analytics</em>. Nothing is collected unless you agree. If you agree, Google Analytics for Firebase receives:</p>
+<ul>
+  <li>Automatically collected events such as app opens, session length and app updates, and app events such as "opened the Premium screen" (with the name of the feature that opened it), "granted SMS permission", "first automatic import", "still using the app after a week", "started a trial" or "subscribed" (with the plan, price and currency), and "review prompt shown".</li>
+  <li>Device model, operating system and app version, approximate region derived from your IP address (country/city level), and an app-instance identifier. If you subscribe, this identifier is shared with RevenueCat so later renewals can be counted.</li>
+</ul>
+<p>Analytics data <strong>never</strong> includes your transactions, amounts, balances, merchants, categories, SMS or notification content, notes, chat messages, name or email address. We do not use the advertising ID, and advertising features of Google Analytics are switched off. Turning the setting off stops collection and deletes the analytics data stored on your device. Google keeps analytics data for 14 months.</p>
+<p>Separately, the app downloads remote settings (Firebase Remote Config) — for example the text shown on the Premium screen — so we can improve it without an app update. This uses a Firebase installation identifier and sends no personal data.</p>
+
+<h2>7a. Shared household budgets (optional)</h2>
+<p>If you start or join a household (up to 6 people), we store in Cloud Firestore: the household name, its members' account IDs and display names, the shared monthly budgets, and each member's <strong>monthly spending total per category</strong> (for example "Food: ₹8,200 in October"). Every member can see these. Individual transactions, merchants, notes and messages are never shared. Invite codes expire after 7 days. Leaving the household removes your shared totals; the owner can remove members or delete the household, which removes everything shared in it. Deleting your account does the same.</p>
+
+<h2>7b. Invite friends (optional)</h2>
+<p>If you use invites, our server stores your invite code linked to your account ID, whether you redeemed a code, and how many free months you have earned this year, and asks RevenueCat to grant the free Premium month. We do not learn who you shared your code with unless they redeem it. These records are deleted when you delete your account.</p>
+
+<h2>7c. Home-screen widget and Money Wrap</h2>
+<p>If you add the home-screen widget, today's spending and remaining budget are kept in the widget's storage on your phone so the widget can show them; if biometric lock is on, no amounts are stored and the widget shows a lock instead. The monthly Money Wrap is created on your phone. Sharing it is up to you; the shared card leaves out amounts unless you turn them on.</p>
+
+<h2>8. Service providers</h2>
 <table>
 <tr><th>Provider</th><th>Purpose</th><th>Data</th></tr>
 <tr><td>Google Firebase Authentication</td><td>Sign-in</td><td>Name, email, Google account ID</td></tr>
 <tr><td>Google Cloud Firestore</td><td>Cloud backup &amp; sync (signed-in users)</td><td>The data listed in section 5</td></tr>
 <tr><td>Firebase Crashlytics</td><td>Crash reports (you can turn this off in Settings)</td><td>Crash stack traces, device model, OS and app version, an installation identifier</td></tr>
-<tr><td>RevenueCat</td><td>Subscription management</td><td>Your app account ID, Google Play purchase records</td></tr>
+<tr><td>Google Analytics for Firebase</td><td>Usage analytics (only if you opt in)</td><td>The data in section 7</td></tr>
+<tr><td>Firebase Remote Config</td><td>Remote app settings</td><td>An installation identifier, app version, device language and country</td></tr>
+<tr><td>RevenueCat</td><td>Subscription management and free months from invites</td><td>Your app account ID, Google Play purchase records</td></tr>
 <tr><td>Google Play Billing</td><td>Payments</td><td>Handled by Google; we never see your card details</td></tr>
-<tr><td>Cloudflare</td><td>Server for the AI Copilot</td><td>The data in section 6, in transit</td></tr>
+<tr><td>Cloudflare</td><td>Server for the AI Copilot, free AI allowance and invites</td><td>The data in section 6 in transit; question counts and invite records (sections 6 and 7b)</td></tr>
 <tr><td>Groq</td><td>AI responses</td><td>The data in section 6</td></tr>
 </table>
 <p>All data is sent over encrypted connections (HTTPS/TLS).</p>
 
-<h2>8. Retention</h2>
+<h2>9. Retention</h2>
 <ul>
   <li>Transactions and settings: until you delete them, sign out (device copy), or delete your account.</li>
   <li>Masked SMS/notification text: up to 90 days. Fingerprints of non-transaction messages: until you sign out or delete your account.</li>
   <li>Unrecognised-format diagnostics: up to 30 days.</li>
+  <li>Usage analytics (if you opted in): 14 months in Google Analytics.</li>
+  <li>Free AI question counts: about 40 days. Invite records: until you delete your account.</li>
+  <li>Household data: until you leave, the owner removes you or deletes the household, or you delete your account.</li>
   <li>Exported CSV/PDF files: created only when you export, and removed from the app's temporary storage after sharing.</li>
 </ul>
 
-<h2>9. Signing out and deleting your data</h2>
+<h2>10. Signing out and deleting your data</h2>
 <ul>
   <li><strong>Sign out</strong> removes all P.E.T data from this device. For Google accounts, your cloud backup remains and is restored when you sign in again. For guest users, signing out permanently deletes your data.</li>
-  <li><strong>Delete account:</strong> Settings → Danger Zone → Delete Account permanently deletes your cloud data, your sign-in account, and all P.E.T data on the device.</li>
+  <li><strong>Delete account:</strong> Settings → Danger Zone → Delete Account permanently deletes your cloud data, removes you from any shared household (deleting households you own), deletes your invite and free-AI records, your sign-in account, and all P.E.T data on the device.</li>
   <li><strong>Without the app:</strong> request deletion at <a href="https://personal-expense-tracker-6891b.web.app/account-deletion.html">our account deletion page</a> or by email. We complete requests within 30 days (usually within 48 hours).</li>
   <li>Cancel any Google Play subscription separately in Google Play → Payments &amp; subscriptions.</li>
 </ul>
 
-<h2>10. Children</h2>
+<h2>11. Children</h2>
 <p>P.E.T is intended for users aged 18 and over. We do not knowingly collect data from children.</p>
 
-<h2>11. Changes</h2>
+<h2>12. Changes</h2>
 <p>We will update the date at the top of this page when this policy changes and highlight material changes in the app.</p>
 
-<h2>12. Contact</h2>
+<h2>13. Contact</h2>
 <p>Suvraneel Paul — <a href="mailto:psuvraneel@gmail.com">psuvraneel@gmail.com</a></p>
 </main>
 </body>

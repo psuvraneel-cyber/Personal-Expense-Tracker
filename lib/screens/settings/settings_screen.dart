@@ -1,4 +1,6 @@
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/core/l10n/app_language.dart';
+import 'package:pet/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:provider/provider.dart';
@@ -23,6 +25,7 @@ import 'package:pet/services/platform_stub.dart'
     as platform;
 import 'package:pet/screens/settings/account_deletion_sheet.dart';
 import 'package:pet/screens/settings/notification_settings_screen.dart';
+import 'package:pet/screens/settings/referral_screen.dart';
 import 'package:pet/core/widgets/oem_battery_dialog.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';
 import 'package:pet/premium/providers/goal_provider.dart';
@@ -38,6 +41,8 @@ import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/config/app_links.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:pet/services/app_bootstrap.dart' show kCrashReportsPrefKey;
+import 'package:pet/services/analytics_service.dart';
+import 'package:pet/services/home_widget_service.dart';
 import 'package:pet/services/local_data_wiper.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -67,6 +72,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _userEmail = '';
   String _appVersion = '';
   bool _crashReportsEnabled = true;
+
+  // Read live: the one-time consent prompt may change it after this
+  // screen was built (it lives in the home screen's IndexedStack).
+  Future<void> _setAnalytics(bool enabled) async {
+    final saved = AnalyticsService.instance.setEnabled(enabled);
+    setState(() {});
+    await saved;
+  }
 
   Future<void> _setCrashReports(bool enabled) async {
     setState(() => _crashReportsEnabled = enabled);
@@ -112,6 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final themeModeNotifier = ThemeModeNotifier.of(context);
     final currentThemeMode = themeModeNotifier.themeMode;
+    final l10n = AppLocalizations.of(context);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -127,21 +141,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
 
           // Appearance
-          _buildSectionTitle(context, 'Appearance'),
+          _buildSectionTitle(context, l10n.settingsAppearance),
           const SizedBox(height: 8),
           _buildThemePicker(context, isDark, currentThemeMode),
+          const SizedBox(height: 4),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.translate_rounded,
+            iconColor: AppTheme.accentPurple,
+            title: l10n.settingsLanguage,
+            subtitle: AppLanguage.current.value.languageCode == 'hi'
+                ? '${l10n.languageHindi} · ${l10n.settingsLanguageHint}'
+                : l10n.languageEnglish,
+            onTap: () async {
+              final code = await showDialog<String>(
+                context: context,
+                builder: (ctx) => SimpleDialog(
+                  title: Text(l10n.settingsLanguage),
+                  children: [
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(ctx, 'en'),
+                      child: Text(l10n.languageEnglish),
+                    ),
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(ctx, 'hi'),
+                      child: Text(l10n.languageHindi),
+                    ),
+                  ],
+                ),
+              );
+              if (code != null) await AppLanguage.set(code);
+            },
+          ),
+          if (!kIsWeb) ...[
+            const SizedBox(height: 4),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.widgets_outlined,
+              iconColor: AppTheme.accentTeal,
+              title: l10n.settingsWidgetTitle,
+              subtitle: l10n.settingsWidgetSubtitle,
+              trailing: const Icon(Icons.add_rounded),
+              onTap: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                if (!await HomeWidgetService.requestPin()) {
+                  messenger.showSnackBar(SnackBar(
+                    content: Text(l10n.settingsWidgetManual),
+                  ));
+                }
+              },
+            ),
+          ],
           const SizedBox(height: 16),
 
           // Notifications
-          _buildSectionTitle(context, 'Notifications'),
+          _buildSectionTitle(context, l10n.settingsNotifications),
           const SizedBox(height: 8),
           _buildSettingTile(
             context,
             isDark: isDark,
             icon: Icons.notifications_none_rounded,
             iconColor: AppTheme.accentPurple,
-            title: 'Notification Preferences',
-            subtitle: 'Manage budget, anomaly, and bill alert categories',
+            title: l10n.settingsNotificationPrefs,
+            subtitle: l10n.settingsNotificationPrefsSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -157,7 +221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDark: isDark,
             icon: Icons.battery_charging_full_rounded,
             iconColor: AppTheme.incomeGreen,
-            title: 'Battery & Autostart Settings',
+            title: l10n.settingsBattery,
             subtitle:
                 'Prevent MIUI/ColorOS/FuntouchOS from stopping SMS alerts',
             onTap: () {
@@ -170,7 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
 
           // Premium
-          _buildSectionTitle(context, 'Premium'),
+          _buildSectionTitle(context, l10n.settingsPremium),
           const SizedBox(height: 8),
           Consumer<PremiumProvider>(
             builder: (context, premium, _) {
@@ -181,10 +245,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     isDark: isDark,
                     icon: Icons.workspace_premium_rounded,
                     iconColor: AppTheme.accentPurple,
-                    title: 'Premium Hub',
+                    title: l10n.settingsPremiumHub,
                     subtitle: premium.isPremium
-                        ? 'Active (Rs 50/mo, Rs 450/yr)'
-                        : 'Unlock premium features',
+                        ? l10n.settingsPremiumActive
+                        : l10n.settingsPremiumPreview,
                     onTap: () {
                       Navigator.push(
                         context,
@@ -194,6 +258,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       );
                     },
                   ),
+                  const SizedBox(height: 8),
+                  _buildSettingTile(
+                    context,
+                    isDark: isDark,
+                    icon: Icons.card_giftcard_rounded,
+                    iconColor: AppTheme.accentTeal,
+                    title: l10n.settingsInvite,
+                    subtitle: l10n.settingsInviteSubtitle,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ReferralScreen()),
+                    ),
+                  ),
                 ],
               );
             },
@@ -201,7 +278,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
 
           // Currency
-          _buildSectionTitle(context, 'Currency'),
+          _buildSectionTitle(context, l10n.settingsCurrency),
           const SizedBox(height: 8),
           _buildSettingTile(
             context,
@@ -214,7 +291,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
 
           // Default payment method
-          _buildSectionTitle(context, 'Default Payment Method'),
+          _buildSectionTitle(context, l10n.settingsDefaultPayment),
           const SizedBox(height: 8),
           RadioGroup<String>(
             groupValue: _defaultPaymentMethod,
@@ -278,7 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
 
           // Custom Categories
-          _buildSectionTitle(context, 'Categories'),
+          _buildSectionTitle(context, l10n.settingsCategories),
           const SizedBox(height: 8),
           _buildSettingTile(
             context,
@@ -293,7 +370,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // SMS Auto-Detection (Android only)
           if (!kIsWeb && platform.isAndroid) ...[
-            _buildSectionTitle(context, 'Auto-Detect Transactions'),
+            _buildSectionTitle(context, l10n.settingsAutoDetect),
             const SizedBox(height: 8),
             Consumer<SmsTransactionProvider>(
               builder: (context, smsProvider, _) {
@@ -373,7 +450,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Export
           if (!kIsWeb) ...[
-            _buildSectionTitle(context, 'Export Transactions'),
+            _buildSectionTitle(context, l10n.settingsExport),
             const SizedBox(height: 8),
             _buildSettingTile(
               context,
@@ -397,15 +474,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
 
           // Haptic Feedback
-          _buildSectionTitle(context, 'Accessibility'),
+          _buildSectionTitle(context, l10n.settingsAccessibility),
           const SizedBox(height: 8),
           _buildSettingTile(
             context,
             isDark: isDark,
             icon: Icons.vibration,
             iconColor: AppTheme.accentTeal,
-            title: 'Haptic Feedback',
-            subtitle: 'Vibration on key actions',
+            title: l10n.settingsHaptics,
+            subtitle: l10n.settingsHapticsSubtitle,
             trailing: Switch(
               value: HapticService.instance.isEnabled,
               onChanged: (value) {
@@ -419,32 +496,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
 
           // Privacy
-          _buildSectionTitle(context, 'Privacy'),
+          _buildSectionTitle(context, l10n.settingsPrivacy),
           const SizedBox(height: 8),
           _buildSettingTile(
             context,
             isDark: isDark,
             icon: Icons.bug_report_outlined,
             iconColor: AppTheme.accentPurple,
-            title: 'Share crash reports',
-            subtitle: 'Send anonymous crash details to help fix bugs',
+            title: l10n.settingsCrashReports,
+            subtitle: l10n.settingsCrashReportsSubtitle,
             trailing: Switch(
               value: _crashReportsEnabled,
               onChanged: _setCrashReports,
               activeThumbColor: AppTheme.accentTeal,
             ),
           ),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.insights_rounded,
+            iconColor: AppTheme.accentPurple,
+            title: l10n.settingsAnalytics,
+            subtitle: l10n.settingsAnalyticsSubtitle,
+            trailing: Switch(
+              value: AnalyticsService.instance.isEnabled,
+              onChanged: _setAnalytics,
+              activeThumbColor: AppTheme.accentTeal,
+            ),
+          ),
           const SizedBox(height: 16),
 
           // Security
-          _buildSectionTitle(context, 'Security'),
+          _buildSectionTitle(context, l10n.settingsSecurity),
           const SizedBox(height: 8),
           _buildSettingTile(
             context,
             isDark: isDark,
             icon: Icons.fingerprint,
             iconColor: AppTheme.accentPurple,
-            title: 'Biometric Lock',
+            title: l10n.settingsBiometric,
             subtitle: BiometricService.instance.isEnabled
                 ? 'Locks after ${BiometricService.instance.timeoutMinutes} min idle'
                 : 'Protect your financial data',
@@ -499,7 +589,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Developer Options — DEBUG builds only.
           // Compile-time constant: entire block tree-shaken in release.
           if (kDebugMode) ...[
-            _buildSectionTitle(context, 'Developer Options'),
+            _buildSectionTitle(context, l10n.settingsDeveloper),
             const SizedBox(height: 8),
             Consumer<PremiumProvider>(
               builder: (context, premium, _) {
@@ -524,7 +614,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
 
           // About
-          _buildSectionTitle(context, 'About'),
+          _buildSectionTitle(context, l10n.settingsAbout),
           const SizedBox(height: 8),
           _buildSettingTile(
             context,
@@ -539,8 +629,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDark: isDark,
             icon: Icons.privacy_tip_outlined,
             iconColor: AppTheme.accentPurple,
-            title: 'Privacy Policy',
-            subtitle: 'How your data is processed and protected',
+            title: l10n.settingsPrivacyPolicy,
+            subtitle: l10n.settingsPrivacyPolicySubtitle,
             onTap: () => AppLinks.open(context, AppLinks.privacyPolicy),
           ),
           _buildSettingTile(
@@ -548,8 +638,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDark: isDark,
             icon: Icons.gavel_rounded,
             iconColor: AppTheme.accentPurple,
-            title: 'Terms of Service',
-            subtitle: 'Rules for using P.E.T and subscriptions',
+            title: l10n.settingsTerms,
+            subtitle: l10n.settingsTermsSubtitle,
             onTap: () => AppLinks.open(context, AppLinks.terms),
           ),
           _buildSettingTile(
@@ -557,7 +647,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDark: isDark,
             icon: Icons.mail_outline_rounded,
             iconColor: AppTheme.accentTeal,
-            title: 'Contact Support',
+            title: l10n.settingsSupport,
             subtitle: AppLinks.supportEmail,
             onTap: () => AppLinks.emailSupport(context),
           ),
@@ -566,8 +656,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDark: isDark,
             icon: Icons.workspace_premium_outlined,
             iconColor: AppTheme.accentTeal,
-            title: 'Manage Subscription',
-            subtitle: 'Cancel or change your plan on Google Play',
+            title: l10n.settingsManageSubscription,
+            subtitle: l10n.settingsManageSubscriptionSubtitle,
             onTap: () => AppLinks.open(context, AppLinks.manageSubscriptions),
           ),
           _buildSettingTile(
