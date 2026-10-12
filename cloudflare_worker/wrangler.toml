@@ -12,8 +12,9 @@ FIREBASE_PROJECT_NUMBER = "101986511704"
 # (Play Integrity) — requests without a valid App Check token are then rejected.
 REQUIRE_APP_CHECK = "false"
 # LLM used for all Copilot replies. Check https://console.groq.com/docs/models
-# and update here if Groq deprecates it.
-GROQ_MODEL = "llama-3.3-70b-versatile"
+# and update here if Groq deprecates it (llama-3.3-70b-versatile was shut
+# down for non-enterprise accounts on 16 Aug 2026 and now returns 404).
+GROQ_MODEL = "openai/gpt-oss-120b"
 # Free Copilot questions per signed-in (non-guest) user per calendar month
 # (UTC). "0" makes the Copilot premium-only.
 FREE_AI_QUESTIONS_PER_MONTH = "3"
