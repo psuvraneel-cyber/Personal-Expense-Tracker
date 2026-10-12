@@ -618,11 +618,12 @@ class NotificationService {
       ),
     );
 
+    final hide = await NotificationPreferencesService.hideAmounts();
     try {
       await _plugin.show(
         id: id,
-        title: title,
-        body: body,
+        title: hide ? NotificationPreferencesService.maskAmounts(title) : title,
+        body: hide ? NotificationPreferencesService.maskAmounts(body) : body,
         notificationDetails: details,
         payload: isUncertain
             ? '$kReviewPayloadPrefix$observationId'
@@ -690,10 +691,11 @@ class NotificationService {
           presentSound: true,
         ),
       );
+      final hide = await NotificationPreferencesService.hideAmounts();
       await _plugin.show(
         id: id,
-        title: title,
-        body: body,
+        title: hide ? NotificationPreferencesService.maskAmounts(title) : title,
+        body: hide ? NotificationPreferencesService.maskAmounts(body) : body,
         notificationDetails: details,
         payload: payload,
       );
@@ -746,9 +748,14 @@ class NotificationService {
   }) async {
     try {
       final count = alerts.length;
+      final hide = await NotificationPreferencesService.hideAmounts();
+      String privacy(String s) =>
+          hide ? NotificationPreferencesService.maskAmounts(s) : s;
       final summaryTitle = '$count new alerts';
-      final lines = alerts.map((a) => '${a.title}: ${a.body}').toList();
-      final summaryBody = alerts.map((a) => a.title).toSet().join(', ');
+      final lines =
+          alerts.map((a) => privacy('${a.title}: ${a.body}')).toList();
+      final summaryBody =
+          privacy(alerts.map((a) => a.title).toSet().join(', '));
 
       final inboxStyle = InboxStyleInformation(
         lines,
@@ -815,10 +822,11 @@ class NotificationService {
         ),
       );
 
+      final hide = await NotificationPreferencesService.hideAmounts();
       await _plugin.zonedSchedule(
         id: id,
-        title: title,
-        body: body,
+        title: hide ? NotificationPreferencesService.maskAmounts(title) : title,
+        body: hide ? NotificationPreferencesService.maskAmounts(body) : body,
         scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
         notificationDetails: details,
         payload: payload,

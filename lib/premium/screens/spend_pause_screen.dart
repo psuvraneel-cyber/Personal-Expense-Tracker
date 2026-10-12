@@ -63,7 +63,8 @@ class _SpendPauseScreenState extends State<SpendPauseScreen>
       ),
       body: PremiumGate(
         title: 'Focus Mode',
-        subtitle: 'Temporarily pause spending to hit your goals faster.',
+        subtitle: 'Pause categories you want a break from. We nudge you when '
+            'you log or receive a payment in one.',
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 60),
           children: [

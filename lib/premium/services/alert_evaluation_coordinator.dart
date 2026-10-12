@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:pet/premium/services/balance_anchor_service.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
@@ -179,13 +180,21 @@ class AlertEvaluationCoordinator {
       } catch (_) {}
 
       AppAlert? cashflowAlert;
+      // Cash-flow alerts need the user's real balance; without it a
+      // "deficit" would only reflect untracked income.
+      final openingBalance = await BalanceAnchorService.openingBalanceFor(
+          transactions,
+          now: referenceTime);
       try {
-        cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
-          transactions: transactions,
-          confirmedBills: confirmedBills,
-          now: referenceTime,
-          goalReserves: goalReserves,
-        );
+        if (openingBalance != null) {
+          cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
+            transactions: transactions,
+            confirmedBills: confirmedBills,
+            now: referenceTime,
+            goalReserves: goalReserves,
+            openingBalance: openingBalance,
+          );
+        }
       } catch (e, st) {
         AppLogger.error('Cashflow evaluation error in AlertCoordinator',
             error: e, stack: st, label: 'AlertCoordinator');
@@ -221,6 +230,8 @@ class AlertEvaluationCoordinator {
           budgets: resolvedBudgets,
           spent: resolvedSpent,
           now: referenceTime,
+          largestExpense: AlertEvaluator.largestExpenseThisMonth(transactions,
+              now: referenceTime),
         );
         alerts.addAll(budgetAlerts);
         alerts.addAll(pacingAlerts);
@@ -304,10 +315,19 @@ class AlertEvaluationCoordinator {
         now: referenceTime,
       );
 
+      Map<String, double>? largestExpense;
+      try {
+        largestExpense = AlertEvaluator.largestExpenseThisMonth(
+          await _transactionRepository.getTransactionsByMonth(
+              referenceTime.month, referenceTime.year),
+          now: referenceTime,
+        );
+      } catch (_) {}
       final pacingAlerts = AlertEvaluator.evaluateBudgetPacing(
         budgets: budgets,
         spent: spent,
         now: referenceTime,
+        largestExpense: largestExpense,
       );
 
       final period =
@@ -438,13 +458,19 @@ class AlertEvaluationCoordinator {
           );
         } catch (_) {}
 
+        final openingBalance = await BalanceAnchorService.openingBalanceFor(
+            transactions,
+            now: referenceTime);
         try {
-          cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
-            transactions: transactions,
-            confirmedBills: confirmed,
-            now: referenceTime,
-            goalReserves: goalReserves,
-          );
+          if (openingBalance != null) {
+            cashflowAlert = AlertEvaluator.evaluateCashflowRisk(
+              transactions: transactions,
+              confirmedBills: confirmed,
+              now: referenceTime,
+              goalReserves: goalReserves,
+              openingBalance: openingBalance,
+            );
+          }
         } catch (e, st) {
           AppLogger.error(
             'Cashflow evaluation error in onRecurringChanged',
@@ -488,12 +514,15 @@ class AlertEvaluationCoordinator {
   }) async {
     try {
       final period = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+      final openingBalance =
+          await BalanceAnchorService.openingBalanceFor(transactions, now: now);
       final forecast = CashflowForecastService.forecast(
         transactions,
         confirmedBills: confirmedBills,
         days: 30,
         referenceDate: now,
         goalReserves: goalReserves,
+        openingBalanceOverride: openingBalance,
       );
 
       final alertWindowPoints = forecast.dailyPoints.take(14).toList();
@@ -502,10 +531,14 @@ class AlertEvaluationCoordinator {
         (min, pt) => (min == null || pt.balance < min.balance) ? pt : min,
       );
 
+      // No entered balance: no cash-flow condition can be known, so any
+      // earlier cash-flow alert is withdrawn.
+      final balanceKnown = openingBalance != null;
       final lowestBal = lowestPoint?.balance ?? 0.0;
-      final hasImminentDeficit = lowestBal < 0;
-      final hasEndingDeficit = forecast.projectedEndingBalance <= 0;
-      final hasBufferBreach =
+      final hasImminentDeficit = balanceKnown && lowestBal < 0;
+      final hasEndingDeficit =
+          balanceKnown && forecast.projectedEndingBalance <= 0;
+      final hasBufferBreach = balanceKnown &&
           lowestBal < CashflowForecastService.defaultSafetyBuffer;
 
       if (!hasImminentDeficit && !hasEndingDeficit && !hasBufferBreach) {

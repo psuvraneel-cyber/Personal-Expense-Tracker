@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:pet/premium/services/bill_payment_matcher.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/enums.dart';
@@ -23,7 +24,20 @@ class RecurringProvider extends ChangeNotifier {
     RecurringPaymentRepository? repository,
     FirestoreSyncService? firestoreSync,
   })  : _repository = repository ?? RecurringPaymentRepository(),
-        _firestoreSync = firestoreSync ?? FirestoreSyncService();
+        _firestoreSync = firestoreSync ?? FirestoreSyncService() {
+    BillPaymentMatcher.billsRevision.addListener(_reloadAfterAutoPayment);
+  }
+
+  /// A bill was marked paid by an imported/added payment: reload it.
+  Future<void> _reloadAfterAutoPayment() async {
+    if (_disposed || kIsWeb) return;
+    try {
+      _recurring = await _repository.getAll();
+      notifyListeners();
+    } catch (e) {
+      AppLogger.debug('[RecurringProvider] reload after payment failed: $e');
+    }
+  }
 
   List<RecurringPayment> _recurring = [];
   bool _isLoading = false;
@@ -140,10 +154,13 @@ class RecurringProvider extends ChangeNotifier {
             localMap[remote.id] = remote;
             if (!kIsWeb) await _repository.upsert(remote);
             changed = true;
-          } else if (remote.updatedAt.isAfter(local.updatedAt) ||
-              remote.status != local.status ||
-              remote.amount != local.amount ||
-              remote.nextDueAt != local.nextDueAt) {
+          } else if (!remote.updatedAt.isBefore(local.updatedAt) &&
+              (remote.updatedAt.isAfter(local.updatedAt) ||
+                  remote.status != local.status ||
+                  remote.amount != local.amount ||
+                  remote.nextDueAt != local.nextDueAt)) {
+            // Last writer wins: an older cloud copy must not roll back a
+            // newer local change (e.g. a bill auto-marked as paid).
             localMap[remote.id] = remote;
             if (!kIsWeb) await _repository.upsert(remote);
             changed = true;
@@ -545,6 +562,7 @@ class RecurringProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    BillPaymentMatcher.billsRevision.removeListener(_reloadAfterAutoPayment);
     _firestoreSubscription?.cancel();
     super.dispose();
   }

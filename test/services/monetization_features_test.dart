@@ -39,7 +39,8 @@ TransactionRecord _txn(
 
 RecurringPayment _bill(String id, double amount,
         {RecurringStatus status = RecurringStatus.detected,
-        String frequency = 'monthly'}) =>
+        String frequency = 'monthly',
+        double confidence = 0.95}) =>
     RecurringPayment(
       id: id,
       merchantName: id,
@@ -49,6 +50,7 @@ RecurringPayment _bill(String id, double amount,
       nextDueAt: DateTime(2026, 10, 1),
       categoryId: 'subs',
       status: status,
+      confidence: confidence,
     );
 
 void main() {
@@ -64,6 +66,18 @@ void main() {
       expect(PremiumTeasers.recurring([]), isNull);
       expect(PremiumTeasers.recurring([_bill('Gym', 999)]),
           contains('1 recurring payment '));
+    });
+
+    test('only confirmed or confident detections count; never daily', () {
+      final teaser = PremiumTeasers.recurring([
+        _bill('Netflix', 649), // detected, confident
+        _bill('Chai Point', 120, confidence: 0.65), // only two payments
+        _bill('Metro', 40, frequency: 'daily'), // daily: coincidence-prone
+        _bill('Rent', 15000,
+            status: RecurringStatus.confirmed, confidence: 0.6),
+      ]);
+      expect(teaser,
+          'We found 2 recurring payments costing about ₹15,649 a month.');
     });
 
     test('tax total covers the Indian financial year only', () {

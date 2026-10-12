@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:pet/data/models/enums.dart';
+import 'package:pet/data/models/transaction.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -33,6 +35,9 @@ class FinancialContext {
   final List<String> recentTransactions;
 
   // --- Canonical Cashflow Forecast Metrics (CF-20) ---
+  /// Bank balance now (entered by the user, plus tracked activity since);
+  /// null when the user hasn't entered one.
+  final double? currentBalance;
   final double? projectedEndingBalance;
   final double? safeToSpend;
   final int? cashflowRunwayDays;
@@ -52,6 +57,7 @@ class FinancialContext {
     required this.categorySpending,
     required this.budgets,
     required this.recentTransactions,
+    this.currentBalance,
     this.projectedEndingBalance,
     this.safeToSpend,
     this.cashflowRunwayDays,
@@ -162,7 +168,35 @@ class AuthErrorException implements Exception {
       errorCode == 'AUTH_TOKEN_UNKNOWN_KEY';
 }
 
+/// Income, spending and spending per category id for one calendar month.
+typedef MonthTotals = ({
+  double income,
+  double expense,
+  Map<String, double> byCategory,
+});
+
 class AiCopilotService {
+  /// Totals for the calendar month containing [now]. The AI always talks
+  /// about the current month, whatever month a screen is showing.
+  static MonthTotals monthTotals(
+    Iterable<TransactionRecord> transactions,
+    DateTime now,
+  ) {
+    var income = 0.0, expense = 0.0;
+    final byCategory = <String, double>{};
+    for (final t in transactions) {
+      if (t.date.year != now.year || t.date.month != now.month) continue;
+      if (t.date.isAfter(now)) continue;
+      if (t.type == TransactionType.income) {
+        income += t.amount;
+      } else if (t.type == TransactionType.expense) {
+        expense += t.amount;
+        byCategory[t.categoryId] = (byCategory[t.categoryId] ?? 0) + t.amount;
+      }
+    }
+    return (income: income, expense: expense, byCategory: byCategory);
+  }
+
   AiCopilotService({required this.model});
 
   final String model;
@@ -446,6 +480,19 @@ class AiCopilotService {
       for (final t in ctx.recentTransactions.take(10)) {
         buf.writeln('  • $t');
       }
+    }
+
+    // --- Bank balance: entered by the user, or explicitly unknown ---
+    if (ctx.currentBalance != null) {
+      buf.writeln(
+          '\nCurrent bank balance (user-entered, plus tracked activity since): '
+          '₹${_fmt(ctx.currentBalance!)}');
+    } else {
+      buf.writeln('\nBANK BALANCE: UNKNOWN. The user has not entered their '
+          'balance and P.E.T only sees tracked transactions, so income may be '
+          'missing. Do not say whether they can afford something, how long '
+          'their money will last, or that they are heading for a deficit. '
+          'Suggest entering their balance in Premium Hub → Cash Flow.');
     }
 
     // --- Canonical Cashflow Forecast Section (CF-20) ---

@@ -1,4 +1,5 @@
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/premium/services/balance_anchor_service.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kReleaseMode;
@@ -46,6 +47,7 @@ import 'package:pet/premium/screens/alerts_screen.dart';
 import 'package:pet/premium/screens/recurring_bills_screen.dart';
 import 'package:pet/premium/screens/goals_screen.dart';
 import 'package:pet/premium/screens/cashflow_screen.dart';
+import 'package:pet/premium/screens/spend_pause_screen.dart';
 import 'package:pet/screens/reports/money_wrap_screen.dart';
 import 'package:pet/services/report_notifier.dart';
 
@@ -109,6 +111,9 @@ void main() async {
 
   // Chosen app language (English unless Hindi was picked in Settings).
   await AppLanguage.load();
+
+  // Bank balance the cash-flow forecast starts from (if entered).
+  await BalanceAnchorService.load();
 
   // Initialize biometric lock preference
   await BiometricService.instance.init();
@@ -211,6 +216,8 @@ class PETApp extends StatefulWidget {
         return MoneyWrapScreen(month: month ?? DateTime.now());
       case 'goal':
         return const GoalsScreen();
+      case 'focus':
+        return const SpendPauseScreen();
       case 'cashflow':
         return const CashflowScreen();
       case 'anomaly':

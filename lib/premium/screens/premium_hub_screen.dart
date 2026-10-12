@@ -187,7 +187,7 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
             (
               Icons.pause_circle_rounded,
               'Focus Mode',
-              'Pause impulse spending',
+              'Nudges on paused categories',
               const Color(0xFFf59e0b),
               null,
               () => _push(context, const SpendPauseScreen()),

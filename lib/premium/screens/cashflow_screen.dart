@@ -1,4 +1,6 @@
 import 'dart:math';
+import 'package:pet/core/utils/amount_input.dart';
+import 'package:pet/premium/services/balance_anchor_service.dart';
 import 'package:pet/premium/services/premium_teasers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -104,82 +106,247 @@ class _CashflowScreenState extends State<CashflowScreen> {
         showPreview: true,
         teaser: (context) => PremiumTeasers.cashflow(
             context.watch<TransactionProvider>().allTransactions.length),
-        child: Consumer2<TransactionProvider, RecurringProvider>(
-          builder: (context, provider, recurringProvider, _) {
-            double goalReserves = 0.0;
-            try {
-              goalReserves =
-                  Provider.of<GoalProvider>(context).totalActiveGoalReserves;
-            } catch (_) {
-              goalReserves = 0.0;
-            }
-            final CashflowForecast baseForecast;
-            try {
-              baseForecast = CashflowForecastService.forecast(
+        // Forecasts start from the bank balance the user entered; the app
+        // can't know it from tracked transactions alone.
+        child: ValueListenableBuilder<BalanceAnchor?>(
+          valueListenable: BalanceAnchorService.current,
+          builder: (context, anchor, _) =>
+              Consumer2<TransactionProvider, RecurringProvider>(
+            builder: (context, provider, recurringProvider, _) {
+              if (anchor == null) {
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                  children: [_buildBalanceSetupCard(isDark)],
+                );
+              }
+              final openingBalance = BalanceAnchorService.openingBalance(
+                anchor,
                 provider.allTransactions,
-                confirmedBills: recurringProvider.confirmedBills,
-                days: _selectedHorizon,
-                goalReserves: goalReserves,
+                DateTime.now(),
               );
-            } catch (e) {
-              return _buildError(isDark, e.toString());
-            }
+              double goalReserves = 0.0;
+              try {
+                goalReserves =
+                    Provider.of<GoalProvider>(context).totalActiveGoalReserves;
+              } catch (_) {
+                goalReserves = 0.0;
+              }
+              final CashflowForecast baseForecast;
+              try {
+                baseForecast = CashflowForecastService.forecast(
+                  provider.allTransactions,
+                  confirmedBills: recurringProvider.confirmedBills,
+                  days: _selectedHorizon,
+                  goalReserves: goalReserves,
+                  openingBalanceOverride: openingBalance,
+                );
+              } catch (e) {
+                return _buildError(isDark, e.toString());
+              }
 
-            // Keep simulated forecast in sync with horizon / transactions
-            final activeForecast =
-                (_simulatedAmount != null && _simulatedAmount! > 0)
-                    ? CashflowForecastService.simulateExpense(
-                        baseForecast,
-                        amount: _simulatedAmount!,
-                        date: _simulatorDate,
-                      )
-                    : baseForecast;
+              // Keep simulated forecast in sync with horizon / transactions
+              final activeForecast =
+                  (_simulatedAmount != null && _simulatedAmount! > 0)
+                      ? CashflowForecastService.simulateExpense(
+                          baseForecast,
+                          amount: _simulatedAmount!,
+                          date: _simulatorDate,
+                        )
+                      : baseForecast;
 
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-              children: [
-                // 1. Data quality & confidence banner
-                _buildConfidenceBanner(baseForecast, isDark),
-                const SizedBox(height: 12),
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                children: [
+                  // 0. Where the numbers start from
+                  _buildBalanceRow(anchor, openingBalance, isDark),
+                  const SizedBox(height: 12),
 
-                // 2. Horizon Segmented Control
-                _buildHorizonSelector(isDark),
-                const SizedBox(height: 16),
+                  // 1. Data quality & confidence banner
+                  _buildConfidenceBanner(baseForecast, isDark),
+                  const SizedBox(height: 12),
 
-                // 3. Hero Card: Safe-to-Spend with info affordance
-                _buildSafeToSpendHero(baseForecast, isDark),
-                const SizedBox(height: 12),
-
-                // 4. Runway & Health Row
-                _buildRunwayAndHealthRow(baseForecast, isDark),
-                const SizedBox(height: 16),
-
-                // 5. "Can I Afford This?" What-If Simulator Card
-                if (_showSimulator) ...[
-                  _buildWhatIfSimulatorCard(baseForecast, isDark),
+                  // 2. Horizon Segmented Control
+                  _buildHorizonSelector(isDark),
                   const SizedBox(height: 16),
+
+                  // 3. Hero Card: Safe-to-Spend with info affordance
+                  _buildSafeToSpendHero(baseForecast, isDark),
+                  const SizedBox(height: 12),
+
+                  // 4. Runway & Health Row
+                  _buildRunwayAndHealthRow(baseForecast, isDark),
+                  const SizedBox(height: 16),
+
+                  // 5. "Can I Afford This?" What-If Simulator Card
+                  if (_showSimulator) ...[
+                    _buildWhatIfSimulatorCard(baseForecast, isDark),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // 6. Interactive Forecast Chart with Scrubber
+                  _buildInteractiveChartSection(
+                    baseForecast,
+                    activeForecast,
+                    isDark,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 7. Danger Zone / Trough Driver Card
+                  _buildTroughInsightCard(baseForecast, isDark),
+                  const SizedBox(height: 20),
+
+                  // 8. Full Daily Timeline with Filters
+                  _buildTimelineHeader(baseForecast, isDark),
+                  const SizedBox(height: 8),
+                  _buildTimelineList(baseForecast, isDark),
                 ],
-
-                // 6. Interactive Forecast Chart with Scrubber
-                _buildInteractiveChartSection(
-                  baseForecast,
-                  activeForecast,
-                  isDark,
-                ),
-                const SizedBox(height: 20),
-
-                // 7. Danger Zone / Trough Driver Card
-                _buildTroughInsightCard(baseForecast, isDark),
-                const SizedBox(height: 20),
-
-                // 8. Full Daily Timeline with Filters
-                _buildTimelineHeader(baseForecast, isDark),
-                const SizedBox(height: 8),
-                _buildTimelineList(baseForecast, isDark),
-              ],
-            );
-          },
+              );
+            },
+          ),
         ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 0. Bank balance the forecast starts from
+  // ---------------------------------------------------------------------------
+  static final _balanceFmt =
+      NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+
+  Future<void> _editBalance(BalanceAnchor? current) async {
+    final controller = TextEditingController(
+      text: current == null ? '' : current.amount.toStringAsFixed(0),
+    );
+    String? error;
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Your bank balance'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter the total in your bank accounts right now. P.E.T adds '
+                'the income and spending it tracks from here on.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: AmountInput.formatters,
+                decoration: InputDecoration(
+                  prefixText: '₹ ',
+                  hintText: '0',
+                  errorText: error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final text = controller.text.trim();
+                // AmountInput rejects 0, but a zero balance is valid.
+                final value = RegExp(r'^0+(\.0{1,2})?$').hasMatch(text)
+                    ? 0.0
+                    : AmountInput.parse(text);
+                if (value == null) {
+                  setDialogState(() => error = 'Enter an amount in rupees');
+                  return;
+                }
+                Navigator.pop(ctx, value);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (amount != null) await BalanceAnchorService.save(amount);
+  }
+
+  Widget _buildBalanceSetupCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.accentTeal.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.account_balance_wallet_rounded,
+              color: AppTheme.accentTeal, size: 32),
+          const SizedBox(height: 12),
+          Text(
+            'Add your bank balance to see your forecast',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'P.E.T only sees the income and spending it tracks, not what is '
+            'in your bank. Enter your current balance once and the forecast, '
+            'safe-to-spend and runway start from it. It stays encrypted on '
+            'this phone.',
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.accentTeal,
+            ),
+            onPressed: () => _editBalance(null),
+            icon: const Icon(Icons.edit_rounded),
+            label: const Text('Enter balance'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBalanceRow(
+    BalanceAnchor anchor,
+    double openingBalance,
+    bool isDark,
+  ) {
+    final asOf = DateFormat('d MMM, h:mm a').format(anchor.asOf);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.account_balance_wallet_outlined,
+              size: 18, color: AppTheme.accentTeal),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Balance now ${_balanceFmt.format(openingBalance)} '
+              '(you entered ${_balanceFmt.format(anchor.amount)} on $asOf, '
+              'plus tracked activity since)',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          TextButton(
+            onPressed: () => _editBalance(anchor),
+            child: const Text('Update'),
+          ),
+        ],
       ),
     );
   }

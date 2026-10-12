@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:pet/premium/services/bill_payment_matcher.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart'
@@ -564,6 +565,11 @@ class TransactionProvider extends ChangeNotifier {
       AppLogger.error('Alert evaluation failed in addTransaction',
           error: e, stack: st, label: 'AlertCoordinator');
     }));
+
+    // A manually logged bill payment marks that bill as paid.
+    if (!kIsWeb) {
+      unawaited(BillPaymentMatcher.recordIfBillPayment(transaction));
+    }
   }
 
   Future<void> updateTransaction(TransactionRecord transaction) async {

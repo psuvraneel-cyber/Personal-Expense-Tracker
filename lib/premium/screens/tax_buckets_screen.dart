@@ -12,6 +12,7 @@ import 'package:pet/premium/widgets/premium_gate.dart';
 const _sectionColors = {
   '80C': AppTheme.accentPurple,
   '80D': AppTheme.accentTeal,
+  '80DP': Color(0xFF0ea5e9),
   'HRA': Color(0xFFf59e0b),
   'LTA': Color(0xFF10b981),
   '80E': Color(0xFFef4444),
@@ -19,8 +20,10 @@ const _sectionColors = {
 
 const _sectionDescriptions = {
   '80C': 'ELSS, PPF, LIC, PF, tuition fee',
-  '80D': 'Health insurance premium',
-  'HRA': 'House rent allowance',
+  '80D': 'Health insurance: self & family (₹50,000 if 60+)',
+  '80DP': 'Health insurance: parents (₹50,000 if they are 60+)',
+  'HRA': 'Rent paid. The exemption depends on your salary; '
+      'not counted in the estimate',
   'LTA': 'Leave travel allowance',
   '80E': 'Education loan interest',
 };
@@ -28,6 +31,7 @@ const _sectionDescriptions = {
 const _sectionEmojis = {
   '80C': '💼',
   '80D': '🏥',
+  '80DP': '👪',
   'HRA': '🏠',
   'LTA': '✈️',
   '80E': '🎓',
@@ -203,9 +207,16 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   (totals[txn.taxCategory!] ?? 0) + txn.amount;
             }
 
-            final totalDeductions = totals.values.fold(0.0, (s, v) => s + v);
-            final estimatedSaved =
-                totalDeductions * 0.20; // Conservative estimate
+            // Only amounts within each section's limit can count; HRA is a
+            // record of rent paid. Savings are estimated only for the old
+            // regime, at the user's own slab plus cess.
+            final totalDeductions =
+                TaxProvider.claimable(totals, sectionLimits);
+            final estimatedSaved = TaxProvider.estimatedSaving(
+              claimable: totalDeductions,
+              regime: taxProvider.regime,
+              slabRate: taxProvider.slabRate,
+            );
             final totalLimit = sectionLimits.values
                 .where((v) => v.isFinite)
                 .fold(0.0, (s, v) => s + v);
@@ -213,9 +224,12 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
               children: [
+                _buildRegimeCard(taxProvider, isDark),
+                const SizedBox(height: 16),
                 _buildHeroBanner(
                   totalDeductions,
                   estimatedSaved,
+                  taxProvider,
                   totalLimit,
                   totals,
                   sectionLimits,
@@ -339,9 +353,71 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     );
   }
 
+  Widget _buildRegimeCard(TaxProvider tax, bool isDark) {
+    final regime = tax.regime;
+    final message = switch (regime) {
+      null => 'Which tax regime do you file under? Most of these deductions '
+          'can only be claimed under the old regime.',
+      TaxRegime.newRegime => 'You chose the new regime: 80C, 80D, HRA, LTA '
+          "and 80E generally can't be claimed under it. Totals are kept for "
+          'your records.',
+      TaxRegime.oldRegime => 'Old regime, ${(tax.slabRate * 100).round()}% '
+          'slab. Tax saved is estimated at your slab plus 4% cess.',
+    };
+    final warn = regime != TaxRegime.oldRegime;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: (warn ? AppTheme.warningYellow : AppTheme.accentTeal)
+            .withAlpha(isDark ? 24 : 16),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(message, style: const TextStyle(fontSize: 13, height: 1.4)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Old regime'),
+                selected: regime == TaxRegime.oldRegime,
+                onSelected: (_) => tax.setRegime(TaxRegime.oldRegime),
+              ),
+              ChoiceChip(
+                label: const Text('New regime'),
+                selected: regime == TaxRegime.newRegime,
+                onSelected: (_) => tax.setRegime(TaxRegime.newRegime),
+              ),
+              if (regime == TaxRegime.oldRegime)
+                PopupMenuButton<double>(
+                  tooltip: 'Your tax slab',
+                  onSelected: tax.setSlabRate,
+                  itemBuilder: (_) => [
+                    for (final r in TaxProvider.slabRates)
+                      PopupMenuItem(
+                        value: r,
+                        child: Text('${(r * 100).round()}% slab'),
+                      ),
+                  ],
+                  child: Chip(
+                    avatar: const Icon(Icons.percent_rounded, size: 16),
+                    label: Text('${(tax.slabRate * 100).round()}% slab'),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHeroBanner(
     double total,
     double saved,
+    TaxProvider tax,
     double totalLimit,
     Map<String, double> totals,
     Map<String, double> limits,
@@ -378,7 +454,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Total Claimed',
+                      'Within limits',
                       style: TextStyle(color: Colors.white60, fontSize: 12),
                     ),
                     const SizedBox(height: 4),
@@ -406,7 +482,11 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                         children: [
                           const Text('💰 ', style: TextStyle(fontSize: 12)),
                           Text(
-                            'Est. tax saved: ${formatter.format(saved)}',
+                            tax.regime == TaxRegime.oldRegime
+                                ? 'Est. tax saved: ${formatter.format(saved)}'
+                                : tax.regime == TaxRegime.newRegime
+                                    ? 'No deduction under the new regime'
+                                    : 'Choose your regime to estimate',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,

@@ -1,4 +1,5 @@
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/premium/services/notification_preferences_service.dart';
 import 'package:pet/core/l10n/app_language.dart';
 import 'package:pet/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -72,6 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _userEmail = '';
   String _appVersion = '';
   bool _crashReportsEnabled = true;
+  bool _hideNotificationAmounts = false;
 
   // Read live: the one-time consent prompt may change it after this
   // screen was built (it lives in the home screen's IndexedStack).
@@ -109,6 +111,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _defaultPaymentMethod = prefs.getString('defaultPaymentMethod') ?? 'UPI';
       _crashReportsEnabled = prefs.getBool(kCrashReportsPrefKey) ?? true;
+      _hideNotificationAmounts =
+          prefs.getBool(NotificationPreferencesService.kHideAmountsKey) ??
+              prefs.getBool('biometricEnabled') ??
+              false;
       _userName = AuthService.userName ?? prefs.getString('userName') ?? '';
       _userEmail = AuthService.userEmail ?? prefs.getString('userEmail') ?? '';
     });
@@ -214,6 +220,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               );
             },
+          ),
+          const SizedBox(height: 8),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.visibility_off_outlined,
+            iconColor: AppTheme.accentPurple,
+            title: l10n.settingsHideAmounts,
+            subtitle: l10n.settingsHideAmountsSubtitle,
+            trailing: Switch(
+              value: _hideNotificationAmounts,
+              onChanged: (value) {
+                setState(() => _hideNotificationAmounts = value);
+                NotificationPreferencesService.setHideAmounts(value);
+              },
+              activeThumbColor: AppTheme.accentTeal,
+            ),
           ),
           const SizedBox(height: 8),
           _buildSettingTile(

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:pet/data/repositories/budget_repository.dart';
+import 'package:pet/data/models/budget.dart';
+import 'package:pet/premium/services/balance_anchor_service.dart';
 import 'package:pet/config/app_env.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -92,29 +95,47 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
   // Build financial context from live providers
   // ---------------------------------------------------------------------------
 
-  FinancialContext _buildContext() {
+  /// This month's budgets. The Budget tab may be showing another month, in
+  /// which case they're read from the database.
+  Future<List<Budget>> _currentMonthBudgets() async {
+    final budgetProv = context.read<BudgetProvider>();
+    final now = DateTime.now();
+    if (budgetProv.currentMonth == now.month &&
+        budgetProv.currentYear == now.year) {
+      return budgetProv.budgets;
+    }
+    try {
+      return await BudgetRepository().getBudgetsByMonth(now.month, now.year);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  FinancialContext _buildContext(List<Budget> currentBudgets) {
     final txnProv = context.read<TransactionProvider>();
     final catProv = context.read<CategoryProvider>();
-    final budgetProv = context.read<BudgetProvider>();
 
+    // Always the current month, independent of the month the dashboard or
+    // Budget tab is showing.
     final now = DateTime.now();
     final monthLabel = DateFormat('MMMM yyyy').format(now);
+    final month = AiCopilotService.monthTotals(txnProv.allTransactions, now);
 
     // Category id → name lookup
     Category? catById(String id) => catProv.getCategoryById(id);
 
     // Category spending with human-readable names
     final catSpending = <String, double>{};
-    for (final entry in txnProv.categoryWiseSpending.entries) {
+    for (final entry in month.byCategory.entries) {
       final name = catById(entry.key)?.name ?? entry.key;
-      catSpending[name] = entry.value;
+      catSpending[name] = (catSpending[name] ?? 0) + entry.value;
     }
 
-    // Budget vs spent
+    // Budget vs spent (this month)
     final budgets = <Map<String, dynamic>>[];
-    for (final b in budgetProv.budgets) {
+    for (final b in currentBudgets) {
       final name = catById(b.categoryId)?.name ?? b.categoryId;
-      final spent = budgetProv.getSpentForCategory(b.categoryId);
+      final spent = month.byCategory[b.categoryId] ?? 0.0;
       budgets.add({'category': name, 'budget': b.amount, 'spent': spent});
     }
 
@@ -146,17 +167,27 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
     } catch (_) {}
 
     // Canonical cashflow forecast with active goal reserves (CF-20)
+    // Only forecast from a balance the user entered; otherwise the AI is
+    // told the balance is unknown rather than given a guess.
     CashflowForecast? forecast;
     double upcoming14DaysTotal = 0;
+    final anchor = BalanceAnchorService.current.value;
+    final currentBalance = anchor == null
+        ? null
+        : BalanceAnchorService.openingBalance(
+            anchor, txnProv.allTransactions, now);
     try {
       final recurringProv = context.read<RecurringProvider>();
       final confirmed = recurringProv.confirmedBills;
-      forecast = CashflowForecastService.forecast(
-        txnProv.allTransactions,
-        confirmedBills: confirmed,
-        days: 30,
-        goalReserves: goalProv?.totalActiveGoalReserves ?? 0.0,
-      );
+      if (currentBalance != null) {
+        forecast = CashflowForecastService.forecast(
+          txnProv.allTransactions,
+          confirmedBills: confirmed,
+          days: 30,
+          goalReserves: goalProv?.totalActiveGoalReserves ?? 0.0,
+          openingBalanceOverride: currentBalance,
+        );
+      }
 
       final limitDate = now.add(const Duration(days: 14));
       for (final bill in confirmed) {
@@ -198,9 +229,10 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
 
     return FinancialContext(
       monthLabel: monthLabel,
-      totalIncome: txnProv.totalIncome,
-      totalExpenses: txnProv.totalExpenses,
-      totalSavings: txnProv.totalSavings,
+      currentBalance: currentBalance,
+      totalIncome: month.income,
+      totalExpenses: month.expense,
+      totalSavings: month.income - month.expense,
       categorySpending: catSpending,
       budgets: budgets,
       recentTransactions: recent,
@@ -771,7 +803,9 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
     if (!mounted) return;
 
     // Capture financial context while we still have BuildContext.
-    final financialCtx = _buildContext();
+    final budgetsNow = await _currentMonthBudgets();
+    if (!mounted) return;
+    final financialCtx = _buildContext(budgetsNow);
 
     setState(() {
       _messages.add(

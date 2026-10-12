@@ -15,9 +15,20 @@ class PremiumTeasers {
   static String _plural(int n, String one, String many) =>
       '$n ${n == 1 ? one : many}';
 
-  /// Bills and subscriptions found from SMS, whether or not confirmed yet.
+  /// Detected payments must be at least this confident to be counted.
+  static const double minDetectedConfidence = 0.85;
+
+  /// Bills and subscriptions we can state as fact: everything the user
+  /// confirmed, plus confident detections (3+ matching payments). Daily
+  /// patterns are never counted; they're too easily coincidence.
   static List<RecurringPayment> activeRecurring(List<RecurringPayment> all) =>
-      all.where((r) => r.status != RecurringStatus.cancelled).toList();
+      all
+          .where((r) =>
+              r.status == RecurringStatus.confirmed ||
+              (r.status == RecurringStatus.detected &&
+                  r.confidence >= minDetectedConfidence &&
+                  r.frequencyEnum != RecurringFrequency.daily))
+          .toList();
 
   static String? recurring(List<RecurringPayment> all) {
     final active = activeRecurring(all);
@@ -56,6 +67,7 @@ class PremiumTeasers {
 
   static String? cashflow(int transactionCount) => transactionCount < 10
       ? null
-      : 'Your 30-day forecast is ready, based on '
-          '${_plural(transactionCount, 'transaction', 'transactions')}.';
+      : 'Forecast your next 30 days from the '
+          '${_plural(transactionCount, 'transaction', 'transactions')} '
+          "you've tracked.";
 }
