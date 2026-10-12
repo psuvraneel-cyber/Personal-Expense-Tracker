@@ -1,0 +1,22 @@
+name: pet_engine_hooks
+description: >-
+  Attaches the P.E.T app's own native plugins to every Flutter engine,
+  including engines created by background workers (WorkManager), which
+  only receive plugins listed in GeneratedPluginRegistrant.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.41.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.pet.tracker.enginehooks
+        pluginClass: EngineHooksPlugin

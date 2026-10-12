@@ -58,6 +58,21 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             }
 
         /**
+         * Clears the shared sink only if it is still [expected]. Every Flutter
+         * engine (UI and background workers) has its own plugin instance, so
+         * one engine shutting down must not disconnect another's listener.
+         */
+        fun clearEventSinkIf(expected: EventChannel.EventSink?) {
+            if (expected == null) return
+            synchronized(sinkLock) {
+                if (_eventSink === expected) {
+                    _eventSink = null
+                    SafeLog.d(TAG, "EventSink cleared")
+                }
+            }
+        }
+
+        /**
          * Known bank/UPI sender ID patterns for native-side pre-filtering.
          * Matching is case-insensitive, partial match on the sender address.
          * This avoids passing millions of personal/promo SMS to Dart.
@@ -146,6 +161,7 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     private lateinit var notificationEventChannel: EventChannel
     private var applicationContext: Context? = null
     private var smsReceiver: BroadcastReceiver? = null
+    private var smsEventSink: EventChannel.EventSink? = null
     private var notificationEventSink: EventChannel.EventSink? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -169,8 +185,8 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                 // item is only removed after it has been stored.
             }
             override fun onCancel(arguments: Any?) {
+                TransactionNotificationListener.clearEventSinkIf(notificationEventSink)
                 notificationEventSink = null
-                TransactionNotificationListener.eventSink = null
             }
         })
     }
@@ -180,7 +196,11 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         eventChannel.setStreamHandler(null)
         notificationEventChannel.setStreamHandler(null)
         unregisterSmsReceiver()
-        TransactionNotificationListener.eventSink = null
+        // A destroyed engine's sink silently drops events, which would keep
+        // SmsBroadcastReceiver from scheduling the background scan.
+        clearEventSinkIf(smsEventSink)
+        smsEventSink = null
+        TransactionNotificationListener.clearEventSinkIf(notificationEventSink)
         notificationEventSink = null
         applicationContext = null
     }
@@ -486,12 +506,14 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     // ─── EventChannel StreamHandler ─────────────────────────────────
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+        smsEventSink = events
         eventSink = events
         registerSmsReceiver()
     }
 
     override fun onCancel(arguments: Any?) {
-        eventSink = null
+        clearEventSinkIf(smsEventSink)
+        smsEventSink = null
         unregisterSmsReceiver()
     }
 }

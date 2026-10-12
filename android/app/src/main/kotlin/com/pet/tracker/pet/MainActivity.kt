@@ -8,9 +8,8 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        // Register native SMS reader plugin that reads directly from
-        // the system content provider — works regardless of default SMS app.
-        flutterEngine.plugins.add(SmsReaderPlugin())
+        // SmsReaderPlugin is attached to every engine (this one included) by
+        // EngineHooksPlugin; see PetApplication.
 
         // FLAG_SECURE toggle: hides content in Recents and blocks screenshots
         // while the user has App Lock enabled.

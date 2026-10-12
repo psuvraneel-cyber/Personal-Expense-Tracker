@@ -69,6 +69,22 @@ class TransactionNotificationListener : NotificationListenerService() {
             }
 
         /**
+         * Clears the shared sink only if it is still [expected], so one
+         * Flutter engine shutting down never disconnects another engine's
+         * live listener.
+         */
+        fun clearEventSinkIf(expected: EventChannel.EventSink?) {
+            if (expected == null) return
+            synchronized(sinkLock) {
+                if (_eventSink === expected) {
+                    _eventSink = null
+                    _sinkVersion++
+                    SafeLog.d(TAG, "EventSink cleared (version=$_sinkVersion)")
+                }
+            }
+        }
+
+        /**
          * Visible for testing: Resets static synchronization state.
          */
         @VisibleForTesting

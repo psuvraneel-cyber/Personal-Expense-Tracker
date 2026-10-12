@@ -38,6 +38,9 @@ dependencies:
   # SMS Transaction Auto-Detection (Android only)
   permission_handler: ^12.0.1
   workmanager: ^0.10.10
+  # Attaches the app's native SMS / notification plugin to background engines.
+  pet_engine_hooks:
+    path: packages/pet_engine_hooks
   device_info_plus: ^13.3.0
   android_intent_plus: ^6.1.0
   crypto: ^3.0.6

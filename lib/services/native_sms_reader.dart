@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/services/ingestion_diagnostics.dart';
 import 'package:pet/services/platform_stub.dart'
     if (dart.library.io) 'package:pet/services/platform_native.dart'
     as platform;
@@ -113,6 +114,18 @@ class NativeSmsReader {
   static bool get isSupported =>
       debugOverrideIsSupported ?? (!kIsWeb && platform.isAndroid);
 
+  /// The native plugin is not attached to this Flutter engine. That is a
+  /// wiring bug, not "no messages": count it and rethrow so callers record a
+  /// detection failure instead of silently importing nothing.
+  static Never _missingPlugin(String method, MissingPluginException e) {
+    AppLogger.error(
+      '[NativeSmsReader] $method: native plugin missing in this engine',
+      error: e,
+    );
+    IngestionDiagnostics.instance.recordBackgroundFailure();
+    throw e;
+  }
+
   // ─── Read Inbox ───────────────────────────────────────────────────
 
   /// Read SMS messages from the system inbox.
@@ -181,6 +194,8 @@ class NativeSmsReader {
             (item) => NativeSmsMessage.fromMap(item as Map<dynamic, dynamic>),
           )
           .toList();
+    } on MissingPluginException catch (e) {
+      _missingPlugin(method, e);
     } on PlatformException catch (e) {
       AppLogger.debug(
         '[NativeSmsReader] Platform error reading SMS ($method): ${e.message}',
@@ -306,6 +321,8 @@ class NativeSmsReader {
             (item) => NativeSmsMessage.fromMap(item as Map<dynamic, dynamic>),
           )
           .toList();
+    } on MissingPluginException catch (e) {
+      _missingPlugin('peekPendingNotifications', e);
     } on PlatformException catch (e) {
       AppLogger.debug(
         '[NativeSmsReader] Platform error peeking pending notifications: ${e.message}',
@@ -394,6 +411,8 @@ class NativeSmsReader {
             (item) => NativeSmsMessage.fromMap(item as Map<dynamic, dynamic>),
           )
           .toList();
+    } on MissingPluginException catch (e) {
+      _missingPlugin('getSmsSince', e);
     } on PlatformException catch (e) {
       AppLogger.debug(
         '[NativeSmsReader] Platform error in getSmsSinceTimestamp: ${e.message}',
