@@ -19,6 +19,7 @@ import 'package:pet/services/classification_rule_engine.dart';
 import 'package:pet/services/ingestion_diagnostics.dart';
 import 'package:pet/services/merchant_rule_service.dart';
 import 'package:pet/services/native_sms_reader.dart';
+import 'package:pet/services/sms_parser/sender_identity.dart';
 import 'package:pet/services/sms_service.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -431,8 +432,23 @@ class FinancialIngestionService {
         (bank != 'Unknown Bank') &&
         (confidence >= 0.40);
 
-    final isAutoAccept =
-        (confidence >= autoAcceptConfidenceThreshold) || hasHighEvidence;
+    // A bank's own service SMS with a reference number is as reliable as
+    // anything the app can see, even when it does not name the other party
+    // (e.g. "credited with INR 75.00 … by UPI Ref No …").
+    final isVerifiedBankAlert = isVerifiedBankAlertFor(
+      source: source,
+      sender: sender,
+      classified: classified,
+    );
+
+    final isAutoAccept = (confidence >= autoAcceptConfidenceThreshold) ||
+        hasHighEvidence ||
+        isVerifiedBankAlert;
+
+    // Shown instead of "Unknown" when the bank does not name the payee.
+    final displayMerchant = merchant == 'Unknown' && isVerifiedBankAlert
+        ? unnamedPayeeLabel(classified)
+        : merchant;
 
     if (confidence < reviewConfidenceThreshold) {
       // Low confidence -> Reject
@@ -530,10 +546,10 @@ class FinancialIngestionService {
       type: isIncome ? TransactionType.income : TransactionType.expense,
       categoryId: mappedCategoryId,
       date: classified.parsedDate,
-      note: '$merchant ($bank)',
+      note: '$displayMerchant ($bank)',
       paymentMethod: PaymentMethod.upi,
       isRecurring: false,
-      merchantName: merchant,
+      merchantName: displayMerchant,
       source: source == FinancialObservationSource.notification
           ? TransactionSource.notification
           : TransactionSource.sms,
@@ -645,7 +661,7 @@ class FinancialIngestionService {
       final smsTxn = SmsTransaction(
         id: observationId,
         amount: amount,
-        merchantName: merchant,
+        merchantName: displayMerchant,
         bankName: bank,
         transactionType: classified.transactionType,
         transactionSubType: classified.transactionSubType,
@@ -678,13 +694,13 @@ class FinancialIngestionService {
 
     ledgerRevision.value++;
     AppLogger.info(
-      '[IngestionService] Promoted ₹$amount at $merchant to Core Ledger ($txnId)',
+      '[IngestionService] Promoted ₹$amount at $displayMerchant to Core Ledger ($txnId)',
     );
 
     // Interactive notification for auto-promoted transaction
     await NotificationService.showTransactionDetectedNotification(
       observationId: observationId,
-      merchant: merchant,
+      merchant: displayMerchant,
       amount: amount,
       bankOrChannel: bank,
       isUncertain: false,
@@ -1147,6 +1163,41 @@ class FinancialIngestionService {
 
     if (ledgerChanged) ledgerRevision.value++;
     reviewRevision.value++;
+  }
+
+  /// Whether an SMS is a bank's own service alert with enough evidence to
+  /// import without review: a bank service/transactional sender ID, a
+  /// reference number, a detected direction and a positive amount.
+  /// Merchant confirmations (e.g. Swiggy) and promotions never qualify.
+  @visibleForTesting
+  static bool isVerifiedBankAlertFor({
+    required FinancialObservationSource source,
+    required String sender,
+    required ClassifiedTransaction classified,
+  }) {
+    final ref = classified.referenceId?.trim() ?? '';
+    return source == FinancialObservationSource.sms &&
+        SenderIdentity.isBankServiceSender(sender) &&
+        classified.bankName != 'Unknown Bank' &&
+        classified.hasDirection &&
+        ref.length >= 6 &&
+        classified.amount > 0 &&
+        classified.confidence >= reviewConfidenceThreshold;
+  }
+
+  /// Payee shown when a bank alert does not name the other party.
+  @visibleForTesting
+  static String unnamedPayeeLabel(ClassifiedTransaction classified) {
+    final channel = switch (classified.channel) {
+      'imps' => 'IMPS',
+      'neft' => 'NEFT',
+      'rtgs' => 'RTGS',
+      'upi' => 'UPI',
+      _ => 'Bank',
+    };
+    return classified.transactionType == 'credit'
+        ? '$channel credit'
+        : '$channel payment';
   }
 
   // ─── Internal Helpers ──────────────────────────────────────────────

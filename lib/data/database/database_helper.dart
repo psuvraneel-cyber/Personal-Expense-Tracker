@@ -16,7 +16,7 @@ import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
 
 /// Current SQLite schema version.
-const int kDatabaseVersion = 21;
+const int kDatabaseVersion = 22;
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -510,6 +510,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 21 && newVersion >= 21) {
       await _migrateToV21(db);
+    }
+    if (oldVersion < 22 && newVersion >= 22) {
+      await _migrateToV22(db);
     }
   }
 
@@ -1318,6 +1321,59 @@ class DatabaseHelper {
         },
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  /// v22: older builds filed auto-imported rows under category IDs that do
+  /// not exist (`cat_other`, `cat_gifts`, `cat_investments`), so they showed
+  /// as "Unknown". Re-file them and queue the fix for cloud sync.
+  Future<void> _migrateToV22(Database db) async {
+    final legacy = CategoryMapper.legacyCategoryIds;
+    final placeholders = List.filled(legacy.length, '?').join(', ');
+    final rows = await db.rawQuery(
+      'SELECT * FROM transactions WHERE categoryId IN ($placeholders)',
+      legacy.keys.toList(),
+    );
+    final now = DateTime.now();
+    final batch = db.batch();
+    for (final row in rows) {
+      final fixed = TransactionRecord.fromMap(row).copyWith(
+        categoryId:
+            CategoryMapper.canonicalCategoryId(row['categoryId'] as String),
+        updatedAt: now,
+      );
+      batch.update(
+        'transactions',
+        fixed.toMap(),
+        where: 'id = ?',
+        whereArgs: [fixed.id],
+      );
+      batch.insert(
+        'transaction_sync_queue',
+        {
+          'id': 'v22_category_${fixed.id}',
+          'transactionId': fixed.id,
+          'action': 'update',
+          'payload': jsonEncode(fixed.toMap()),
+          'timestamp': now.millisecondsSinceEpoch,
+          'userId': 'guest_user',
+          'retryCount': 0,
+          'lastAttemptAt': 0,
+          'lastError': null,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+    for (final table in ['recurring_rules', 'recurring_payments']) {
+      for (final entry in legacy.entries) {
+        batch.update(
+          table,
+          {'categoryId': entry.value},
+          where: 'categoryId = ?',
+          whereArgs: [entry.key],
+        );
+      }
     }
     await batch.commit(noResult: true);
   }
