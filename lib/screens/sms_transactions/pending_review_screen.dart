@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
+import 'package:pet/screens/sms_transactions/sms_detail_widgets.dart';
 
 import 'package:pet/providers/category_provider.dart';
 
@@ -159,7 +160,8 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
                     Expanded(
                       child: Text(
                         '${uncertain.length} possible transaction${uncertain.length > 1 ? 's' : ''} '
-                        'need your review. Swipe right to accept, left to reject, or tap Edit.',
+                        'need your review. Tap one to see the original SMS, swipe right '
+                        'to accept or left to reject.',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark
@@ -185,6 +187,12 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
                       isDark: isDark,
                       currencyFormat: currencyFormat,
                       onEdit: () => _showEditDialog(context, txn, provider),
+                      onTap: () => _showReviewDetail(
+                        context,
+                        txn,
+                        provider,
+                        currencyFormat,
+                      ),
                     );
                   },
                 ),
@@ -339,17 +347,227 @@ Future<void> _showEditDialog(
   }
 }
 
+/// Everything the parser saw, including the original SMS, so the user can
+/// decide before accepting or rejecting.
+Future<void> _showReviewDetail(
+  BuildContext context,
+  SmsTransaction txn,
+  SmsTransactionProvider provider,
+  NumberFormat currencyFormat,
+) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final isDebit = txn.transactionType == 'debit';
+  final dateStr = txn.timestampIsApproximate
+      ? DateFormat('dd MMM yyyy').format(txn.timestamp)
+      : DateFormat('dd MMM yyyy, hh:mm a').format(txn.timestamp);
+  final messenger = ScaffoldMessenger.of(context);
+
+  Future<void> accept(BuildContext sheetCtx, String type) async {
+    Navigator.pop(sheetCtx);
+    await provider.acceptUncertainTransaction(txn.id, overrideType: type);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Accepted as $type'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.incomeGreen,
+      ),
+    );
+  }
+
+  return showModalBottomSheet<void>(
+    useSafeArea: true,
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) {
+      return Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(sheetCtx).size.height * 0.8,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withAlpha(30)
+                    : Colors.black.withAlpha(30),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Review Transaction',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: isDark
+                                ? AppTheme.textPrimary
+                                : AppTheme.textPrimaryLight,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withAlpha(isDark ? 25 : 18),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${(txn.confidence * 100).toStringAsFixed(0)}% sure',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.amber,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    SmsDetailRow(
+                      label: 'Amount',
+                      value: currencyFormat.format(txn.amount),
+                      isDark: isDark,
+                    ),
+                    SmsDetailRow(
+                      label: 'Looks like',
+                      value:
+                          isDebit ? 'Debit (money out)' : 'Credit (money in)',
+                      isDark: isDark,
+                    ),
+                    SmsDetailRow(
+                      label: 'Merchant',
+                      value: txn.merchantName,
+                      isDark: isDark,
+                    ),
+                    SmsDetailRow(
+                      label: 'Bank',
+                      value: txn.bankName,
+                      isDark: isDark,
+                    ),
+                    SmsDetailRow(label: 'Date', value: dateStr, isDark: isDark),
+                    SmsDetailRow(
+                      label: 'Category',
+                      value: txn.category,
+                      isDark: isDark,
+                    ),
+                    SmsDetailRow(
+                      label: 'Sender',
+                      value: txn.smsSender,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 16),
+                    OriginalSmsBox(body: txn.rawSmsBody, isDark: isDark),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => accept(sheetCtx, 'debit'),
+                            icon: const Icon(Icons.arrow_upward_rounded,
+                                size: 16),
+                            label: const Text('Accept as debit'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.expenseRed,
+                              side: BorderSide(
+                                color: AppTheme.expenseRed.withAlpha(60),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => accept(sheetCtx, 'credit'),
+                            icon: const Icon(Icons.arrow_downward_rounded,
+                                size: 16),
+                            label: const Text('Accept as credit'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.incomeGreen,
+                              side: BorderSide(
+                                color: AppTheme.incomeGreen.withAlpha(60),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: () {
+                              Navigator.pop(sheetCtx);
+                              _showEditDialog(context, txn, provider);
+                            },
+                            icon: const Icon(Icons.edit_rounded, size: 16),
+                            label: const Text('Edit details'),
+                          ),
+                        ),
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: () async {
+                              Navigator.pop(sheetCtx);
+                              await provider.rejectUncertainTransaction(txn.id);
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Marked as not a transaction'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 16),
+                            label: const Text('Not a transaction'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.textTertiary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
 class _UncertainTransactionCard extends StatelessWidget {
   final SmsTransaction txn;
   final bool isDark;
   final NumberFormat currencyFormat;
   final VoidCallback onEdit;
+  final VoidCallback onTap;
 
   const _UncertainTransactionCard({
     required this.txn,
     required this.isDark,
     required this.currencyFormat,
     required this.onEdit,
+    required this.onTap,
   });
 
   @override
@@ -449,165 +667,182 @@ class _UncertainTransactionCard extends StatelessWidget {
           return false; // Already handled
         }
       },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.amber.withAlpha(isDark ? 30 : 20)),
+      child: Semantics(
+        button: true,
+        hint: 'Shows the original SMS',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: _buildCard(dateStr, amountColor, confidencePercent, context),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top row: merchant + amount
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withAlpha(isDark ? 25 : 18),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.help_outline_rounded,
-                    color: Colors.amber,
-                    size: 20,
-                  ),
+      ),
+    );
+  }
+
+  Widget _buildCard(
+    String dateStr,
+    Color amountColor,
+    String confidencePercent,
+    BuildContext context,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withAlpha(isDark ? 30 : 20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top row: merchant + amount
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.amber.withAlpha(isDark ? 25 : 18),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        txn.merchantName,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? AppTheme.textPrimary
-                              : AppTheme.textPrimaryLight,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${txn.bankName}  •  $dateStr',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark
-                              ? AppTheme.textTertiary
-                              : AppTheme.textSecondaryLight,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: const Icon(
+                  Icons.help_outline_rounded,
+                  color: Colors.amber,
+                  size: 20,
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      currencyFormat.format(txn.amount),
+                      txn.merchantName,
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: amountColor,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? AppTheme.textPrimary
+                            : AppTheme.textPrimaryLight,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withAlpha(isDark ? 20 : 14),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '$confidencePercent% sure',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.amber,
-                        ),
+                    Text(
+                      '${txn.bankName}  •  $dateStr',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark
+                            ? AppTheme.textTertiary
+                            : AppTheme.textSecondaryLight,
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    currencyFormat.format(txn.amount),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: amountColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withAlpha(isDark ? 20 : 14),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$confidencePercent% sure',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.amber,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
 
-            const SizedBox(height: 10),
+          const SizedBox(height: 10),
 
-            // Action buttons
-            Row(
-              children: [
-                Expanded(
-                  child: _ActionButton(
-                    label: 'Debit',
-                    icon: Icons.arrow_upward_rounded,
-                    color: AppTheme.expenseRed,
-                    isDark: isDark,
-                    onTap: () {
-                      Provider.of<SmsTransactionProvider>(
-                        context,
-                        listen: false,
-                      ).acceptUncertainTransaction(
-                        txn.id,
-                        overrideType: 'debit',
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: _ActionButton(
-                    label: 'Credit',
-                    icon: Icons.arrow_downward_rounded,
-                    color: AppTheme.incomeGreen,
-                    isDark: isDark,
-                    onTap: () {
-                      Provider.of<SmsTransactionProvider>(
-                        context,
-                        listen: false,
-                      ).acceptUncertainTransaction(
-                        txn.id,
-                        overrideType: 'credit',
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: _ActionButton(
-                    label: 'Edit',
-                    icon: Icons.edit_rounded,
-                    color: Colors.amber,
-                    isDark: isDark,
-                    onTap: onEdit,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                _ActionButton(
-                  label: 'Reject',
-                  icon: Icons.close_rounded,
-                  color: AppTheme.textTertiary,
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: _ActionButton(
+                  label: 'Debit',
+                  icon: Icons.arrow_upward_rounded,
+                  color: AppTheme.expenseRed,
                   isDark: isDark,
                   onTap: () {
                     Provider.of<SmsTransactionProvider>(
                       context,
                       listen: false,
-                    ).rejectUncertainTransaction(txn.id);
+                    ).acceptUncertainTransaction(
+                      txn.id,
+                      overrideType: 'debit',
+                    );
                   },
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _ActionButton(
+                  label: 'Credit',
+                  icon: Icons.arrow_downward_rounded,
+                  color: AppTheme.incomeGreen,
+                  isDark: isDark,
+                  onTap: () {
+                    Provider.of<SmsTransactionProvider>(
+                      context,
+                      listen: false,
+                    ).acceptUncertainTransaction(
+                      txn.id,
+                      overrideType: 'credit',
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _ActionButton(
+                  label: 'Edit',
+                  icon: Icons.edit_rounded,
+                  color: Colors.amber,
+                  isDark: isDark,
+                  onTap: onEdit,
+                ),
+              ),
+              const SizedBox(width: 4),
+              _ActionButton(
+                label: 'Reject',
+                icon: Icons.close_rounded,
+                color: AppTheme.textTertiary,
+                isDark: isDark,
+                onTap: () {
+                  Provider.of<SmsTransactionProvider>(
+                    context,
+                    listen: false,
+                  ).rejectUncertainTransaction(txn.id);
+                },
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

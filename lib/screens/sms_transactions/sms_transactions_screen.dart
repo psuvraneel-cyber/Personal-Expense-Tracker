@@ -5,6 +5,7 @@ import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:pet/screens/sms_transactions/pending_review_screen.dart';
+import 'package:pet/screens/sms_transactions/sms_detail_widgets.dart';
 import 'package:pet/screens/sms_transactions/sms_permission_screen.dart';
 import 'package:pet/services/sms_parser/intent_detector.dart';
 import 'package:pet/services/sms_parser/negative_filter.dart';
@@ -1114,70 +1115,36 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
                       ),
                       const SizedBox(height: 20),
 
-                      _DetailRow(
+                      SmsDetailRow(
                         label: 'Amount',
                         value: _currencyFormat.format(txn.amount),
                         isDark: isDark,
                       ),
-                      _DetailRow(
+                      SmsDetailRow(
                         label: 'Merchant',
                         value: txn.merchantName,
                         isDark: isDark,
                       ),
-                      _DetailRow(
+                      SmsDetailRow(
                         label: 'Bank',
                         value: txn.bankName,
                         isDark: isDark,
                       ),
-                      _DetailRow(label: 'Date', value: dateStr, isDark: isDark),
-                      _DetailRow(
+                      SmsDetailRow(
+                          label: 'Date', value: dateStr, isDark: isDark),
+                      SmsDetailRow(
                         label: 'Category',
                         value: txn.category,
                         isDark: isDark,
                       ),
-                      _DetailRow(
+                      SmsDetailRow(
                         label: 'Sender',
                         value: txn.smsSender,
                         isDark: isDark,
                       ),
 
                       const SizedBox(height: 16),
-                      Text(
-                        'Original SMS',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? AppTheme.textSecondary
-                              : AppTheme.textSecondaryLight,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? Colors.white.withAlpha(6)
-                              : Colors.black.withAlpha(6),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.white.withAlpha(8)
-                                : Colors.black.withAlpha(8),
-                          ),
-                        ),
-                        child: Text(
-                          txn.rawSmsBody,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? AppTheme.textSecondary
-                                : AppTheme.textSecondaryLight,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
+                      OriginalSmsBox(body: txn.rawSmsBody, isDark: isDark),
 
                       const SizedBox(height: 20),
 
@@ -1384,55 +1351,6 @@ class _SummaryColumn extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
       ],
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool isDark;
-
-  const _DetailRow({
-    required this.label,
-    required this.value,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: isDark
-                    ? AppTheme.textTertiary
-                    : AppTheme.textSecondaryLight,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color:
-                    isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
