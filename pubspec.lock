@@ -1005,6 +1005,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.2"
+  pet_engine_hooks:
+    dependency: "direct main"
+    description:
+      path: "packages/pet_engine_hooks"
+      relative: true
+    source: path
+    version: "1.0.0"
   petitparser:
     dependency: transitive
     description:
