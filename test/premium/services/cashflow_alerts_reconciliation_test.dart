@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:pet/premium/services/balance_anchor_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -56,6 +57,10 @@ void main() {
 
   setUp(() async {
     CashflowForecastService.clearCache();
+    // A ₹0 balance entered before any transaction reproduces the balance
+    // derived from tracked activity alone (what these tests were written for).
+    BalanceAnchorService.debugSet(
+        BalanceAnchor(amount: 0, asOf: DateTime(2000)));
     tempDir = Directory.systemTemp.createTempSync();
     dbPath = p.join(tempDir.path, 'cashflow_alerts_test.db');
 
@@ -81,6 +86,7 @@ void main() {
   });
 
   tearDown(() async {
+    BalanceAnchorService.debugReset();
     coordinator.detachProvider();
     DatabaseHelper.setTestDatabase(null);
     await db.close();
@@ -269,6 +275,46 @@ void main() {
           .where((a) => a.type == AppAlertType.cashflow && !a.isDismissed)
           .toList();
       expect(unDismissedCashflowAlerts, isEmpty);
+      expect(
+          provider.alerts.any((a) => a.type == AppAlertType.cashflow), isFalse);
+    });
+  });
+
+  group('Audit P1: no entered balance', () {
+    test('expenses-only data raises no cash-flow alert and clears old ones',
+        () async {
+      final deficitTxns = [
+        TransactionRecord(
+          id: 't_exp_baseline',
+          amount: 2000,
+          date: now.subtract(const Duration(days: 14)),
+          categoryId: 'food',
+          type: TransactionType.expense,
+        ),
+        TransactionRecord(
+          id: 't_exp_huge',
+          amount: 40000,
+          date: now.subtract(const Duration(days: 3)),
+          categoryId: 'medical',
+          type: TransactionType.expense,
+        ),
+      ];
+      // With a balance: a genuine deficit alert.
+      await coordinator.onTransactionsChanged(deficitTxns, now: now);
+      expect(
+          (await alertRepo.getPage())
+              .any((a) => a.type == AppAlertType.cashflow && !a.isDismissed),
+          isTrue);
+
+      // Balance removed (e.g. never entered on this device): the alert is
+      // withdrawn and no new one is raised.
+      BalanceAnchorService.debugSet(null);
+      CashflowForecastService.clearCache();
+      await coordinator.onTransactionsChanged(deficitTxns, now: now);
+      expect(
+          (await alertRepo.getPage())
+              .where((a) => a.type == AppAlertType.cashflow && !a.isDismissed),
+          isEmpty);
       expect(
           provider.alerts.any((a) => a.type == AppAlertType.cashflow), isFalse);
     });

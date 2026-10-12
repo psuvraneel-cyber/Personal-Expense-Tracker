@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:pet/premium/services/notification_preferences_service.dart';
+import 'package:pet/premium/services/balance_anchor_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/core/l10n/app_language.dart';
@@ -38,6 +40,7 @@ class LocalDataWiper {
     kAnalyticsPrefKey,
     kAnalyticsConsentAskedKey,
     kAppLanguagePrefKey,
+    NotificationPreferencesService.kHideAmountsKey,
     ...EngagementTracker.deviceStateKeys,
   };
 
@@ -67,6 +70,7 @@ class LocalDataWiper {
       await SecureStorageService.instance.delete('userName');
       await SecureStorageService.instance.delete('userEmail');
     });
+    await step('clear entered bank balance', BalanceAnchorService.clear);
     await step('clear preferences', clearUserPreferences);
     await step('clear home-screen widget', HomeWidgetService.clear);
     HouseholdSync.reset();

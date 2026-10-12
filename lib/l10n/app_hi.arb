@@ -82,7 +82,7 @@
   "paywallFeatureCashflowTitle": "कैश-फ़्लो अनुमान",
   "paywallFeatureCashflowBody": "पैसा कितने दिन चलेगा, कितना खर्च सुरक्षित है, और आगे का अनुमान।",
   "paywallFeatureFocusTitle": "खर्च फ़ोकस मोड",
-  "paywallFeatureFocusBody": "रोकी गई श्रेणियों में खर्च करने से पहले चेतावनी पाएँ।",
+  "paywallFeatureFocusBody": "जिन श्रेणियों से ब्रेक चाहिए उन्हें रोकें। उनमें कोई भुगतान दर्ज होने या आने पर आपको याद दिलाया जाएगा।",
   "trustNoBankLogin": "बैंक लॉगिन नहीं",
   "trustEncrypted": "आपके फ़ोन पर एन्क्रिप्टेड",
   "trustNeverSell": "हम आपका डेटा कभी नहीं बेचते",
@@ -129,5 +129,7 @@
   "settingsTermsSubtitle": "P.E.T और सब्सक्रिप्शन के इस्तेमाल के नियम",
   "settingsSupport": "सहायता से संपर्क करें",
   "settingsManageSubscription": "सब्सक्रिप्शन मैनेज करें",
-  "settingsManageSubscriptionSubtitle": "Google Play पर अपना प्लान रद्द करें या बदलें"
+  "settingsManageSubscriptionSubtitle": "Google Play पर अपना प्लान रद्द करें या बदलें",
+  "settingsHideAmounts": "नोटिफ़िकेशन में राशि छिपाएँ",
+  "settingsHideAmountsSubtitle": "राशि की जगह ₹••• दिखाएँ। बायोमेट्रिक लॉक चालू होने पर अपने-आप चालू।"
 }

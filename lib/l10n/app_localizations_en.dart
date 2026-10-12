@@ -263,7 +263,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get paywallFeatureFocusBody =>
-      'Get warned before spending in paused categories.';
+      'Pause categories you want a break from. Get a nudge when you log or receive a payment in one.';
 
   @override
   String get trustNoBankLogin => 'No bank login';
@@ -411,4 +411,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsManageSubscriptionSubtitle =>
       'Cancel or change your plan on Google Play';
+
+  @override
+  String get settingsHideAmounts => 'Hide amounts in notifications';
+
+  @override
+  String get settingsHideAmountsSubtitle =>
+      'Show ₹••• instead of the amount. On by default when biometric lock is on.';
 }

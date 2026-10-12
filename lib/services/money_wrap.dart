@@ -1,4 +1,5 @@
 import 'package:pet/data/models/enums.dart';
+import 'package:pet/premium/services/premium_teasers.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
 
@@ -118,8 +119,7 @@ class MoneyWrap {
       }
     });
 
-    final active =
-        recurring.where((r) => r.status != RecurringStatus.cancelled).toList();
+    final active = PremiumTeasers.activeRecurring(recurring);
 
     return MoneyWrap(
       month: start,

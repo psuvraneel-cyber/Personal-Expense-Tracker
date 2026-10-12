@@ -262,7 +262,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get paywallFeatureFocusBody =>
-      'रोकी गई श्रेणियों में खर्च करने से पहले चेतावनी पाएँ।';
+      'जिन श्रेणियों से ब्रेक चाहिए उन्हें रोकें। उनमें कोई भुगतान दर्ज होने या आने पर आपको याद दिलाया जाएगा।';
 
   @override
   String get trustNoBankLogin => 'बैंक लॉगिन नहीं';
@@ -410,4 +410,11 @@ class AppLocalizationsHi extends AppLocalizations {
   @override
   String get settingsManageSubscriptionSubtitle =>
       'Google Play पर अपना प्लान रद्द करें या बदलें';
+
+  @override
+  String get settingsHideAmounts => 'नोटिफ़िकेशन में राशि छिपाएँ';
+
+  @override
+  String get settingsHideAmountsSubtitle =>
+      'राशि की जगह ₹••• दिखाएँ। बायोमेट्रिक लॉक चालू होने पर अपने-आप चालू।';
 }

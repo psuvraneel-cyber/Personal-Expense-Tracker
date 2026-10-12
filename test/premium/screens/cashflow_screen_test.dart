@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pet/premium/services/balance_anchor_service.dart';
 import 'package:pet/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -89,7 +90,13 @@ void main() {
   setUp(() {
     CashflowForecastService.clearCache();
     fakePremium = FakePremiumProvider();
+    // A ₹0 balance entered before any transaction reproduces the balance
+    // derived from tracked activity alone (what these tests were written for).
+    BalanceAnchorService.debugSet(
+        BalanceAnchor(amount: 0, asOf: DateTime(2000)));
   });
+
+  tearDown(BalanceAnchorService.debugReset);
 
   Widget buildTestWidget({
     required List<TransactionRecord> transactions,
@@ -114,6 +121,20 @@ void main() {
   }
 
   group('CashflowScreen Widget Tests', () {
+    testWidgets('asks for a bank balance before showing any forecast',
+        (tester) async {
+      fakePremium.isPremium = true;
+      BalanceAnchorService.debugSet(null);
+
+      await tester.pumpWidget(buildTestWidget(transactions: [], bills: []));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Add your bank balance to see your forecast'),
+          findsOneWidget);
+      expect(find.text('Enter balance'), findsOneWidget);
+      expect(find.textContaining('Safe-to-Spend'), findsNothing);
+    });
+
     testWidgets('shows premium gate paywall when user is not premium',
         (tester) async {
       fakePremium.isPremium = false;

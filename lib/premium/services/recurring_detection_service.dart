@@ -7,6 +7,14 @@ import 'package:uuid/uuid.dart';
 class RecurringDetectionService {
   RecurringDetectionService._();
 
+  /// Payments below this are too small to be a bill or subscription (and are
+  /// usually repeat purchases such as tea or metro top-ups).
+  static const double minBillAmount = 30.0;
+
+  /// Daily and weekly patterns need this many payments: two equal purchases a
+  /// day or a week apart are far more often coincidence than a bill.
+  static const int minOccurrencesShortCycle = 3;
+
   static const Uuid _uuid = Uuid();
 
   /// Normalizes raw merchant names for robust grouping and duplicate avoidance.
@@ -72,10 +80,16 @@ class RecurringDetectionService {
       // 2. Infer frequency and check consistency
       final freq = _inferFrequency(items);
       if (freq == null) continue;
+      if ((freq == RecurringFrequency.daily ||
+              freq == RecurringFrequency.weekly) &&
+          items.length < minOccurrencesShortCycle) {
+        continue;
+      }
 
       // 3. Analyze amounts for stable price vs. price change vs. variable spending
       final amountAnalysis = _analyzeAmounts(items);
       if (amountAnalysis == null) continue; // Discard erratic variable spending
+      if (amountAnalysis.currentAmount < minBillAmount) continue;
 
       final last = items.last;
       final displayName = normalizeMerchantName(last.merchantName);

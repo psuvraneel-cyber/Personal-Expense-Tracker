@@ -116,6 +116,30 @@ New `wrangler.toml` vars (already set): `FREE_AI_QUESTIONS_PER_MONTH = "3"`
 New routes (all need a Firebase ID token): `POST /quota`,
 `POST /referral/code`, `POST /referral/redeem`, `POST /referral/forget`.
 
+### App Check (stop scripted use of the free AI allowance)
+
+The app already sends an App Check token with every Worker request
+(Play Integrity in release builds, the debug provider in debug builds). To
+make the Worker require it:
+
+1. Play Console → Test and release → App integrity → **App signing**: copy
+   the *App signing key* SHA-256 certificate fingerprint.
+2. Firebase console → Project settings → your Android app → **Add
+   fingerprint**: paste it (also add your upload key's SHA-256).
+3. Firebase console → **App Check** → Apps → the Android app → **Play
+   Integrity** → Save. (Link the Play Console app to the Firebase project
+   if asked.)
+4. For debug builds, run the app once, copy the App Check debug token from
+   logcat, and add it under App Check → Apps → ⋮ → Manage debug tokens.
+5. Watch App Check → **Metrics** for a few days: most requests should be
+   "Verified" before you enforce anything.
+6. Then set `REQUIRE_APP_CHECK = "true"` in `wrangler.toml` and
+   `npx wrangler deploy`. (Don't enforce App Check on Firestore until
+   every build in use sends tokens.)
+
+To watch free-question usage:
+`npx wrangler kv key list --binding KV_LIMITS --prefix free: | find /c "name"`.
+
 **KV usage goes up** (free-question counters, referral records, premium
 cache). The KV free tier allows 1,000 writes/day, so move to Workers Paid
 before launch.

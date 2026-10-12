@@ -154,6 +154,32 @@ class RecurringPaymentRepository {
 
   /// Atomically merges newly detected recurring bills without modifying or duplicating
   /// user-confirmed or user-cancelled recurring bills, suppressing user-dismissed candidates.
+  /// Statement-notice bills are dropped this long after their due date.
+  static const int statementBillGraceDays = 30;
+
+  /// Saves a bill parsed from a statement notice, replacing earlier
+  /// unconfirmed statement bills from the same issuer (one per card).
+  Future<void> upsertStatementBill(RecurringPayment bill) async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'recurring_payments',
+        where: "status = ? AND substr(id, 1, 5) = 'bill_' "
+            'AND LOWER(merchantName) = ? AND id != ?',
+        whereArgs: [
+          RecurringStatus.detected.toJson(),
+          bill.merchantName.toLowerCase(),
+          bill.id,
+        ],
+      );
+      await txn.insert(
+        'recurring_payments',
+        bill.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+  }
+
   Future<void> syncDetectedPayments(
       List<RecurringPayment> newlyDetected) async {
     final db = await _dbHelper.database;
@@ -172,11 +198,24 @@ class RecurringPaymentRepository {
           .map((m) => (m['merchantName'] as String).toLowerCase().trim())
           .toSet();
 
-      // 2. Clear old unconfirmed detected payments
+      // 2. Clear old unconfirmed detected payments. Bills parsed from
+      // statement notices (ids "bill_…") aren't re-derived by detection, so
+      // keep them until well past their due date.
       await txn.delete(
         'recurring_payments',
-        where: 'status = ?',
+        where: "status = ? AND substr(id, 1, 5) != 'bill_'",
         whereArgs: [RecurringStatus.detected.toJson()],
+      );
+      await txn.delete(
+        'recurring_payments',
+        where: "status = ? AND substr(id, 1, 5) = 'bill_' "
+            'AND nextDueAt < ?',
+        whereArgs: [
+          RecurringStatus.detected.toJson(),
+          DateTime.now()
+              .subtract(const Duration(days: statementBillGraceDays))
+              .toIso8601String(),
+        ],
       );
 
       // 3. Insert newly detected payments that don't collide with existing confirmed/cancelled

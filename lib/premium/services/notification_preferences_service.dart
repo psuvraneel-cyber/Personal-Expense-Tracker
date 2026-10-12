@@ -14,6 +14,37 @@ class NotificationPreferencesService extends ChangeNotifier {
   static const String _keyLastReminderDate = 'notif_daily_reminder_last_date';
   static const String _keyBannerDismissed = 'notif_banner_dismissed';
 
+  /// "Hide amounts in notifications". Unset = follow the biometric lock:
+  /// someone who locks the app shouldn't see amounts on the notification
+  /// shade either.
+  static const String kHideAmountsKey = 'notifHideAmounts';
+
+  static final RegExp _amountPattern = RegExp(
+    r'(₹|\bRs\.?|\bINR)\s?-?[\d,]+(\.\d+)?',
+    caseSensitive: false,
+  );
+
+  /// Replaces every rupee amount in [text] with "₹•••".
+  static String maskAmounts(String text) =>
+      text.replaceAll(_amountPattern, '₹•••');
+
+  /// Whether notification text should have its amounts masked.
+  static Future<bool> hideAmounts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(kHideAmountsKey) ??
+          prefs.getBool('biometricEnabled') ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> setHideAmounts(bool hide) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(kHideAmountsKey, hide);
+  }
+
   final Map<NotificationCategory, bool> _preferences = {
     for (final category in NotificationCategory.values) category: true,
   };

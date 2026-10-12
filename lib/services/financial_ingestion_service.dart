@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:pet/premium/services/focus_mode_notifier.dart';
+import 'package:pet/premium/services/bill_payment_matcher.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:pet/core/utils/app_logger.dart';
@@ -254,7 +256,7 @@ class FinancialIngestionService {
           status: RecurringStatus.detected,
           detectionReason: 'Parsed from statement notice ($sender)',
         );
-        await _recurringRepository.upsert(billItem);
+        await _recurringRepository.upsertStatementBill(billItem);
       }
 
       await _recordObservation(
@@ -680,6 +682,7 @@ class FinancialIngestionService {
     AppLogger.info(
       '[IngestionService] Promoted ₹$amount at $merchant to Core Ledger ($txnId)',
     );
+    await _afterLedgerInsert(promotedTxn);
 
     // Interactive notification for auto-promoted transaction
     await NotificationService.showTransactionDetectedNotification(
@@ -999,7 +1002,17 @@ class FinancialIngestionService {
 
     ledgerRevision.value++;
     reviewRevision.value++;
+    if (linkedTo == txnId) await _afterLedgerInsert(txnRecord);
     return linkedTo == txnId ? txnRecord : null;
+  }
+
+  /// Follow-ups for a newly recorded transaction. Best effort: never blocks
+  /// or fails the import.
+  Future<void> _afterLedgerInsert(TransactionRecord txn) async {
+    // Autopaid bills: mark the matching confirmed bill as paid.
+    await BillPaymentMatcher.recordIfBillPayment(txn);
+    // Focus Mode: tell the user a paused category was spent in.
+    await FocusModeNotifier.notifyIfPaused(txn, userId: _syncUserId());
   }
 
   /// Re-categorises the ledger transaction created from an SMS/notification

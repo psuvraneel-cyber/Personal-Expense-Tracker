@@ -84,7 +84,7 @@
   "paywallFeatureCashflowTitle": "Cash-Flow Forecasting",
   "paywallFeatureCashflowBody": "Runway, safe-to-spend targets and projections.",
   "paywallFeatureFocusTitle": "Spending Focus Mode",
-  "paywallFeatureFocusBody": "Get warned before spending in paused categories.",
+  "paywallFeatureFocusBody": "Pause categories you want a break from. Get a nudge when you log or receive a payment in one.",
   "trustNoBankLogin": "No bank login",
   "trustEncrypted": "Encrypted on your phone",
   "trustNeverSell": "We never sell your data",
@@ -131,5 +131,7 @@
   "settingsTermsSubtitle": "Rules for using P.E.T and subscriptions",
   "settingsSupport": "Contact Support",
   "settingsManageSubscription": "Manage Subscription",
-  "settingsManageSubscriptionSubtitle": "Cancel or change your plan on Google Play"
+  "settingsManageSubscriptionSubtitle": "Cancel or change your plan on Google Play",
+  "settingsHideAmounts": "Hide amounts in notifications",
+  "settingsHideAmountsSubtitle": "Show ₹••• instead of the amount. On by default when biometric lock is on."
 }

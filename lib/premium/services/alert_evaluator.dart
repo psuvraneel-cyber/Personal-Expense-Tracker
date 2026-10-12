@@ -31,7 +31,22 @@ class AlertEvaluator {
     final referenceTime = now ?? DateTime.now();
     // Window: 3 completed calendar months prior to current month
     final to = DateTime(referenceTime.year, referenceTime.month, 1);
-    final from = DateTime(referenceTime.year, referenceTime.month - 3, 1);
+    var from = DateTime(referenceTime.year, referenceTime.month - 3, 1);
+
+    // Only months the app tracked from the 1st count: a partly tracked month
+    // (e.g. the month of install) would set a baseline far too low and flag
+    // a normal month as a spike. Tracking starts at the earliest transaction.
+    if (transactions.isNotEmpty) {
+      final first = transactions
+          .map((t) => t.date)
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+      final firstDay = DateTime(first.year, first.month, first.day);
+      final firstFullMonth = firstDay.day == 1
+          ? DateTime(first.year, first.month, 1)
+          : DateTime(first.year, first.month + 1, 1);
+      if (firstFullMonth.isAfter(from)) from = firstFullMonth;
+    }
+    if (!from.isBefore(to)) return {};
 
     final byCategory = <String, double>{};
     final months = <String, Set<String>>{};
@@ -142,11 +157,38 @@ class AlertEvaluator {
   ///
   /// Predicts whether current run-rate will exhaust the budget before month end.
   /// Suppressed during early days of month (day < 5) to avoid noise.
+  /// Largest single expense this month per category (for pacing).
+  static Map<String, double> largestExpenseThisMonth(
+    Iterable<TransactionRecord> transactions, {
+    DateTime? now,
+  }) {
+    final ref = now ?? DateTime.now();
+    final largest = <String, double>{};
+    for (final t in transactions) {
+      if (t.type != TransactionType.expense ||
+          t.date.year != ref.year ||
+          t.date.month != ref.month) {
+        continue;
+      }
+      if (t.amount > (largest[t.categoryId] ?? 0)) {
+        largest[t.categoryId] = t.amount;
+      }
+    }
+    return largest;
+  }
+
+  /// Warns when the month-to-date pace would overrun a budget.
+  ///
+  /// Pace is a straight line, so a category where one payment makes up more
+  /// than half the spending (rent, fees, an annual premium) is skipped: that
+  /// payment won't repeat daily. Pass [largestExpense] from
+  /// [largestExpenseThisMonth] to enable this.
   static List<AppAlert> evaluateBudgetPacing({
     required Map<String, double> budgets,
     required Map<String, double> spent,
     DateTime? now,
     Uuid? uuid,
+    Map<String, double>? largestExpense,
   }) {
     final referenceTime = now ?? DateTime.now();
     final idGenerator = uuid ?? _uuid;
@@ -170,6 +212,8 @@ class AlertEvaluator {
       final progress = spentAmount / budgetAmount;
       // Skip if already exceeded (handled by evaluateBudgetAlerts)
       if (progress >= 1.0) continue;
+      // One-off payments dominate this category: a daily pace is misleading.
+      if ((largestExpense?[categoryId] ?? 0) > spentAmount * 0.5) continue;
 
       final dailyRate = spentAmount / day;
       final projectedMonthSpend = dailyRate * daysInMonth;
@@ -412,6 +456,7 @@ class AlertEvaluator {
     double safetyBuffer = CashflowForecastService.defaultSafetyBuffer,
     double goalReserves = 0.0,
     String? userId,
+    double? openingBalance,
   }) {
     final referenceTime = now ?? DateTime.now();
     final idGenerator = uuid ?? _uuid;
@@ -424,6 +469,7 @@ class AlertEvaluator {
       referenceDate: referenceTime,
       safetyBuffer: safetyBuffer,
       goalReserves: goalReserves,
+      openingBalanceOverride: openingBalance,
     );
 
     // Evaluate across the 14-day imminent horizon as well as the 30-day projection

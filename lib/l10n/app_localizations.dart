@@ -551,7 +551,7 @@ abstract class AppLocalizations {
   /// No description provided for @paywallFeatureFocusBody.
   ///
   /// In en, this message translates to:
-  /// **'Get warned before spending in paused categories.'**
+  /// **'Pause categories you want a break from. Get a nudge when you log or receive a payment in one.'**
   String get paywallFeatureFocusBody;
 
   /// No description provided for @trustNoBankLogin.
@@ -829,6 +829,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel or change your plan on Google Play'**
   String get settingsManageSubscriptionSubtitle;
+
+  /// No description provided for @settingsHideAmounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide amounts in notifications'**
+  String get settingsHideAmounts;
+
+  /// No description provided for @settingsHideAmountsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show ₹••• instead of the amount. On by default when biometric lock is on.'**
+  String get settingsHideAmountsSubtitle;
 }
 
 class _AppLocalizationsDelegate

@@ -2,10 +2,17 @@ import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/models/transaction.dart';
 
+/// Most transactions loaded into memory at once. Forecasts, alerts, tax
+/// totals and the AI read this list, so it must cover years of history: at
+/// 10 transactions a day this is over five years. (It was 1,000, which
+/// silently dropped older data from those calculations for heavy users.)
+const int kMaxLoadedTransactions = 20000;
+
 class TransactionRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper();
 
-  Future<List<TransactionRecord>> getAllTransactions({int limit = 1000}) async {
+  Future<List<TransactionRecord>> getAllTransactions(
+      {int limit = kMaxLoadedTransactions}) async {
     final db = await _dbHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(
       'transactions',

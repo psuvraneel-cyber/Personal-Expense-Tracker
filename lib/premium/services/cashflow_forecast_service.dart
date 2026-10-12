@@ -3,6 +3,7 @@ import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/premium/models/cashflow_forecast.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
+import 'package:pet/premium/services/bill_payment_matcher.dart';
 import 'package:pet/services/recurrence_calculator.dart';
 
 /// Single authoritative engine for cashflow forecasting across P.E.T.
@@ -177,9 +178,26 @@ class CashflowForecastService {
     final majorEvents = <CashflowEvent>[];
 
     for (final bill in activeBills) {
-      // Overdue bill handling: If nextDueAt is before today and unpaid, treat as due TODAY
+      // Overdue bill handling: If nextDueAt is before today and unpaid, treat
+      // as due TODAY. A recorded payment that matches the bill (e.g. autopay
+      // imported from SMS) means it was paid, so it isn't deducted again.
       var occ = bill.nextDueAt;
-      if (occ.isBefore(todayFloor)) {
+      final paidAlready = occ.isBefore(todayFloor) &&
+          pastTransactions.any((t) =>
+              t.type == TransactionType.expense &&
+              BillPaymentMatcher.matches(
+                bill,
+                merchant: t.merchantName,
+                amount: t.amount,
+                date: t.date,
+              ));
+      if (paidAlready) {
+        occ = RecurrenceCalculator.computeNextOccurrence(
+          anchorDate: bill.nextDueAt,
+          currentOccurrence: todayFloor,
+          frequency: bill.frequencyEnum,
+        );
+      } else if (occ.isBefore(todayFloor)) {
         final todayKey =
             '${todayFloor.year}-${todayFloor.month}-${todayFloor.day}';
         billDeductionsByDate[todayKey] =
