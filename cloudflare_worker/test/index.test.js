@@ -593,9 +593,64 @@ test("Overrides client-requested expensive models and excessive max_tokens", asy
   assert.strictEqual(res.status, 200);
 
   // Verify overridden properties sent to Groq
-  assert.strictEqual(groqRequestBody.model, "llama-3.3-70b-versatile");
-  assert.strictEqual(groqRequestBody.max_tokens, 600);
+  assert.strictEqual(groqRequestBody.model, "openai/gpt-oss-120b");
+  // 600-token answer cap plus the reasoning budget.
+  assert.strictEqual(groqRequestBody.max_tokens, 600 + 1024);
   assert.strictEqual(groqRequestBody.temperature, 0.5);
+  assert.strictEqual(groqRequestBody.reasoning_effort, "low");
+  assert.strictEqual(groqRequestBody.include_reasoning, false);
+});
+
+test("Non-reasoning models get no reasoning parameters or extra budget", async () => {
+  let groqRequestBody = null;
+  setupFetchMock([
+    googleJwksHandler,
+    premiumRevenueCatHandler,
+    {
+      matches: (url) => url.includes("groq.com"),
+      handle: (url, options) => {
+        groqRequestBody = JSON.parse(options.body);
+        return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 });
+      }
+    }
+  ]);
+
+  const req = new Request("https://example.com/api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${validToken}` },
+    body: JSON.stringify({ messages: [{ role: "user", content: "hi" }], max_tokens: 999999 })
+  });
+
+  const res = await worker.fetch(req, {
+    ...mockEnv,
+    GROQ_MODEL: "llama-3.1-8b-instant",
+    KV_LIMITS: new MockKV()
+  });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(groqRequestBody.model, "llama-3.1-8b-instant");
+  assert.strictEqual(groqRequestBody.max_tokens, 600);
+  assert.strictEqual(groqRequestBody.reasoning_effort, undefined);
+  assert.strictEqual(groqRequestBody.include_reasoning, undefined);
+});
+
+test("An empty answer from the model is reported as an error", async () => {
+  setupFetchMock([
+    googleJwksHandler,
+    premiumRevenueCatHandler,
+    {
+      matches: (url) => url.includes("groq.com"),
+      handle: () => new Response(JSON.stringify({ choices: [{ message: { content: "  " } }] }), { status: 200 })
+    }
+  ]);
+
+  const req = new Request("https://example.com/api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${validToken}` },
+    body: JSON.stringify({ messages: [{ role: "user", content: "hi" }] })
+  });
+
+  const res = await worker.fetch(req, { ...mockEnv, KV_LIMITS: new MockKV() });
+  assert.strictEqual(res.status, 502);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
