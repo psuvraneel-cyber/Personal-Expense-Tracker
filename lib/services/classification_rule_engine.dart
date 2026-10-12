@@ -64,6 +64,7 @@ class ClassificationRuleEngine {
         merchantName: result.merchant ?? 'Unknown',
         bankName: result.bank ?? 'Unknown Bank',
         transactionType: result.direction?.name ?? 'debit',
+        hasDirection: result.direction != null,
         transactionSubType: result.subType.name,
         parsedDate: result.date ?? smsTimestamp,
         upiId: result.upiId,
@@ -184,6 +185,10 @@ class ClassifiedTransaction {
   final String merchantName;
   final String bankName;
   final String transactionType;
+
+  /// Whether the parser found the direction; [transactionType] falls back to
+  /// `debit` when it did not.
+  final bool hasDirection;
   final String transactionSubType;
   final DateTime parsedDate;
   final String? upiId;
@@ -215,6 +220,7 @@ class ClassifiedTransaction {
     required this.merchantName,
     required this.bankName,
     required this.transactionType,
+    this.hasDirection = true,
     this.transactionSubType = 'payment',
     required this.parsedDate,
     this.upiId,
