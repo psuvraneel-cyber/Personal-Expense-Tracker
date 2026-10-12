@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pet/data/models/enums.dart';
+import 'package:pet/services/category_mapper.dart';
 
 class TransactionRecord {
   final String id;
@@ -179,7 +180,10 @@ class TransactionRecord {
       id: docId,
       amount: (data['amount'] as num).toDouble(),
       type: TransactionType.fromJson(data['type'] as String?),
-      categoryId: data['categoryId'] as String? ?? '',
+      // Rows synced by older builds may carry IDs that match no category.
+      categoryId: CategoryMapper.canonicalCategoryId(
+        data['categoryId'] as String? ?? '',
+      ),
       date: (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
       note: data['note'] as String? ?? '',
       paymentMethod: PaymentMethod.fromJson(data['paymentMethod'] as String?),

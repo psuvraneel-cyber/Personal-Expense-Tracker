@@ -3,8 +3,27 @@
 class CategoryMapper {
   CategoryMapper._();
 
-  static const String fallbackExpenseCategoryId = 'cat_other';
+  static const String fallbackExpenseCategoryId = 'cat_other_expense';
   static const String fallbackIncomeCategoryId = 'cat_other_income';
+
+  /// IDs older builds wrote that match no category (shown as "Unknown"),
+  /// mapped to the categories they meant.
+  static const Map<String, String> legacyCategoryIds = {
+    'cat_other': fallbackExpenseCategoryId,
+    'cat_investments': 'cat_investment',
+    'cat_gifts': 'cat_gift_income',
+  };
+
+  /// Returns the current ID for [categoryId], replacing legacy IDs.
+  static String canonicalCategoryId(String categoryId) =>
+      legacyCategoryIds[categoryId] ?? categoryId;
+
+  /// Every ID [mapToCategoryId] can return. Visible for testing.
+  static Set<String> get allMappedIds => {
+        fallbackExpenseCategoryId,
+        fallbackIncomeCategoryId,
+        ..._knownCategoryMappings.values,
+      };
 
   /// Map of known category names / keywords to canonical category IDs.
   static const Map<String, String> _knownCategoryMappings = {
@@ -106,16 +125,16 @@ class CategoryMapper {
     'payroll': 'cat_salary',
     'freelance': 'cat_freelance',
     'consulting': 'cat_freelance',
-    'investments': 'cat_investments',
-    'investment': 'cat_investments',
-    'dividend': 'cat_investments',
-    'interest': 'cat_investments',
-    'mutual fund': 'cat_investments',
-    'stocks': 'cat_investments',
-    'groww': 'cat_investments',
-    'zerodha': 'cat_investments',
-    'gifts': 'cat_gifts',
-    'gift': 'cat_gifts',
+    'investments': 'cat_investment',
+    'investment': 'cat_investment',
+    'dividend': 'cat_investment',
+    'interest': 'cat_investment',
+    'mutual fund': 'cat_investment',
+    'stocks': 'cat_investment',
+    'groww': 'cat_investment',
+    'zerodha': 'cat_investment',
+    'gifts': 'cat_gift_income',
+    'gift': 'cat_gift_income',
     'cashback': 'cat_other_income',
     'refund': 'cat_other_income',
   };
