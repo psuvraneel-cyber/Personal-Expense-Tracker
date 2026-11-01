@@ -281,12 +281,12 @@ class FirestoreSyncService {
         lastDoc = snap.docs.last;
       }
       return allTxns;
-    } on FirebaseException catch (e) {
-      AppLogger.debug('[Firestore] fetchAllTransactions error: ${e.message}');
-      return allTxns;
     } catch (e) {
-      AppLogger.debug('[Firestore] fetchAllTransactions unexpected error: $e');
-      return allTxns;
+      // A failed page must not look like a complete history: the caller
+      // retries instead of reporting "synced" with records missing.
+      AppLogger.debug(
+          '[Firestore] fetchAllTransactions failed after ${allTxns.length} docs: $e');
+      rethrow;
     }
   }
 
@@ -464,6 +464,19 @@ class FirestoreSyncService {
       AppLogger.debug('[Firestore] createTombstone error: ${e.message}');
       rethrow;
     }
+  }
+
+  /// When [transactionId] was deleted on any device, or null if it has no
+  /// tombstone. Reads the server when online, the local cache otherwise.
+  Future<DateTime?> tombstoneDeletedAt(String transactionId) async {
+    final snap = await _tombstoneCollection.doc(transactionId).get();
+    if (!snap.exists) return null;
+    final raw = snap.data()?['deletedAt'];
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is String) return DateTime.tryParse(raw);
+    if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+    // Tombstone without a readable time: treat the delete as newest.
+    return DateTime.now();
   }
 
   Future<void> deleteTombstone(String transactionId) async {

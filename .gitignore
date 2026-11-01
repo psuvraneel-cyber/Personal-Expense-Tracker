@@ -116,3 +116,7 @@ repomix-output.txt
 
 # Gradle build output
 /android/build/
+
+# Deploy tool caches (Firebase CLI, Wrangler)
+.firebase/
+.wrangler/

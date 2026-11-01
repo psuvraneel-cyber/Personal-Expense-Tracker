@@ -156,6 +156,31 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         }
     }
 
+    /**
+     * Inbox queries can scan thousands of messages; running them in
+     * [onMethodCall] (the main thread) risks an ANR on large inboxes. They
+     * run here and post their result back to the main thread.
+     */
+    private val ioExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun replyFromBackground(result: MethodChannel.Result, work: () -> Any?) {
+        try {
+            ioExecutor.execute {
+                val value = try {
+                    work()
+                } catch (e: Exception) {
+                    SafeLog.e(TAG, "Background SMS read failed: ${e.message}", e)
+                    emptyList<Map<String, Any?>>()
+                }
+                mainHandler.post { result.success(value) }
+            }
+        } catch (e: java.util.concurrent.RejectedExecutionException) {
+            // Engine detached (executor shut down) — nothing to read for.
+            result.success(emptyList<Map<String, Any?>>())
+        }
+    }
+
     private lateinit var methodChannel: MethodChannel
     private lateinit var eventChannel: EventChannel
     private lateinit var notificationEventChannel: EventChannel
@@ -203,6 +228,7 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         TransactionNotificationListener.clearEventSinkIf(notificationEventSink)
         notificationEventSink = null
         applicationContext = null
+        ioExecutor.shutdown()
     }
 
     // ─── MethodChannel Handler ──────────────────────────────────────
@@ -211,8 +237,7 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         when (call.method) {
             "getInboxSms" -> {
                 val lookbackMillis = call.argument<Number>("lookbackMillis")?.toLong()
-                val messages = readSms("content://sms/inbox", lookbackMillis)
-                result.success(messages)
+                replyFromBackground(result) { readSms("content://sms/inbox", lookbackMillis) }
             }
             "getSentSms" -> {
                 // Sent-box access removed for privacy; kept for channel compatibility.
@@ -220,14 +245,12 @@ class SmsReaderPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             }
             "getAllSms" -> {
                 val lookbackMillis = call.argument<Number>("lookbackMillis")?.toLong()
-                val messages = readAllSms(lookbackMillis)
-                result.success(messages)
+                replyFromBackground(result) { readAllSms(lookbackMillis) }
             }
             "getSmsSince" -> {
                 val sinceTimestamp = call.argument<Number>("sinceTimestamp")?.toLong()
                 val fallbackDays = call.argument<Number>("fallbackDays")?.toInt() ?: 7
-                val messages = readSmsSince(sinceTimestamp, fallbackDays)
-                result.success(messages)
+                replyFromBackground(result) { readSmsSince(sinceTimestamp, fallbackDays) }
             }
             "startListening" -> {
                 registerSmsReceiver()

@@ -164,6 +164,149 @@ void main() {
       expect(IngestionDiagnostics().crossSourceMerged, equals(1));
     });
 
+    group('Transfers and card-bill payments (audit P2-10)', () {
+      test('are recognised; card purchases are not', () {
+        const transfers = [
+          'Payment of Rs 15,000.00 received towards your HDFC Bank Credit Card XX4321. Thank you.',
+          'Rs 15000.00 debited from A/c XX1234 for Credit Card Bill payment.',
+          'We have received payment of Rs.8,450.00 on your ICICI Bank Credit Card.',
+          'Rs 5000 transferred to self A/c XX9876 via IMPS.',
+          'Rs 2,000 debited towards your own account XX5555. Self transfer.',
+        ];
+        const purchases = [
+          'Rs 500.00 spent on your HDFC Bank Credit Card XX4321 at AMAZON on 24-Aug-26.',
+          'Rs 450.00 debited from HDFC Bank A/c XX1234 at Starbucks. Ref UPI/987654321.',
+          'Rs 20000.00 credited to A/c XX1234 by NEFT from ACME PVT LTD (salary).',
+        ];
+        for (final t in transfers) {
+          expect(FinancialIngestionService.isPossibleTransfer(t), isTrue,
+              reason: t);
+        }
+        for (final t in purchases) {
+          expect(FinancialIngestionService.isPossibleTransfer(t), isFalse,
+              reason: t);
+        }
+      });
+
+      test('a card-bill payment goes to Review instead of the ledger',
+          () async {
+        final txn = await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'HDFCBK',
+          body: 'Rs 15000.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 '
+              'for Credit Card Bill payment. Ref 4455667788.',
+          dateMillis: DateTime(2026, 8, 24, 10).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(txn, isNull);
+        expect(await db.query('transactions'), isEmpty);
+        final pending = await ingestionService.getPendingReviewObservations();
+        expect(
+            pending.map((o) => o.stateReason), contains('possible_transfer'));
+      });
+    });
+
+    group('Cross-source dedup edge cases (audit P2-9)', () {
+      Future<int> ledgerCount() async =>
+          (await db.rawQuery('SELECT COUNT(*) AS c FROM transactions'))
+              .first['c'] as int;
+
+      test('notification without a ref + SMS with a ref → one transaction',
+          () async {
+        final t = DateTime(2026, 8, 24, 16, 0);
+        await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'PhonePe',
+          packageName: 'com.phonepe.app',
+          title: 'Paid to Starbucks',
+          body: 'Rs 350.00 using HDFC Bank A/c',
+          dateMillis: t.millisecondsSinceEpoch,
+          source: 'notification',
+        ));
+        await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'HDFCBK',
+          body: 'Rs 350.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 '
+              'at Starbucks. Ref UPI/555666777.',
+          dateMillis: t.add(const Duration(minutes: 2)).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(await ledgerCount(), 1);
+      });
+
+      test('same payment either side of a 15-minute bucket edge → one',
+          () async {
+        // 16:14:50 and 16:15:10 fall in different fixed 15-minute buckets.
+        final t = DateTime(2026, 8, 24, 16, 14, 50);
+        await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'PhonePe',
+          packageName: 'com.phonepe.app',
+          title: 'Paid to Starbucks',
+          body: 'Rs 275.00 using HDFC Bank A/c',
+          dateMillis: t.millisecondsSinceEpoch,
+          source: 'notification',
+        ));
+        await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'HDFCBK',
+          body: 'Rs 275.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 '
+              'at Starbucks.',
+          dateMillis: t.add(const Duration(seconds: 20)).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(await ledgerCount(), 1);
+      });
+
+      test('two genuine identical payments from the same source → two',
+          () async {
+        final t = DateTime(2026, 8, 24, 9, 1);
+        Future<void> pay(DateTime at, String bal) =>
+            ingestionService.ingestMessage(NativeSmsMessage(
+              address: 'HDFCBK',
+              body: 'Rs 20.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 '
+                  'at Chai Point. Avl Bal Rs $bal.',
+              dateMillis: at.millisecondsSinceEpoch,
+              source: 'sms',
+            ));
+        await pay(t, '1,000.00');
+        await pay(t.add(const Duration(minutes: 3)), '980.00');
+        expect(await ledgerCount(), 2);
+      });
+
+      test('the same SMS text delivered twice (different receive times) → one',
+          () async {
+        final t = DateTime(2026, 8, 24, 11, 0);
+        const body = 'Rs 20.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 '
+            'at Chai Point. Avl Bal Rs 1,000.00.';
+        for (final offset in [0, 900]) {
+          await ingestionService.ingestMessage(NativeSmsMessage(
+            address: 'HDFCBK',
+            body: body,
+            dateMillis:
+                t.add(Duration(milliseconds: offset)).millisecondsSinceEpoch,
+            source: 'sms',
+          ));
+        }
+        expect(await ledgerCount(), 1);
+      });
+
+      test('different merchants with the same amount stay separate', () async {
+        final t = DateTime(2026, 8, 24, 13, 0);
+        await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'PhonePe',
+          packageName: 'com.phonepe.app',
+          title: 'Paid to Starbucks',
+          body: 'Rs 199.00 using HDFC Bank A/c',
+          dateMillis: t.millisecondsSinceEpoch,
+          source: 'notification',
+        ));
+        await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'HDFCBK',
+          body: 'Rs 199.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 '
+              'at Dominos.',
+          dateMillis: t.add(const Duration(minutes: 1)).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(await ledgerCount(), 2);
+      });
+    });
+
     test(
         'Test E — Uncertain transaction holds in review queue without entering core ledger until confirmed',
         () async {

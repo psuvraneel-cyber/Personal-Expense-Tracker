@@ -196,16 +196,20 @@ class HouseholdService {
     });
   }
 
-  /// Owner only: removes [uid] and the totals they shared.
+  /// Owner only: removes [uid] and the totals they shared, and revokes every
+  /// invite code for the household so the removed member can't re-join
+  /// with a code that is still valid.
   Future<void> removeMember(Household h, String uid) async {
     await deleteMySpending(h.id, uid);
     await _households.doc(h.id).update({
       'memberUids': FieldValue.arrayRemove([uid]),
       'memberNames.$uid': FieldValue.delete(),
     });
+    await revokeInvites(h.id);
   }
 
-  /// Owner only: deletes budgets, everyone's totals and the household.
+  /// Owner only: deletes budgets, everyone's totals, all invite codes and
+  /// the household.
   Future<void> deleteHousehold(Household h) async {
     final ref = _households.doc(h.id);
     for (final sub in ['budgets', 'spending']) {
@@ -214,7 +218,21 @@ class HouseholdService {
         await d.reference.delete();
       }
     }
+    // Before the household doc: the rules check ownership through it.
+    await revokeInvites(h.id);
     await ref.delete();
+  }
+
+  /// Owner only: deletes every invite code for [householdId], whoever
+  /// created it.
+  Future<void> revokeInvites(String householdId) async {
+    final invites = await _db
+        .collection('householdInvites')
+        .where('householdId', isEqualTo: householdId)
+        .get();
+    for (final d in invites.docs) {
+      await d.reference.delete();
+    }
   }
 
   Stream<List<SharedBudget>> watchBudgets(String householdId) => _households

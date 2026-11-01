@@ -51,7 +51,7 @@ void smsCallbackDispatcher() {
 
     if (taskName == kSmsInboxScanTask) {
       try {
-        // Use a short lookback (2 days) since we run every 15 minutes.
+        // Use a short lookback (2 days) since we run every hour.
         // The hash-based dedup and lastProcessedTimestamp watermark
         // in SmsService prevent duplicates regardless.
         final smsService = SmsService();
@@ -228,17 +228,20 @@ Future<void> initSmsBackgroundService() async {
 
   await Workmanager().initialize(smsCallbackDispatcher);
 
-  // Register a periodic task that runs every 15 minutes (minimum interval).
-  // WorkManager handles battery optimization and doze mode automatically.
+  // Safety-net inbox scan. New SMS already trigger an immediate (expedited)
+  // import from SmsBroadcastReceiver, so this only catches messages missed
+  // while the receiver couldn't run; hourly is enough, and each run starts
+  // a Flutter engine and opens the encrypted database (battery).
+  // `update` re-applies the interval to installs registered at 15 minutes.
   await Workmanager().registerPeriodicTask(
     kSmsInboxScanTask,
     kSmsInboxScanTask,
-    frequency: const Duration(minutes: 15),
+    frequency: const Duration(hours: 1),
     constraints: Constraints(
       networkType: NetworkType.notRequired,
       requiresBatteryNotLow: true,
     ),
-    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
     backoffPolicy: BackoffPolicy.linear,
     backoffPolicyDelay: const Duration(minutes: 5),
   );
@@ -260,16 +263,18 @@ Future<void> initSmsBackgroundService() async {
     backoffPolicyDelay: const Duration(minutes: 15),
   );
 
-  // Register a periodic task for budget & anomaly alert evaluation (every 30 minutes).
+  // Periodic budget, anomaly and reminder evaluation (hourly). Imports
+  // already evaluate alerts as they happen; this catches time-based ones
+  // (daily reminder, bills due) and re-arms scheduled reminders.
   await Workmanager().registerPeriodicTask(
     kAlertEvaluationTask,
     kAlertEvaluationTask,
-    frequency: const Duration(minutes: 30),
+    frequency: const Duration(hours: 1),
     constraints: Constraints(
       networkType: NetworkType.notRequired,
       requiresBatteryNotLow: true,
     ),
-    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
     backoffPolicy: BackoffPolicy.linear,
     backoffPolicyDelay: const Duration(minutes: 5),
   );

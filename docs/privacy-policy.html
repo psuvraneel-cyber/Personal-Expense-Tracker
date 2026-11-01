@@ -18,7 +18,7 @@
 <body>
 <main>
 <h1>Privacy Policy</h1>
-<p class="note">P.E.T — Personal Expense Tracker (Android, package <code>com.pet.tracker.pet</code>)<br>Last updated: 13 October 2026</p>
+<p class="note">P.E.T — Personal Expense Tracker (Android, package <code>com.pet.tracker.pet</code>)<br>Last updated: 1 November 2026</p>
 
 <p>P.E.T helps you track your spending. This policy explains what data the app reads, what it stores, where it is sent, how long it is kept, and how you can delete it. The developer is Suvraneel Paul, India (contact details at the end).</p>
 
@@ -47,17 +47,18 @@
 <p>If you grant <em>Notification access</em>, the app reads notifications only from payment and banking apps (for example Google Pay, PhonePe, Paytm, BHIM, Amazon Pay, CRED and major bank apps) to detect payments that do not arrive by SMS. Notifications from every other app — including chat and social media apps — are ignored and never stored. Detected payment notifications are handled exactly like SMS in section 2. If the app is closed when a notification arrives, it is kept briefly in encrypted storage on the device (AES-256) until it is processed.</p>
 
 <h2>4. Data stored on your device</h2>
-<p>Your transactions, categories, budgets, goals, bills and settings are stored in a database on your device encrypted with SQLCipher (256-bit AES). The encryption key is kept in Android's secure Keystore-backed storage. This database is excluded from Android cloud backup and device-to-device transfer.</p>
-<p>If you enter your bank balance for the Cash Flow forecast, it is kept only on this device in Android's encrypted secure storage, is never uploaded, and is removed when you sign out or delete your account.</p>
+<p>Your transactions, categories, budgets, goals, bills and settings are stored in a database on your device encrypted with SQLCipher (256-bit AES). The encryption key is kept in Android's secure Keystore-backed storage. No P.E.T data is included in Android cloud backup or copied when you transfer to a new phone; on a new phone, sign in with Google to restore your cloud backup.</p>
+<p>To keep sync working offline, Google's Firestore library also keeps a temporary copy of your synced data in the app's private storage. This copy is not encrypted by P.E.T and is deleted when you sign out or delete your account.</p>
+<p>If you enter your bank balance for the Cash Flow forecast, it is stored on this device in Android's encrypted secure storage and is removed when you sign out or delete your account. It is never synced to our cloud database. If you use the AI Copilot, your balance (plus the activity tracked since you entered it) is included in the summary sent with your question, as described in section 6.</p>
 
 <h2>5. Accounts and cloud backup</h2>
 <ul>
-  <li><strong>Google sign-in:</strong> we receive your name, email address and Google account ID from Firebase Authentication. Your profile (name, email) and the data you create — transactions (amount, type, category, date, note, payment method, merchant name), custom categories, budgets, recurring rules and bills, savings goals, alerts and weekly limits — are synced to Google Cloud Firestore. Security rules allow only your signed-in account to read or write your data.</li>
+  <li><strong>Google sign-in:</strong> we receive your name, email address and Google account ID from Firebase Authentication. Your profile (name, email) and the data you create — transactions (amount, type, category, date, note, payment method, merchant name), custom categories, budgets, recurring rules and bills, savings goals, alerts and weekly limits — are synced to Google Cloud Firestore, as are any AI Copilot answers you choose to report (section 6). Security rules allow only your signed-in account to read or write your data.</li>
   <li><strong>Guest mode:</strong> your data stays on this device only and is not backed up. The app may create an anonymous Firebase sign-in for the guest session; it contains no personal details.</li>
 </ul>
 
 <h2>6. AI Copilot (optional)</h2>
-<p>When you send a message to the AI Copilot, the app sends to our server (a Cloudflare Worker): your message, the earlier messages in the same chat, and a summary of your finances — this month's income and expense totals, top spending categories, budget usage, up to 10 recent transactions (amount, category, merchant or note), savings goals, weekly limits and the cash-flow forecast. Our server checks your sign-in and subscription (or, without Premium, your free monthly allowance of questions), then forwards the request to Groq, Inc., which generates the reply. To enforce the free allowance, our server counts how many questions your account asked this month; the count is deleted after about 40 days. We do not store your chat messages. Our server logs only a hashed account identifier, the response status and timing for abuse prevention. Please do not include personal details (such as account numbers) in your questions. AI answers can be wrong and are not financial advice. You can report an inappropriate answer from inside the chat.</p>
+<p>When you send a message to the AI Copilot, the app sends to our server (a Cloudflare Worker): your message, the earlier messages in the same chat, and a summary of your finances — this month's income and expense totals, top spending categories, budget usage, up to 10 recent transactions (amount, category, merchant or note), savings goals, weekly limits, the cash-flow forecast and, if you entered one, your bank balance (plus the activity tracked since). Our server checks your sign-in and subscription (or, without Premium, your free monthly allowance of questions), then forwards the request to Groq, Inc., which generates the reply. To enforce the free allowance, our server counts how many questions your account asked this month; the count is deleted after about 40 days. We do not store your chat messages, except when you report an answer: the reported answer and the question you asked are saved to your account (up to 5,000 and 2,000 characters) so we can review them, and are deleted with your account. Our server logs only a hashed account identifier, the response status and timing for abuse prevention. Please do not include personal details (such as account numbers) in your questions. AI answers can be wrong and are not financial advice. You can report an inappropriate answer from inside the chat.</p>
 
 <h2>7. Usage analytics (optional)</h2>
 <p>The app asks once whether you want to share anonymous usage data, and you can change your answer at any time in Settings → Privacy → <em>Share usage analytics</em>. Nothing is collected unless you agree. If you agree, Google Analytics for Firebase receives:</p>
@@ -72,7 +73,7 @@
 <p>If you start or join a household (up to 6 people), we store in Cloud Firestore: the household name, its members' account IDs and display names, the shared monthly budgets, and each member's <strong>monthly spending total per category</strong> (for example "Food: ₹8,200 in October"). Every member can see these. Individual transactions, merchants, notes and messages are never shared. Invite codes expire after 7 days. Leaving the household removes your shared totals; the owner can remove members or delete the household, which removes everything shared in it. Deleting your account does the same.</p>
 
 <h2>7b. Invite friends (optional)</h2>
-<p>If you use invites, our server stores your invite code linked to your account ID, whether you redeemed a code, and how many free months you have earned this year, and asks RevenueCat to grant the free Premium month. We do not learn who you shared your code with unless they redeem it. These records are deleted when you delete your account.</p>
+<p>If you use invites, our server stores your invite code linked to your account ID, whether you redeemed a code, and how many free months you have earned this year, and asks RevenueCat to grant the free Premium month. We do not learn who you shared your code with unless they redeem it. These records are deleted when you delete your account, with one exception: when you redeem a code we keep a one-way, salted hash of your Google account ID for 2 years, even after account deletion, so the same Google account can't redeem a free month again. The hash can't be turned back into your account ID or email.</p>
 
 <h2>7c. Home-screen widget and Money Wrap</h2>
 <p>If you add the home-screen widget, today's spending and remaining budget are kept in the widget's storage on your phone so the widget can show them; if biometric lock is on, no amounts are stored and the widget shows a lock instead. The monthly Money Wrap is created on your phone. Sharing it is up to you; the shared card leaves out amounts unless you turn them on.</p>
@@ -98,15 +99,15 @@
   <li>Masked SMS/notification text: up to 90 days. Fingerprints of non-transaction messages: until you sign out or delete your account.</li>
   <li>Unrecognised-format diagnostics: up to 30 days.</li>
   <li>Usage analytics (if you opted in): 14 months in Google Analytics.</li>
-  <li>Free AI question counts: about 40 days. Invite records: until you delete your account.</li>
+  <li>Free AI question counts: about 40 days. Invite records: until you delete your account. Hash of the Google account that redeemed an invite: 2 years.</li>
   <li>Household data: until you leave, the owner removes you or deletes the household, or you delete your account.</li>
   <li>Exported CSV/PDF files: created only when you export, and removed from the app's temporary storage after sharing.</li>
 </ul>
 
 <h2>10. Signing out and deleting your data</h2>
 <ul>
-  <li><strong>Sign out</strong> removes all P.E.T data from this device. For Google accounts, your cloud backup remains and is restored when you sign in again. For guest users, signing out permanently deletes your data.</li>
-  <li><strong>Delete account:</strong> Settings → Danger Zone → Delete Account permanently deletes your cloud data, removes you from any shared household (deleting households you own), deletes your invite and free-AI records, your sign-in account, and all P.E.T data on the device.</li>
+  <li><strong>Sign out</strong> removes all P.E.T data from this device, including the temporary Firestore copy described in section 4, and P.E.T won't sign you back in automatically. For Google accounts, your cloud backup remains and is restored when you sign in again. If some changes haven't been uploaded yet (for example because you're offline), the app warns you before signing out. For guest users, signing out permanently deletes your data.</li>
+  <li><strong>Delete account:</strong> Settings → Danger Zone → Delete Account permanently deletes your cloud data, removes you from any shared household (deleting households you own), deletes your invite and free-AI records (except the invite hash described in section 7b), your customer record at our billing provider RevenueCat, your sign-in account, and all P.E.T data on the device. Google Play keeps its own purchase records.</li>
   <li><strong>Without the app:</strong> request deletion at <a href="https://personal-expense-tracker-6891b.web.app/account-deletion.html">our account deletion page</a> or by email. We complete requests within 30 days (usually within 48 hours).</li>
   <li>Cancel any Google Play subscription separately in Google Play → Payments &amp; subscriptions.</li>
 </ul>

@@ -11,6 +11,10 @@ FIREBASE_PROJECT_NUMBER = "101986511704"
 # Set to "true" after the Android app is registered in Firebase App Check
 # (Play Integrity) — requests without a valid App Check token are then rejected.
 REQUIRE_APP_CHECK = "false"
+# Comma-separated Firebase App IDs allowed to call when App Check is on
+# (Android app's "mobilesdk_app_id" in google-services.json, e.g.
+# "1:101986511704:android:…"). Fill in BEFORE setting REQUIRE_APP_CHECK.
+FIREBASE_APP_IDS = ""
 # LLM used for all Copilot replies. Check https://console.groq.com/docs/models
 # and update here if Groq deprecates it (llama-3.3-70b-versatile was shut
 # down for non-enterprise accounts on 16 Aug 2026 and now returns 404).
@@ -28,12 +32,30 @@ REFERRAL_MAX_PER_YEAR = "12"
 #
 # GROQ_API_KEY         — Groq API key for LLM inference
 # REVENUECAT_API_KEY   — RevenueCat secret API key for entitlement verification
+#
+# Optional:
+# DELETION_ALERT_WEBHOOK — URL that is POSTed (no personal data) when someone
+#                          submits the web account-deletion form
+# REFERRAL_ID_SALT       — salt for the hashed Google identity of redeemers
 
 # ─── KV Namespace Binding ─────────────────────────────────────────────────────
 # Create a KV namespace first:
 #   wrangler kv namespace create "KV_LIMITS"
 # Then paste the generated id below.
 # If a namespace already exists, use: wrangler kv namespace list
+# ─── Durable Object: atomic counters ─────────────────────────────────────────
+# Free AI questions, rate limits and referral claims are checked-and-counted
+# atomically here (KV alone can't do that). Uses the SQLite storage backend,
+# which is available on the Workers Free plan. If this binding is removed the
+# Worker falls back to the (non-atomic) KV counters.
+[[durable_objects.bindings]]
+name = "USAGE"
+class_name = "UsageCounter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UsageCounter"]
+
 [[kv_namespaces]]
 binding = "KV_LIMITS"
 id = "1ec67e82bc5f4dd7aa13fda71b79747a"

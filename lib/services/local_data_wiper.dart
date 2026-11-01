@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:pet/premium/services/notification_preferences_service.dart';
 import 'package:pet/premium/services/balance_anchor_service.dart';
@@ -7,6 +9,7 @@ import 'package:pet/core/l10n/app_language.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/services/analytics_service.dart';
 import 'package:pet/services/engagement_tracker.dart';
+import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/home_widget_service.dart';
 import 'package:pet/services/household_service.dart';
 import 'package:pet/premium/services/notification_service.dart';
@@ -41,6 +44,9 @@ class LocalDataWiper {
     kAnalyticsConsentAskedKey,
     kAppLanguagePrefKey,
     NotificationPreferencesService.kHideAmountsKey,
+    // Sign-out runs a wipe right before and right after Firebase sign-out;
+    // the "don't auto sign back in" marker must survive both.
+    FirebaseAuthService.kExplicitSignOutKey,
     ...EngagementTracker.deviceStateKeys,
   };
 
@@ -73,7 +79,20 @@ class LocalDataWiper {
     await step('clear entered bank balance', BalanceAnchorService.clear);
     await step('clear preferences', clearUserPreferences);
     await step('clear home-screen widget', HomeWidgetService.clear);
+    if (!kIsWeb) {
+      await step('clear cloud cache', clearFirestoreCache);
+    }
     HouseholdSync.reset();
+  }
+
+  /// The Firestore SDK keeps an unencrypted on-device copy of every synced
+  /// document. Terminating the instance and clearing persistence removes
+  /// it; the next `FirebaseFirestore.instance` call starts a fresh one.
+  static Future<void> clearFirestoreCache() async {
+    if (Firebase.apps.isEmpty) return;
+    final firestore = FirebaseFirestore.instance;
+    await firestore.terminate();
+    await firestore.clearPersistence();
   }
 
   /// Clears all SharedPreferences except [deviceSettingKeys].

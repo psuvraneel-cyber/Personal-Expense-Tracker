@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import crypto from "node:crypto";
-import worker from "../src/index.js";
+import worker, { UsageCounter } from "../src/index.js";
 
 // Mock environment variables
 const MOCK_GROQ_KEY = "mock-groq-key";
@@ -1012,6 +1012,23 @@ test("deletion-request stores a valid request in KV", async () => {
   assert.strictEqual(JSON.parse(stored[1]).email, "user@example.com");
 });
 
+test("deletion-request alerts the developer without sending the email (audit P2-13)", async () => {
+  const posts = [];
+  setupFetchMock([{
+    matches: (url) => url.startsWith("https://alerts.example/"),
+    handle: (url, opts) => { posts.push(opts.body); return new Response("ok"); },
+  }]);
+  const res = await worker.fetch(new Request("https://example.com/deletion-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "CF-Connecting-IP": "3.3.3.3" },
+    body: JSON.stringify({ email: "private@example.com" }),
+  }), { ...mockEnv, KV_LIMITS: new MockKV(), DELETION_ALERT_WEBHOOK: "https://alerts.example/hook" });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(posts.length, 1);
+  assert.match(posts[0], /deletion:/);
+  assert.ok(!posts[0].includes("private@example.com"));
+});
+
 test("deletion-request rejects invalid email and ignores honeypot", async () => {
   const kv = new MockKV();
   const bad = await worker.fetch(new Request("https://example.com/deletion-request", {
@@ -1064,6 +1081,47 @@ test("App Check is enforced only when REQUIRE_APP_CHECK is true", async () => {
   });
   assert.strictEqual(res.status, 401);
   assert.strictEqual((await res.json()).errorCode, "APP_CHECK_FAILED");
+});
+
+function appCheckToken(appId) {
+  return createToken({
+    payload: {
+      iss: "https://firebaseappcheck.googleapis.com/123",
+      aud: ["projects/123"],
+      sub: appId,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    },
+  });
+}
+
+const appCheckJwksHandler = {
+  matches: (url) => url.includes("firebaseappcheck.googleapis.com/v1/jwks"),
+  handle: () => new Response(JSON.stringify({ keys: [testJwk] }), { status: 200 }),
+};
+
+test("App Check accepts only the configured app IDs (audit P2-2)", async () => {
+  setupFetchMock([googleJwksHandler, appCheckJwksHandler, premiumRevenueCatHandler, groqHandler]);
+  const env = {
+    ...mockEnv,
+    KV_LIMITS: new MockKV(),
+    REQUIRE_APP_CHECK: "true",
+    FIREBASE_PROJECT_NUMBER: "123",
+    FIREBASE_APP_IDS: "1:123:android:pet",
+  };
+  const call = (appId) => worker.fetch(new Request("https://example.com/api", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${validToken}`,
+      "X-Firebase-AppCheck": appCheckToken(appId),
+    },
+    body: JSON.stringify({ messages: [{ role: "user", content: "hi" }] }),
+  }), env);
+
+  assert.strictEqual((await call("1:123:android:pet")).status, 200);
+  const other = await call("1:123:web:someone-else");
+  assert.strictEqual(other.status, 401);
+  assert.strictEqual((await other.json()).errorCode, "APP_CHECK_FAILED");
 });
 
 test("Malformed requests do not consume rate-limit quota (audit P2-15)", async () => {
@@ -1323,6 +1381,58 @@ test("A failed grant does not use up the redeemer's one redemption", async () =>
   assert.strictEqual(await env.KV_LIMITS.get("refredeemed:n"), null);
 });
 
+function googleUserToken(sub, googleId) {
+  return createToken({
+    payload: {
+      iss: `https://securetoken.google.com/${MOCK_PROJECT_ID}`,
+      aud: MOCK_PROJECT_ID,
+      sub,
+      iat: Math.floor(Date.now() / 1000) - 10,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      firebase: { sign_in_provider: "google.com", identities: { "google.com": [googleId] } },
+    },
+  });
+}
+
+test("Deleting and re-creating the account can't redeem again (same Google account)", async () => {
+  const grants = [];
+  referralFetchMock({ grants });
+  const kv = new MockKV();
+  const env = { ...mockEnv, KV_LIMITS: kv };
+  const code = await inviteCode(env, freeUserToken("inviter"));
+
+  const first = await worker.fetch(
+    referralRequest(googleUserToken("uid-1", "g-123"), "/referral/redeem", { code }), env);
+  assert.strictEqual(first.status, 200);
+
+  // Account deletion erases the per-UID records ...
+  await worker.fetch(referralRequest(googleUserToken("uid-1", "g-123"), "/referral/forget"), env);
+  // ... but signing in again (new Firebase UID) with the same Google account is refused.
+  const again = await worker.fetch(
+    referralRequest(googleUserToken("uid-2", "g-123"), "/referral/redeem", { code }), env);
+  assert.strictEqual(again.status, 409);
+  assert.strictEqual((await again.json()).errorCode, "ALREADY_REDEEMED");
+  assert.deepStrictEqual(grants.filter((g) => g === "inviter").length, 1);
+
+  // The identity is stored only as a hash, never the raw Google ID.
+  assert.ok(![...kv.store.keys()].some((k) => k.includes("g-123")));
+
+  // A different Google account can still redeem.
+  const other = await worker.fetch(
+    referralRequest(googleUserToken("uid-3", "g-456"), "/referral/redeem", { code }), env);
+  assert.strictEqual(other.status, 200);
+});
+
+test("A failed grant also releases the identity claim", async () => {
+  referralFetchMock({ grantStatus: 500 });
+  const kv = new MockKV();
+  const env = { ...mockEnv, KV_LIMITS: kv };
+  const code = await inviteCode(env, freeUserToken("inviter"));
+  await worker.fetch(
+    referralRequest(googleUserToken("uid-9", "g-9"), "/referral/redeem", { code }), env);
+  assert.ok(![...kv.store.keys()].some((k) => k.startsWith("refidentity:")));
+});
+
 test("/referral/forget removes the user's referral records (account deletion)", async () => {
   referralFetchMock();
   const kv = new MockKV();
@@ -1336,4 +1446,115 @@ test("/referral/forget removes the user's referral records (account deletion)", 
 
   await worker.fetch(referralRequest(freeUserToken("n"), "/referral/forget"), env);
   assert.strictEqual(await kv.get("refredeemed:n"), null);
+});
+
+test("/referral/forget deletes the RevenueCat customer, and fails if it can't (audit P2-6)", async () => {
+  const deleted = [];
+  const deleteHandler = (status) => ({
+    matches: (url, opts) => url.includes("api.revenuecat.com/v1/subscribers/") && opts?.method === "DELETE",
+    handle: (url) => {
+      deleted.push(decodeURIComponent(url.split("/subscribers/")[1]));
+      return new Response("{}", { status });
+    },
+  });
+  const env = { ...mockEnv, KV_LIMITS: new MockKV() };
+
+  setupFetchMock([googleJwksHandler, deleteHandler(200)]);
+  const ok = await worker.fetch(referralRequest(freeUserToken("leaver"), "/referral/forget"), env);
+  assert.strictEqual(ok.status, 200);
+  assert.deepStrictEqual(deleted, ["leaver"]);
+
+  setupFetchMock([googleJwksHandler, deleteHandler(404)]); // never a customer
+  assert.strictEqual(
+    (await worker.fetch(referralRequest(freeUserToken("x"), "/referral/forget"), env)).status, 200);
+
+  setupFetchMock([googleJwksHandler, deleteHandler(500)]);
+  assert.strictEqual(
+    (await worker.fetch(referralRequest(freeUserToken("y"), "/referral/forget"), env)).status, 502);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests - Atomic counters (Durable Object, audit P2-3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Durable Object namespace backed by real UsageCounter instances. Storage
+// calls yield to the event loop so a missing lock would show up as a race.
+class MockUsageNamespace {
+  constructor() {
+    this.objects = new Map();
+  }
+  idFromName(name) {
+    return name;
+  }
+  get(id) {
+    if (!this.objects.has(id)) {
+      const map = new Map();
+      const tick = () => new Promise((r) => setTimeout(r, 1));
+      const storage = {
+        get: async (k) => { await tick(); return map.get(k); },
+        put: async (k, v) => { await tick(); map.set(k, v); },
+        delete: async (k) => { await tick(); map.delete(k); },
+      };
+      this.objects.set(id, new UsageCounter({ storage }));
+    }
+    const obj = this.objects.get(id);
+    return { fetch: (url, init) => obj.fetch(new Request(url, init)) };
+  }
+}
+
+test("Parallel requests can't exceed the 3 free questions (Durable Object)", async () => {
+  setupFetchMock([googleJwksHandler, freeRevenueCatHandler, groqHandler]);
+  const env = { ...mockEnv, KV_LIMITS: new MockKV(), USAGE: new MockUsageNamespace() };
+  const results = await Promise.all(
+    Array.from({ length: 8 }, () => worker.fetch(chatRequest(freeUserToken("racer")), env)));
+  const statuses = results.map((r) => r.status);
+  assert.strictEqual(statuses.filter((s) => s === 200).length, 3);
+  assert.strictEqual(statuses.filter((s) => s === 403).length, 5);
+});
+
+test("Parallel requests can't exceed the per-minute limit (Durable Object)", async () => {
+  setupFetchMock([googleJwksHandler, premiumRevenueCatHandler, groqHandler]);
+  const env = { ...mockEnv, KV_LIMITS: new MockKV(), USAGE: new MockUsageNamespace() };
+  const results = await Promise.all(
+    Array.from({ length: 14 }, () => worker.fetch(chatRequest(validToken), env)));
+  const statuses = results.map((r) => r.status);
+  assert.strictEqual(statuses.filter((s) => s === 200).length, 10);
+  assert.strictEqual(statuses.filter((s) => s === 429).length, 4);
+});
+
+test("A failed AI call gives the reserved free question back (Durable Object)", async () => {
+  setupFetchMock([
+    googleJwksHandler,
+    freeRevenueCatHandler,
+    { matches: (url) => url.includes("groq.com"), handle: () => new Response("{}", { status: 500 }) },
+  ]);
+  const env = { ...mockEnv, KV_LIMITS: new MockKV(), USAGE: new MockUsageNamespace() };
+  const res = await worker.fetch(chatRequest(freeUserToken("unlucky")), env);
+  assert.strictEqual(res.status, 502);
+  setupFetchMock([googleJwksHandler, freeRevenueCatHandler, groqHandler]);
+  const quota = await worker.fetch(chatRequest(freeUserToken("unlucky"), "/quota"), env);
+  assert.strictEqual((await quota.json()).quota.remaining, 3);
+});
+
+test("Parallel redemptions by one Google account grant once (Durable Object)", async () => {
+  const grants = [];
+  referralFetchMock({ grants });
+  const env = { ...mockEnv, KV_LIMITS: new MockKV(), USAGE: new MockUsageNamespace() };
+  const code = await inviteCode(env, freeUserToken("inviter"));
+  const results = await Promise.all(["u1", "u2", "u3", "u4"].map((uid) =>
+    worker.fetch(referralRequest(googleUserToken(uid, "g-same"), "/referral/redeem", { code }), env)));
+  assert.strictEqual(results.filter((r) => r.status === 200).length, 1);
+  assert.strictEqual(grants.filter((g) => g === "inviter").length, 1);
+});
+
+test("Inviter yearly cap holds under parallel redemptions (Durable Object)", async () => {
+  const grants = [];
+  referralFetchMock({ grants });
+  const env = {
+    ...mockEnv, KV_LIMITS: new MockKV(), USAGE: new MockUsageNamespace(), REFERRAL_MAX_PER_YEAR: "2",
+  };
+  const code = await inviteCode(env, freeUserToken("inviter"));
+  await Promise.all(["a", "b", "c", "d", "e"].map((uid) =>
+    worker.fetch(referralRequest(googleUserToken(uid, `g-${uid}`), "/referral/redeem", { code }), env)));
+  assert.strictEqual(grants.filter((g) => g === "inviter").length, 2);
 });

@@ -1801,6 +1801,13 @@ class DatabaseHelper {
           SET body = '', normalizedText = '', title = NULL, rawPayload = NULL
           WHERE receivedAt < ? AND (body != '' OR normalizedText != '')
         ''', [textCutoff]);
+        // Imported SMS/notification rows keep a masked copy of the message
+        // for the "Original SMS" box; it is subject to the same 90 days.
+        await txn.rawUpdate('''
+          UPDATE sms_transactions
+          SET rawSmsBody = ''
+          WHERE timestamp < ? AND rawSmsBody != ''
+        ''', [textCutoff]);
         await txn.delete(
           'unknown_format_logs',
           where: 'COALESCE(created_at, 0) < ?',

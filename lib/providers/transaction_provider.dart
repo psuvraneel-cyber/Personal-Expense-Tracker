@@ -958,6 +958,8 @@ class TransactionProvider extends ChangeNotifier {
     } catch (e) {
       AppLogger.error('syncFromFirestore error', error: e, label: 'Sync');
       _setSyncStatus(SyncStatus.error, error: e.toString());
+      // Let the caller's retry (splash: retryWithBackoff) run again.
+      rethrow;
     }
   }
 
@@ -1051,6 +1053,7 @@ class TransactionProvider extends ChangeNotifier {
     _setSyncStatus(SyncStatus.syncing);
 
     final expectedSession = _firestoreSync.currentSession;
+    final attempted = <String>{};
 
     try {
       final currentUserId = _firestoreSync.currentUserIdOrNull;
@@ -1082,6 +1085,9 @@ class TransactionProvider extends ChangeNotifier {
           if (!_firestoreSync.currentSession.matches(expectedSession)) return;
 
           final actionId = action['id'] as String;
+          // Each action is attempted at most once per trigger, so a parked
+          // action (below) can't spin the loop when backoff is ignored.
+          if (!attempted.add(actionId)) continue;
           final tId = action['transactionId'] as String;
           final act = action['action'] as String;
           final payloadStr = action['payload'] as String?;
@@ -1114,7 +1120,21 @@ class TransactionProvider extends ChangeNotifier {
 
               // Tombstone vs Update ordering: if an active tombstone has deletedAt >= txnUpdated,
               // discard the stale queued update to prevent resurrecting a deleted transaction.
-              final tombDeletedAt = _tombstoneDeletedAt[tId];
+              // The in-memory map is filled by the tombstone listener, which
+              // may not have delivered yet right after start-up — so also
+              // ask Firestore for this transaction's tombstone.
+              var tombDeletedAt = _tombstoneDeletedAt[tId];
+              try {
+                final remote = await _firestoreSync.tombstoneDeletedAt(tId);
+                if (remote != null &&
+                    (tombDeletedAt == null || remote.isAfter(tombDeletedAt))) {
+                  tombDeletedAt = remote;
+                  _tombstoneDeletedAt[tId] = remote;
+                }
+              } catch (e) {
+                AppLogger.debug('Tombstone lookup failed for $tId: $e',
+                    label: 'SyncQueue');
+              }
               final txnUpdated = txn.updatedAt ?? txn.date;
               if (tombDeletedAt != null && !txnUpdated.isAfter(tombDeletedAt)) {
                 AppLogger.info(
@@ -1157,6 +1177,14 @@ class TransactionProvider extends ChangeNotifier {
                 error: e, label: 'SyncQueue');
             await _repository.incrementSyncRetry(actionId, e.toString());
             _setSyncStatus(SyncStatus.error, error: e.toString());
+            if (isPermissionDenied(e) &&
+                retryCount + 1 >= maxPermissionDeniedRetries) {
+              // Rejected again and again (e.g. App Check outage or a rules
+              // mismatch): park it instead of dropping it. It stays queued —
+              // retried with long backoff and counted by pendingSyncCount
+              // so sign-out still warns — but no longer blocks later changes.
+              continue;
+            }
             // Transient (network/server) failure: stop to preserve ordering
             // and let backoff apply.
             processedAny = false;
@@ -1183,12 +1211,44 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
+  /// Number of this account's changes that have not reached the cloud yet.
+  /// After a sync attempt bounded by [flushTimeout] (0 = don't try).
+  Future<int> pendingSyncCount({
+    Duration flushTimeout = Duration.zero,
+  }) async {
+    if (kIsWeb) return 0;
+    final uid = _firestoreSync.currentUserIdOrNull;
+    if (uid == null || !_firestoreSync.isAuthenticated) return 0;
+    if (flushTimeout > Duration.zero) {
+      try {
+        // Offline, a Firestore write only completes when the server
+        // acknowledges it, so never wait longer than the timeout.
+        await triggerSyncQueue(force: true).timeout(flushTimeout);
+      } catch (_) {}
+    }
+    try {
+      return (await _repository.getPendingSyncActions(uid)).length;
+    } catch (e) {
+      AppLogger.error('Could not count pending sync actions',
+          error: e, label: 'SyncQueue');
+      return 0;
+    }
+  }
+
+  /// Consecutive `permission-denied` failures after which an action is
+  /// parked (kept, but no longer blocking the queue).
+  static const int maxPermissionDeniedRetries = 5;
+
+  /// `permission-denied` can be temporary (App Check token unavailable,
+  /// Play Integrity outage), so it is retried rather than dropped.
+  static bool isPermissionDenied(Object e) =>
+      e is FirebaseException && e.code == 'permission-denied';
+
   /// Errors that will fail identically on every retry.
   @visibleForTesting
   static bool isPermanentSyncError(Object e) {
     if (e is FirebaseException) {
       return const {
-        'permission-denied',
         'invalid-argument',
         'failed-precondition',
         'out-of-range',

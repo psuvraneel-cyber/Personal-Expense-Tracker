@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/data/database/database_helper.dart';
+import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/household_service.dart';
 import 'package:pet/services/referral_service.dart';
@@ -22,6 +23,15 @@ enum DeletionStep {
   clearingLocalData,
   clearingPreferences,
   complete,
+}
+
+/// Deletion can't start or continue for a reason the user can fix (no
+/// connection, our server unreachable). [message] is shown as-is.
+class AccountDeletionException implements Exception {
+  final String message;
+  const AccountDeletionException(this.message);
+  @override
+  String toString() => message;
 }
 
 class AccountDeletionService {
@@ -87,6 +97,10 @@ class AccountDeletionService {
       throw StateError('UID mismatch: expected $targetUid but got $uid');
     }
 
+    // Offline, Firestore deletes only complete when the server acknowledges
+    // them, so the sheet would spin forever. Check before changing anything.
+    if (!isTesting) await _ensureOnline(uid);
+
     // Set deletion progress state
     isDeletionInProgress = true;
     if (!isTesting) {
@@ -124,11 +138,14 @@ class AccountDeletionService {
       _progressController.add(DeletionStep.leavingHouseholds);
       await _leaveHouseholds(uid);
 
-      // Referral and free-AI records on our Worker (needs the ID token, so
-      // before the auth account goes). Best effort: these are keyed only by
-      // the account ID, which no longer maps to anyone once it's deleted.
+      // Referral, free-AI and billing (RevenueCat) records on our Worker.
+      // This needs the ID token, so it must succeed before the sign-in
+      // account is deleted — afterwards nobody could ask for it again.
       if (!await _forgetServerRecords()) {
-        AppLogger.debug('[AccountDeletion] Worker records not removed');
+        throw const AccountDeletionException(
+          "Couldn't reach the P.E.T server to delete your invite, AI and "
+          'billing records. Check your connection and try again.',
+        );
       }
 
       // ── Step 6: Delete user profile document
@@ -167,6 +184,13 @@ class AccountDeletionService {
     _progressController.add(DeletionStep.clearingPreferences);
     if (!isTesting) {
       await LocalDataWiper.wipe(dbHelper: _dbHelper);
+      // Clear Google's saved credential too, or the next launch silently
+      // signs the same Google account into a brand-new P.E.T account.
+      try {
+        await FirebaseAuthService().signOut();
+      } catch (e) {
+        AppLogger.debug('[AccountDeletion] Sign-out after deletion failed: $e');
+      }
     }
 
     // ── Step 10: RevenueCat logout
@@ -199,6 +223,32 @@ class AccountDeletionService {
     _progressController.add(DeletionStep.complete);
   }
 
+  /// A server read (never the offline cache) proving Firestore is reachable.
+  Future<void> _ensureOnline(String uid) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      throw const AccountDeletionException(
+        "You're offline. Connect to the internet to delete your account — "
+        'nothing has been deleted yet.',
+      );
+    }
+  }
+
+  /// Leaves "deletion in progress" without finishing: the user chose to
+  /// keep their account after an interrupted or failed deletion. Data on
+  /// this device was never wiped (that is the last step), so the app can
+  /// carry on normally.
+  static Future<void> cancelPendingDeletion() async {
+    isDeletionInProgress = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('deletion_in_progress', false);
+  }
+
   /// Delete all documents in a Firestore subcollection in batches of 500
   Future<void> _deleteFirestoreCollection(String uid, String collection) async {
     const batchSize = 500;
@@ -213,7 +263,9 @@ class AccountDeletionService {
       for (final doc in snapshot.docs) {
         batch.delete(doc.reference);
       }
-      await batch.commit();
+      // Never wait forever if the connection drops mid-way; the failure is
+      // shown with Retry / Cancel and already-deleted documents stay deleted.
+      await batch.commit().timeout(const Duration(seconds: 30));
 
       AppLogger.debug(
         '[AccountDeletion] Deleted ${snapshot.docs.length} docs from $collection',

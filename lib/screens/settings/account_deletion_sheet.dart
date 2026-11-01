@@ -1,6 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/premium/providers/alert_provider.dart';
+import 'package:pet/premium/providers/goal_provider.dart';
+import 'package:pet/premium/providers/recurring_provider.dart';
+import 'package:pet/premium/providers/spend_pause_provider.dart';
+import 'package:pet/premium/providers/weekly_planner_provider.dart';
+import 'package:pet/providers/budget_provider.dart';
+import 'package:pet/providers/category_provider.dart';
+import 'package:pet/providers/recurring_transaction_provider.dart';
+import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/services/account_deletion_service.dart';
+import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/local_data_wiper.dart';
 import 'package:pet/screens/auth/google_sign_in_screen.dart';
@@ -18,6 +31,7 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
   bool _isDeleting = false;
   DeletionStep? _currentDeletionStep;
   String? _errorMessage;
+  StreamSubscription<DeletionStep>? _progressSub;
 
   /// Guests (local-only or Firebase anonymous) have no Google credential to
   /// re-authenticate with, so they skip straight to confirmation.
@@ -103,7 +117,11 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
+                  // A deletion resumed after a crash is still "in progress";
+                  // cancelling must end that state, not just close the sheet.
+                  onPressed: AccountDeletionService.isDeletionInProgress
+                      ? _cancelDeletion
+                      : () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
               ),
@@ -220,7 +238,11 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
+                  // A deletion resumed after a crash is still "in progress";
+                  // cancelling must end that state, not just close the sheet.
+                  onPressed: AccountDeletionService.isDeletionInProgress
+                      ? _cancelDeletion
+                      : () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
               ),
@@ -293,8 +315,16 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
           if (_errorMessage != null) ...[
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+              onPressed: () {
+                setState(() => _errorMessage = null);
+                _executeDelete();
+              },
+              child: const Text('Try again'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _cancelDeletion,
+              child: const Text('Keep my account'),
             ),
           ],
         ],
@@ -377,8 +407,9 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
 
     final service = context.read<AccountDeletionService>();
 
-    // Listen to progress stream
-    service.progress.listen(
+    // Listen to progress stream (once: "Try again" calls this again)
+    await _progressSub?.cancel();
+    _progressSub = service.progress.listen(
       (step) {
         if (mounted) setState(() => _currentDeletionStep = step);
         if (step == DeletionStep.complete && mounted) {
@@ -392,7 +423,7 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
       onError: (e) {
         if (mounted) {
           setState(() {
-            _errorMessage = 'Deletion failed: $e';
+            _errorMessage = _describeFailure(e);
             _isDeleting = false;
           });
         }
@@ -405,11 +436,53 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
       // Handle synchronous or unexpected errors that didn't go through the stream
       if (mounted) {
         setState(() {
-          _errorMessage = 'Deletion failed: $e';
+          _errorMessage = _describeFailure(e);
           _isDeleting = false;
         });
       }
     }
+  }
+
+  static String _describeFailure(Object e) {
+    if (e is AccountDeletionException) return e.message;
+    if (e is TimeoutException) {
+      return 'The connection dropped while deleting. Your account was not '
+          'deleted — try again when you are back online.';
+    }
+    return 'Deletion failed: $e';
+  }
+
+  /// Ends an interrupted or failed deletion and returns to normal use.
+  /// Nothing on this device was wiped (that is the last step), but some of
+  /// the cloud backup may already be gone, so transactions are re-uploaded.
+  Future<void> _cancelDeletion() async {
+    await AccountDeletionService.cancelPendingDeletion();
+    if (!mounted) return;
+    final txnProvider = context.read<TransactionProvider>();
+    // Loads were skipped while deletion was in progress.
+    context.read<CategoryProvider>().loadCategories();
+    context.read<BudgetProvider>().loadBudgets();
+    context.read<RecurringTransactionProvider>().loadRules();
+    context.read<RecurringProvider>().load();
+    context.read<GoalProvider>().load();
+    context.read<AlertProvider>().load();
+    context.read<WeeklyPlannerProvider>().load();
+    context.read<SpendPauseProvider>().load();
+    Navigator.pop(context);
+    await txnProvider.loadTransactions();
+    final sync = FirestoreSyncService();
+    if (sync.isAuthenticated) {
+      unawaited(
+        sync.batchUpsert(txnProvider.allTransactions).catchError(
+            (Object e) => AppLogger.debug('[AccountDeletion] Re-upload: $e')),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _progressSub?.cancel();
+    super.dispose();
   }
 
   @override

@@ -702,7 +702,9 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
     });
   }
 
-  static const _consentKey = 'ai_copilot_consent_v1';
+  // v2: the disclosure now names the bank balance, so everyone who agreed
+  // to the v1 text is asked again.
+  static const _consentKey = 'ai_copilot_consent_v2';
 
   /// First-use disclosure: chat content and a spending summary leave the
   /// device and are processed by a third-party AI provider.
@@ -718,10 +720,13 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
           child: Text(
             'To answer, P.E.T sends your question, this chat, and a summary '
             "of your finances (this month's totals, top categories, budgets, "
-            'up to 10 recent transactions, goals and forecast) to our server, '
-            'which forwards it to our AI provider, Groq.\n\n'
-            "Chats are not stored by P.E.T. Please don't share account "
-            'numbers or other personal details.\n\n'
+            'up to 10 recent transactions, goals, weekly limits, the cash-flow '
+            'forecast and, if you entered one, your bank balance) to our '
+            'server, which forwards it to our AI provider, Groq.\n\n'
+            "Chats are not stored by P.E.T. If you report an answer, that "
+            'answer and your question are saved to your account so we can '
+            "review it. Please don't share account numbers or other personal "
+            'details.\n\n'
             'AI answers can be wrong and are not financial advice. You can '
             'long-press any answer to report it.',
           ),

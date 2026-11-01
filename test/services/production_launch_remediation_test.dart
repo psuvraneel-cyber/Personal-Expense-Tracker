@@ -19,7 +19,9 @@ void main() {
     test(
         'PET-02: Firestore security rules cover all core and premium collections with strict ownership',
         () {
-      final rulesFile = File('firestore.rules').readAsStringSync();
+      // Normalise line endings: Windows checkouts (core.autocrlf) use CRLF.
+      final rulesFile =
+          File('firestore.rules').readAsStringSync().replaceAll('\r\n', '\n');
 
       // Verify helper function
       expect(rulesFile.contains('function isOwner(uid)'), isTrue);
@@ -38,9 +40,12 @@ void main() {
         'saving_goals',
         'recurring_payments',
         'alerts',
-        'tax_categories',
-        'linked_accounts',
-        'family_members',
+        'recurring_payment_history',
+        'weekly_limits',
+        'ai_reports',
+        // tax_categories, linked_accounts and family_members are no longer
+        // written by the app; the catch-all user-subtree rule keeps them
+        // readable and deletable only.
       ];
 
       for (final collection in requiredCollections) {
