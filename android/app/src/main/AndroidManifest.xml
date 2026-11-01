@@ -9,10 +9,12 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
-    <!-- No foreground services are used (background work runs as normal or
-         expedited WorkManager jobs). Explicitly strip FGS-type permissions a
-         library might merge in, so no Play "Foreground service" declaration
-         is required. -->
+    <!-- The app starts no foreground services of its own. Background work runs
+         as WorkManager jobs; WorkManager still merges FOREGROUND_SERVICE and
+         FOREGROUND_SERVICE_SHORT_SERVICE (its SystemForegroundService, type
+         shortService, backs *expedited* jobs such as the SMS import). If Play
+         Console asks, declare that short-service use. The dataSync type is
+         stripped here because it would need a separate Play declaration. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" tools:node="remove" />
 
     <!-- Required for posting local notifications on Android 13+ (API 33+) -->

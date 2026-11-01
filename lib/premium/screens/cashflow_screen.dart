@@ -386,6 +386,25 @@ class _CashflowScreenState extends State<CashflowScreen> {
       );
     }
 
+    final mutedColor =
+        isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildBaselineRow(forecast, isDark),
+        const SizedBox(height: 4),
+        // The model spreads income evenly over the days; say so, so a
+        // smooth line isn't read as a promise about the days before payday.
+        Text(
+          'Income is averaged per day, so dips just before payday and '
+          'transfers between your own accounts aren\'t shown separately.',
+          style: TextStyle(fontSize: 10.5, color: mutedColor, height: 1.3),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBaselineRow(CashflowForecast forecast, bool isDark) {
     return Row(
       children: [
         Icon(

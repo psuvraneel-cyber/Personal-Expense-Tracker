@@ -312,4 +312,29 @@ class EncryptedNotificationCacheTest {
         // Assert: Legacy fallback pref was cleared
         assertFalse(fallbackPrefs.contains("pending_notifications"))
     }
+
+    /** Audit P3-8: the persisted cache expires stale items and is capped. */
+    @Test
+    fun testPersistedCacheExpiresAndIsCapped() {
+        val now = System.currentTimeMillis()
+        val day = 24L * 60 * 60 * 1000
+        val items = org.json.JSONArray()
+        items.put(org.json.JSONObject().put("id", "old").put("date", now - 8 * day))
+        items.put(org.json.JSONObject().put("id", "recent").put("date", now - day))
+        items.put(org.json.JSONObject().put("id", "undated"))
+
+        val pruned = EncryptedNotificationCache.prune(items, now)
+        val ids = (0 until pruned.length()).map { pruned.getJSONObject(it).getString("id") }
+        assertEquals(listOf("recent", "undated"), ids)
+
+        val many = org.json.JSONArray()
+        repeat(EncryptedNotificationCache.MAX_PERSISTED_ITEMS + 25) {
+            many.put(org.json.JSONObject().put("id", "n$it").put("date", now))
+        }
+        val capped = EncryptedNotificationCache.prune(many, now)
+        assertEquals(EncryptedNotificationCache.MAX_PERSISTED_ITEMS, capped.length())
+        // The newest are kept.
+        assertEquals("n${EncryptedNotificationCache.MAX_PERSISTED_ITEMS + 24}",
+            capped.getJSONObject(capped.length() - 1).getString("id"))
+    }
 }

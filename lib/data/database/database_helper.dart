@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert' show jsonEncode;
-import 'dart:io' show Directory, File;
+import 'dart:io' show Directory, File, Platform;
 import 'package:meta/meta.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:path/path.dart';
@@ -115,7 +115,17 @@ class DatabaseHelper {
         await getApplicationDocumentsDirectory();
     final String path = join(documentsDirectory.path, 'pet_tracker.db');
 
-    final cipherSupported = await isSqlCipherSupported();
+    var cipherSupported = await isSqlCipherSupported();
+    if (!cipherSupported && Platform.isAndroid) {
+      // The Android build always bundles SQLCipher, so this is a transient
+      // failure. Never fall back to an unencrypted database of financial
+      // records: retry once, then fail (the app shows its recovery screen).
+      cipherSupported = await isSqlCipherSupported();
+      if (!cipherSupported) {
+        throw StateError('SQLCipher is unavailable; refusing to open the '
+            'database unencrypted.');
+      }
+    }
     if (cipherSupported) {
       final File dbFile = File(path);
       final existedBefore = await dbFile.exists();

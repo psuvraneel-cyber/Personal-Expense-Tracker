@@ -1575,6 +1575,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       await LocalDataWiper.wipe();
 
+      // A guest's anonymous Firebase account holds no data (guests don't
+      // sync) and can never be signed into again, so delete it rather than
+      // leave an orphaned record in Firebase Auth.
+      if (isGuest) {
+        try {
+          await auth.currentUser?.delete();
+        } catch (e) {
+          AppLogger.debug('[Settings] Anonymous account delete failed: $e');
+        }
+      }
+
       await AuthService.signOut();
 
       if (context.mounted) {

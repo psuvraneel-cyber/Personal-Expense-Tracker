@@ -171,7 +171,20 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
       }
     } on PlatformException catch (e) {
       final errorCode = PurchasesErrorHelper.getErrorCode(e);
-      if (errorCode != PurchasesErrorCode.purchaseCancelledError) {
+      if (errorCode == PurchasesErrorCode.paymentPendingError) {
+        // Common with UPI and some cards: Google Play is still confirming
+        // the payment. Premium unlocks by itself once it completes.
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Payment pending — Google Play is confirming it. Premium will '
+              'unlock automatically once it goes through.',
+            ),
+            backgroundColor: AppTheme.warningYellow,
+          ),
+        );
+      } else if (errorCode != PurchasesErrorCode.purchaseCancelledError) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
