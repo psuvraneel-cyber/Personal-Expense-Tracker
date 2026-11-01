@@ -1442,6 +1442,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Second confirmation when [pending] changes are not backed up yet.
+  /// Returns true only if the user chooses to discard them.
+  Future<bool> _confirmUnsyncedSignOut(
+    BuildContext context,
+    int pending,
+  ) async {
+    final changes = pending == 1 ? '1 change' : '$pending changes';
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Not backed up yet'),
+        content: Text(
+          '$changes to your transactions haven\'t reached your Google '
+          'account yet, usually because you\'re offline.\n\nConnect to the '
+          'internet and try again. If you sign out now, these changes will '
+          'be permanently lost.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Stay signed in'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.expenseRed),
+            child: const Text('Sign out and lose them'),
+          ),
+        ],
+      ),
+    );
+    return discard == true;
+  }
+
   Future<void> _signOut(BuildContext context) async {
     final auth = FirebaseAuthService();
     final isGuest = auth.isLocalGuest || auth.currentUser?.isAnonymous == true;
@@ -1485,6 +1518,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (!context.mounted) return;
 
+    // Signing out wipes the local sync queue, so changes that haven't
+    // reached the cloud yet would be lost. Try to upload them first and
+    // only continue if the user explicitly accepts losing the rest.
+    if (!isGuest) {
+      final pending = await context
+          .read<TransactionProvider>()
+          .pendingSyncCount(flushTimeout: const Duration(seconds: 10));
+      if (!context.mounted) return;
+      if (pending > 0 && !await _confirmUnsyncedSignOut(context, pending)) {
+        return;
+      }
+      if (!context.mounted) return;
+    }
+
     try {
       // Invalidate active Firestore sync session immediately to reject any in-flight callbacks
       FirestoreSyncService().onSessionChanged(null);
@@ -1527,6 +1574,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       smsProvider.clearData();
 
       await LocalDataWiper.wipe();
+
+      // A guest's anonymous Firebase account holds no data (guests don't
+      // sync) and can never be signed into again, so delete it rather than
+      // leave an orphaned record in Firebase Auth.
+      if (isGuest) {
+        try {
+          await auth.currentUser?.delete();
+        } catch (e) {
+          AppLogger.debug('[Settings] Anonymous account delete failed: $e');
+        }
+      }
 
       await AuthService.signOut();
 

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert' show jsonEncode;
-import 'dart:io' show Directory, File;
+import 'dart:io' show Directory, File, Platform;
 import 'package:meta/meta.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:path/path.dart';
@@ -115,7 +115,17 @@ class DatabaseHelper {
         await getApplicationDocumentsDirectory();
     final String path = join(documentsDirectory.path, 'pet_tracker.db');
 
-    final cipherSupported = await isSqlCipherSupported();
+    var cipherSupported = await isSqlCipherSupported();
+    if (!cipherSupported && Platform.isAndroid) {
+      // The Android build always bundles SQLCipher, so this is a transient
+      // failure. Never fall back to an unencrypted database of financial
+      // records: retry once, then fail (the app shows its recovery screen).
+      cipherSupported = await isSqlCipherSupported();
+      if (!cipherSupported) {
+        throw StateError('SQLCipher is unavailable; refusing to open the '
+            'database unencrypted.');
+      }
+    }
     if (cipherSupported) {
       final File dbFile = File(path);
       final existedBefore = await dbFile.exists();
@@ -1800,6 +1810,13 @@ class DatabaseHelper {
           UPDATE financial_observations
           SET body = '', normalizedText = '', title = NULL, rawPayload = NULL
           WHERE receivedAt < ? AND (body != '' OR normalizedText != '')
+        ''', [textCutoff]);
+        // Imported SMS/notification rows keep a masked copy of the message
+        // for the "Original SMS" box; it is subject to the same 90 days.
+        await txn.rawUpdate('''
+          UPDATE sms_transactions
+          SET rawSmsBody = ''
+          WHERE timestamp < ? AND rawSmsBody != ''
         ''', [textCutoff]);
         await txn.delete(
           'unknown_format_logs',

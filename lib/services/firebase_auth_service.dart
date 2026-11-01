@@ -52,6 +52,15 @@ class FirebaseAuthService {
 
   FirebaseAuthService._internal();
 
+  /// Set when the user signs out (or deletes their account) and cleared by
+  /// the next interactive Google sign-in. While set, cold start must not
+  /// silently sign a previously used Google account back in.
+  static const String kExplicitSignOutKey = 'explicitlySignedOut';
+
+  /// Test hook replacing the Google (Credential Manager) sign-out.
+  @visibleForTesting
+  Future<void> Function()? googleSignOutForTesting;
+
   bool _isLocalGuest = false;
   String? _localGuestName;
 
@@ -116,6 +125,14 @@ class FirebaseAuthService {
     }
 
     if (kIsWeb) return _firebaseAuth.currentUser != null;
+
+    // After an explicit sign-out only an interactive sign-in may start a
+    // new session; lightweight auth would auto-select the old account.
+    if (_firebaseAuth.currentUser == null &&
+        prefs.getBool(kExplicitSignOutKey) == true) {
+      return false;
+    }
+
     if (!isGoogleSignInSupported) return false;
 
     // If Firebase already has a valid signed-in user, no need to do anything.
@@ -165,6 +182,7 @@ class FirebaseAuthService {
         _localGuestName = null;
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('isLocalGuest');
+        await prefs.remove(kExplicitSignOutKey);
       }
       return result;
     } on FirebaseAuthException catch (e) {
@@ -227,12 +245,20 @@ class FirebaseAuthService {
   }
 
   Future<void> signOut() async {
-    if (!kIsWeb && _googleInit != null) {
-      try {
+    // Always clear the Credential Manager state, even when this process
+    // never initialised GoogleSignIn (session restored from Firebase):
+    // otherwise the next cold start auto-selects the account again.
+    try {
+      if (googleSignOutForTesting != null) {
+        await googleSignOutForTesting!();
+      } else if (!kIsWeb && isGoogleSignInSupported) {
+        await _googleSignIn();
         await GoogleSignIn.instance.signOut();
-      } catch (_) {}
+      }
+    } catch (e) {
+      AppLogger.debug('[AUTH] Google sign-out failed: $e');
     }
-    await _firebaseAuth.signOut();
+    if (isFirebaseReady) await _firebaseAuth.signOut();
     _isLocalGuest = false;
     _localGuestName = null;
 
@@ -244,6 +270,7 @@ class FirebaseAuthService {
     await prefs.remove('userName');
     await prefs.remove('userEmail');
     await prefs.remove('isLocalGuest');
+    await prefs.setBool(kExplicitSignOutKey, true);
   }
 
   Stream<User?> authStateChanges() => isFirebaseReady

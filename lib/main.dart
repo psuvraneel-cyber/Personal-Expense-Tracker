@@ -1,4 +1,5 @@
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/core/utils/crash_scrubber.dart';
 import 'package:pet/premium/services/balance_anchor_service.dart';
 import 'dart:async';
 
@@ -87,13 +88,20 @@ void main() async {
     await AnalyticsService.instance.init();
     await RemoteConfigService.init();
     // Framework errors that reach here are real crashes of the UI.
+    // Error texts can contain amounts or account numbers from parsed
+    // messages; only scrubbed messages are sent (CrashScrubber).
     FlutterError.onError = (errorDetails) {
-      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+      FirebaseCrashlytics.instance.recordFlutterFatalError(
+        errorDetails.copyWith(
+          exception: CrashScrubber.scrubError(errorDetails.exception),
+        ),
+      );
     };
     // Uncaught async errors usually don't terminate the app — record them as
     // non-fatal so real crashes stay visible in Crashlytics.
     PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: false);
+      FirebaseCrashlytics.instance
+          .recordError(CrashScrubber.scrubError(error), stack, fatal: false);
       return true;
     };
   }
@@ -182,7 +190,7 @@ void main() async {
 void _recordNonFatal(Object error, StackTrace stack, String reason) {
   try {
     FirebaseCrashlytics.instance.recordError(
-      error,
+      CrashScrubber.scrubError(error),
       stack,
       reason: reason,
       fatal: false,

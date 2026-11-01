@@ -22,8 +22,11 @@ class TaxProvider extends ChangeNotifier {
   /// can be counted towards a tax-saving estimate.
   static const Set<String> recordOnlySections = {'HRA'};
 
-  /// Income-tax slab rates a user can pick for the estimate.
-  static const List<double> slabRates = [0.05, 0.10, 0.15, 0.20, 0.30];
+  /// Income-tax slab rates a user can pick for the estimate. Savings are
+  /// only estimated under the old regime, whose slabs are 5%, 20% and 30%
+  /// (10% and 15% exist only in the new regime). A rate saved by an older
+  /// version that isn't listed here falls back to the default.
+  static const List<double> slabRates = [0.05, 0.20, 0.30];
 
   /// Health and education cess added to income tax.
   static const double cess = 0.04;

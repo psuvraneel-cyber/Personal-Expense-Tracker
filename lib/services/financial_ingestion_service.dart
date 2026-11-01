@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:pet/premium/services/focus_mode_notifier.dart';
 import 'package:pet/premium/services/bill_payment_matcher.dart';
 import 'dart:convert';
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/database/database_helper.dart';
@@ -343,13 +344,20 @@ class FinancialIngestionService {
     final upiId = classified.upiId;
     final confidence = classified.confidence;
 
-    final fingerprint = CanonicalIdentityResolver.generateFingerprint(
+    var fingerprint = CanonicalIdentityResolver.generateFingerprint(
       referenceId: refId,
       merchantName: merchant,
       upiId: upiId,
       amount: amount,
       timestamp: timestamp,
     );
+    final isRefIdentity = CanonicalIdentityResolver.generateIdentityKey(
+      referenceId: refId,
+      merchantName: merchant,
+      upiId: upiId,
+      amount: amount,
+      timestamp: timestamp,
+    ).startsWith('ref:');
 
     // 4. Cross-Source Dedup Check against Core Ledger & Observations
     final existingTxnByFingerprint = await db.query(
@@ -359,8 +367,35 @@ class FinancialIngestionService {
       limit: 1,
     );
 
+    String? matchedTxnId;
     if (existingTxnByFingerprint.isNotEmpty) {
-      final matchedTxnId = existingTxnByFingerprint.first['id'] as String;
+      final candidateId = existingTxnByFingerprint.first['id'] as String;
+      if (isRefIdentity ||
+          await _isSameEventAs(db, candidateId, source, normalizedText)) {
+        matchedTxnId = candidateId;
+      } else {
+        // Same merchant and amount in the same 15-minute bucket, from the
+        // same source but a different message: a second, real payment
+        // (two ₹20 teas). Keep it, under its own identity.
+        fingerprint = sha256
+            .convert(utf8.encode('$fingerprint|$observationHash'))
+            .toString();
+      }
+    } else {
+      // The bucketed fingerprint misses the same payment when the two
+      // sources carry different evidence (UPI ref only in the SMS) or fall
+      // either side of a 15-minute bucket edge. Look for it directly.
+      matchedTxnId = await _findCrossSourceTwin(
+        db,
+        source: source,
+        amount: amount,
+        isIncome: classified.transactionType == 'credit',
+        merchant: merchant,
+        timestamp: timestamp,
+      );
+    }
+
+    if (matchedTxnId != null) {
       _diagnostics.recordCrossSourceMerge();
       _diagnostics.recordEvent(
         source: source.name,
@@ -443,9 +478,15 @@ class FinancialIngestionService {
       classified: classified,
     );
 
-    final isAutoAccept = (confidence >= autoAcceptConfidenceThreshold) ||
-        hasHighEvidence ||
-        isVerifiedBankAlert;
+    // Paying a credit-card bill or moving money between your own accounts
+    // isn't spending or income: auto-importing it would count card
+    // purchases twice, or a self-transfer as both income and expense. The
+    // ledger has no "transfer" type, so let the user decide in Review.
+    final possibleTransfer = isPossibleTransfer(normalizedText);
+    final isAutoAccept = !possibleTransfer &&
+        ((confidence >= autoAcceptConfidenceThreshold) ||
+            hasHighEvidence ||
+            isVerifiedBankAlert);
 
     // Shown instead of "Unknown" when the bank does not name the payee.
     final displayMerchant = merchant == 'Unknown' && isVerifiedBankAlert
@@ -497,7 +538,7 @@ class FinancialIngestionService {
         bank: bank,
         merchant: merchant,
         decision: 'review_required',
-        reason: 'moderate_confidence',
+        reason: possibleTransfer ? 'possible_transfer' : 'moderate_confidence',
       );
 
       AppLogger.debug(
@@ -519,7 +560,8 @@ class FinancialIngestionService {
           observationHash: observationHash,
           sourceFingerprint: fingerprint,
           state: FinancialObservationState.uncertain,
-          stateReason: 'review_required',
+          stateReason:
+              possibleTransfer ? 'possible_transfer' : 'review_required',
           confidence: confidence,
         ),
       );
@@ -1213,7 +1255,106 @@ class FinancialIngestionService {
         : '$channel payment';
   }
 
+  /// Messages about paying a credit-card bill or moving money between the
+  /// user's own accounts. Card *purchases* ("spent on your credit card at
+  /// Amazon") deliberately don't match.
+  static final List<RegExp> _transferPatterns = [
+    RegExp(r'\b(?:credit\s*card|cc)\s*(?:bill|dues?|outstanding)\b'),
+    RegExp(r'towards\s+(?:your\s+)?(?:\w+\s+){0,3}(?:credit\s*)?card'),
+    RegExp(r'payment\s+(?:of\s+\S+\s+\S*\s*)?(?:has\s+been\s+)?received\b'
+        r'.{0,60}\bcard\b'),
+    RegExp(r'\breceived\s+(?:a\s+)?payment\b.{0,60}\bcard\b'),
+    RegExp(r'\bself[\s-]?transfer\b'),
+    RegExp(r'\b(?:to|into)\s+(?:your\s+)?own\s+(?:a/?c|account)\b'),
+    RegExp(r'\btransfer(?:red)?\s+to\s+self\b'),
+  ];
+
+  @visibleForTesting
+  static bool isPossibleTransfer(String text) {
+    final t = text.toLowerCase();
+    return _transferPatterns.any((p) => p.hasMatch(t));
+  }
+
   // ─── Internal Helpers ──────────────────────────────────────────────
+
+  /// Whether a new message whose fingerprint matches ledger row [txnId] is
+  /// the same payment: either it came from a different source (SMS vs app
+  /// notification), or it is the same message text delivered again (e.g.
+  /// broadcast and inbox scan with slightly different timestamps).
+  Future<bool> _isSameEventAs(
+    Database db,
+    String txnId,
+    FinancialObservationSource source,
+    String normalizedText,
+  ) async {
+    final rows = await db.query(
+      'financial_observations',
+      columns: ['source', 'normalizedText'],
+      where: 'canonicalTransactionId = ?',
+      whereArgs: [txnId],
+    );
+    // No provenance to compare with: keep the conservative merge.
+    if (rows.isEmpty) return true;
+    final redacted = SmsService.redactSensitiveData(normalizedText);
+    for (final row in rows) {
+      if (row['source'] != source.name) return true;
+      final stored = row['normalizedText'] as String? ?? '';
+      // Text already purged (older than the retention window): can't tell.
+      if (stored.isEmpty || stored == redacted) return true;
+    }
+    return false;
+  }
+
+  /// A ledger transaction imported from the *other* source (SMS vs app
+  /// notification) for the same amount and direction within
+  /// [CanonicalIdentityResolver.windowDuration], whose merchant doesn't
+  /// contradict [merchant]. Returns its id, or null.
+  Future<String?> _findCrossSourceTwin(
+    Database db, {
+    required FinancialObservationSource source,
+    required double amount,
+    required bool isIncome,
+    required String merchant,
+    required DateTime timestamp,
+  }) async {
+    const window = CanonicalIdentityResolver.windowDuration;
+    final rows = await db.rawQuery('''
+      SELECT t.id, t.merchantName
+      FROM financial_observations o
+      JOIN transactions t ON t.id = o.canonicalTransactionId
+      WHERE o.source != ?
+        AND o.state IN ('promoted', 'linked')
+        AND o.sourceTimestamp >= ? AND o.sourceTimestamp <= ?
+        AND ABS(t.amount - ?) < 0.01
+        AND t.type = ?
+      ORDER BY ABS(julianday(o.sourceTimestamp) - julianday(?))
+    ''', [
+      source.name,
+      timestamp.subtract(window).toIso8601String(),
+      timestamp.add(window).toIso8601String(),
+      amount,
+      isIncome ? 'income' : 'expense',
+      timestamp.toIso8601String(),
+    ]);
+    for (final row in rows) {
+      if (_merchantsCompatible(merchant, row['merchantName'] as String?)) {
+        return row['id'] as String;
+      }
+    }
+    return null;
+  }
+
+  /// Two merchant names that could describe the same payee: equal after
+  /// normalisation, one containing the other, or either one unknown.
+  static bool _merchantsCompatible(String a, String? b) {
+    String clean(String? s) =>
+        (s ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final x = clean(a);
+    final y = clean(b);
+    const unknown = {'', 'unknown'};
+    if (unknown.contains(x) || unknown.contains(y)) return true;
+    return x == y || x.contains(y) || y.contains(x);
+  }
 
   Future<void> _recordObservation(Database db, FinancialObservation obs) async {
     await db.insert(

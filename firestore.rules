@@ -8,104 +8,174 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    // Schema guard for user-owned documents. A new document may contain
+    // only [fields]; an update may only change [fields] (fields written by
+    // older app versions are left alone, so their documents still sync).
+    function onlyFields(fields) {
+      return resource == null
+        ? request.resource.data.keys().hasOnly(fields)
+        : request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // [field] is absent, null, or a string of at most [max] characters.
+    function optString(field, max) {
+      return !(field in request.resource.data)
+        || request.resource.data[field] == null
+        || (request.resource.data[field] is string
+            && request.resource.data[field].size() <= max);
+    }
+
+    // [field] is absent, null, or a number between 0 and 1e12.
+    function optAmount(field) {
+      return !(field in request.resource.data)
+        || request.resource.data[field] == null
+        || (request.resource.data[field] is number
+            && request.resource.data[field] >= 0
+            && request.resource.data[field] < 1000000000000);
+    }
+
+    function ownerWrite(uid, fields) {
+      return isOwner(uid) && onlyFields(fields);
+    }
+
     // ── User profile + sub-collections ─────────────────────────────
     match /users/{uid} {
 
-      // Only the signed-in user can read/write their own profile doc
-      allow read, write: if isOwner(uid);
+      allow read, delete: if isOwner(uid);
+      allow create, update: if ownerWrite(uid,
+          ['displayName', 'email', 'lastSyncTime', 'syncVersion'])
+        && optString('displayName', 200)
+        && optString('email', 320);
 
       // ── Core Financial Collections ───────────────────────────────
 
       // Transactions
       match /transactions/{txnId} {
-        allow read: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
 
-        allow create: if isOwner(uid)
+        allow create, update: if ownerWrite(uid, ['amount', 'type', 'categoryId',
+            'date', 'note', 'paymentMethod', 'isRecurring', 'recurringFrequency',
+            'merchantName', 'taxCategory', 'source', 'accountId', 'updatedAt',
+            'serverUpdatedAt', 'recurringRuleId', 'occurrenceDate',
+            'sourceObservationId', 'sourceFingerprint'])
           && request.resource.data.keys().hasAll(['amount', 'type', 'categoryId', 'date'])
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
-          && request.resource.data.type in ['income', 'expense'];
-
-        allow update: if isOwner(uid)
-          && request.resource.data.keys().hasAll(['amount', 'type', 'categoryId', 'date'])
-          && request.resource.data.amount is number
-          && request.resource.data.amount > 0
-          && request.resource.data.type in ['income', 'expense'];
-
-        allow delete: if isOwner(uid);
+          && request.resource.data.amount < 1000000000000
+          && request.resource.data.type in ['income', 'expense']
+          && request.resource.data.categoryId is string
+          && request.resource.data.categoryId.size() <= 100
+          && request.resource.data.date is timestamp
+          && optString('note', 5000)
+          && optString('merchantName', 500)
+          && optString('taxCategory', 100)
+          && optString('accountId', 200)
+          && optString('sourceFingerprint', 200);
       }
 
-      // Categories
+      // Categories (custom only)
       match /categories/{catId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['id', 'name', 'iconCodePoint',
+            'iconFontFamily', 'colorValue', 'isCustom', 'type', 'updatedAt'])
+          && optString('name', 100)
+          && optString('iconFontFamily', 100);
       }
 
       // Budgets
       match /budgets/{budgetId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid,
+            ['id', 'categoryId', 'amount', 'month', 'year', 'updatedAt'])
+          && optAmount('amount');
       }
 
       // Recurring Rules (automation engine)
       match /recurring_rules/{ruleId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['amount', 'type', 'categoryId',
+            'note', 'paymentMethod', 'frequency', 'interval', 'startDate', 'endDate',
+            'nextOccurrenceDate', 'lastGeneratedDate', 'isActive', 'merchantName',
+            'taxCategory', 'source', 'accountId', 'createdAt', 'updatedAt', 'userId'])
+          && optAmount('amount')
+          && optString('note', 5000)
+          && optString('merchantName', 500);
       }
 
       // Recurring Occurrences (generated ledger occurrences)
       match /recurring_occurrences/{occurrenceId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['ruleId', 'scheduledDate',
+            'status', 'transactionId', 'generatedAt', 'updatedAt']);
       }
 
       // Tombstones (offline delete-wins synchronization)
       match /tombstones/{tombstoneId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['id', 'deletedAt', 'serverDeletedAt']);
       }
 
       // ── Premium Feature Collections ──────────────────────────────
 
       // Savings Goals
       match /saving_goals/{goalId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['id', 'name', 'targetAmount',
+            'currentAmount', 'targetDate', 'createdAt', 'isPaused', 'emoji', 'updatedAt'])
+          && optString('name', 200)
+          && optString('emoji', 20)
+          && optAmount('targetAmount')
+          && optAmount('currentAmount');
       }
 
-      // Recurring Payments
+      // Recurring Payments (bills & subscriptions)
       match /recurring_payments/{paymentId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['id', 'merchantName', 'amount',
+            'frequency', 'lastPaidAt', 'nextDueAt', 'categoryId', 'confidence',
+            'source', 'status', 'isAutopay', 'previousAmount', 'priceChangeDetectedAt',
+            'notes', 'createdAt', 'updatedAt', 'detectionReason'])
+          && optString('merchantName', 500)
+          && optString('notes', 5000)
+          && optString('detectionReason', 1000)
+          && optAmount('amount')
+          && optAmount('previousAmount');
       }
 
       // Smart Alerts & Anomalies
       match /alerts/{alertId} {
-        allow read, write: if isOwner(uid);
-      }
-
-      // Tax Deduction Buckets
-      match /tax_categories/{taxCatId} {
-        allow read, write: if isOwner(uid);
-      }
-
-      // Linked Accounts (Bank / Aggregator Integration)
-      match /linked_accounts/{accId} {
-        allow read, write: if isOwner(uid);
-      }
-
-      // Family Members / Group Sharing
-      match /family_members/{memberId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['id', 'type', 'stage', 'severity',
+            'title', 'message', 'alertKey', 'categoryId', 'amount', 'targetAmount',
+            'ratio', 'transactionId', 'recurringPaymentId', 'goalId', 'period',
+            'isRead', 'isDismissed', 'actionType', 'actionPayload', 'createdAt',
+            'updatedAt', 'resolvedAt', 'expiresAt'])
+          && optString('title', 500)
+          && optString('message', 2000)
+          && optString('actionPayload', 5000);
       }
 
       // Bill payment history (recurring payments ledger)
       match /recurring_payment_history/{historyId} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid)
+        allow create, update: if ownerWrite(uid, ['id', 'recurringPaymentId',
+            'amount', 'paidAt', 'source', 'transactionId', 'notes', 'createdAt'])
           && request.resource.data.amount is number
-          && request.resource.data.amount >= 0;
+          && request.resource.data.amount >= 0
+          && optAmount('amount')
+          && optString('notes', 5000);
       }
 
       // Weekly planner limits
       match /weekly_limits/{limitId} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid)
+        allow create, update: if ownerWrite(uid, ['id', 'categoryId', 'categoryName',
+            'weeklyLimit', 'createdAt', 'updatedAt', 'isActive', 'periodStart',
+            'recurrencePolicy'])
           && request.resource.data.weeklyLimit is number
-          && request.resource.data.weeklyLimit >= 0;
+          && request.resource.data.weeklyLimit >= 0
+          && optAmount('weeklyLimit')
+          && optString('categoryName', 100);
       }
 
       // User reports about AI Copilot replies (Play AI-Generated Content policy).
@@ -122,8 +192,9 @@ service cloud.firestore {
           && request.resource.data.reason.size() <= 100;
       }
 
-      // Allow deletion and read of any other legacy or auxiliary document within the user's subtree
-      // (ensures account deletion can cleanly wipe all orphaned subcollections)
+      // Read and delete anything else in the user's subtree (legacy collections
+      // such as linked_accounts, tax_categories and family_members, which the
+      // app no longer writes) so account deletion can wipe it all.
       match /{document=**} {
         allow read, delete: if isOwner(uid);
       }
@@ -136,11 +207,20 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+    // Guests (Firebase anonymous auth) can't create households; creating one
+    // is a Premium feature and requires a Google account.
+    function isRegisteredUser() {
+      return signedIn()
+        && request.auth.token.get('firebase', {}).get('sign_in_provider', '') != 'anonymous';
+    }
     function householdData(hid) {
       return get(/databases/$(database)/documents/households/$(hid)).data;
     }
     function isHouseholdMember(hid) {
       return signedIn() && request.auth.uid in householdData(hid).memberUids;
+    }
+    function isHouseholdOwner(hid) {
+      return signedIn() && householdData(hid).ownerUid == request.auth.uid;
     }
     function changedOnly(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -156,7 +236,7 @@ service cloud.firestore {
     match /households/{hid} {
       allow read: if signedIn() && request.auth.uid in resource.data.memberUids;
 
-      allow create: if signedIn()
+      allow create: if isRegisteredUser()
         && request.resource.data.keys().hasOnly(['name', 'ownerUid', 'memberUids', 'memberNames', 'createdAt'])
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.memberUids == [request.auth.uid]
@@ -222,10 +302,14 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['uid', 'month', 'byCategory', 'names', 'total', 'updatedAt'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.month is string
+          && request.resource.data.month.size() <= 7
           && request.resource.data.byCategory is map
           && request.resource.data.byCategory.size() <= 100
           && request.resource.data.names is map
-          && request.resource.data.total is number;
+          && request.resource.data.names.size() <= 100
+          && request.resource.data.total is number
+          && request.resource.data.total >= 0
+          && request.resource.data.total < 1000000000000;
         // Your own totals (even after leaving), or anything for the owner
         // (deleting the household).
         allow delete: if signedIn() && (resource.data.uid == request.auth.uid
@@ -234,10 +318,13 @@ service cloud.firestore {
     }
 
     // Invite codes: whoever knows a code can look it up (it is the secret);
-    // codes can't be listed except your own, and expire within 8 days.
+    // codes can be listed by their creator or by the household's owner, and
+    // expire within 8 days. The owner can revoke any code for the household
+    // (e.g. after removing a member, so they can't re-join with it).
     match /householdInvites/{code} {
       allow get: if signedIn();
-      allow list: if signedIn() && resource.data.createdBy == request.auth.uid;
+      allow list: if signedIn() && (resource.data.createdBy == request.auth.uid
+        || isHouseholdOwner(resource.data.householdId));
       allow create: if signedIn()
         && code.matches('[A-Z2-9]{8}')
         && request.resource.data.keys().hasOnly(['householdId', 'createdBy', 'expiresAt'])
@@ -245,7 +332,8 @@ service cloud.firestore {
         && isHouseholdMember(request.resource.data.householdId)
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt < request.time + duration.value(8, 'd');
-      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+      allow delete: if signedIn() && (resource.data.createdBy == request.auth.uid
+        || isHouseholdOwner(resource.data.householdId));
     }
 
     // Deny all other access (default-deny)

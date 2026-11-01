@@ -14,6 +14,7 @@ import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/recurring_transaction_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseException;
 
 class FakeTransactionRepository implements TransactionRepository {
   final List<TransactionRecord> db = [];
@@ -199,6 +200,16 @@ class FakeFirestoreSyncService implements FirestoreSyncService {
   }
 
   @override
+  Future<DateTime?> tombstoneDeletedAt(String transactionId) async {
+    final t = tombstones.where((x) => x['id'] == transactionId);
+    if (t.isEmpty) return null;
+    return DateTime.parse(t.first['deletedAt'] as String);
+  }
+
+  /// Transaction ids whose upload is rejected with permission-denied.
+  final Set<String> deniedIds = {};
+
+  @override
   Future<void> deleteTombstone(String transactionId) async {
     tombstones.removeWhere((x) => x['id'] == transactionId);
     tombstoneStreamController.add(tombstones);
@@ -209,10 +220,13 @@ class FakeFirestoreSyncService implements FirestoreSyncService {
     return tombstoneStreamController.stream;
   }
 
+  bool failFetchAll = false;
+
   @override
   Future<List<TransactionRecord>> fetchAllTransactions({
     int batchSize = 1000,
   }) async {
+    if (failFetchAll) throw Exception('Mock: page 2 of the restore failed');
     return List<TransactionRecord>.from(remoteDb);
   }
 
@@ -220,6 +234,10 @@ class FakeFirestoreSyncService implements FirestoreSyncService {
   Future<void> upsertTransaction(TransactionRecord transaction) async {
     if (shouldFailUpsert) {
       throw Exception('Mock network failure');
+    }
+    if (deniedIds.contains(transaction.id)) {
+      throw FirebaseException(
+          plugin: 'cloud_firestore', code: 'permission-denied');
     }
     remoteDb.removeWhere((t) => t.id == transaction.id);
     remoteDb.add(transaction);
@@ -729,6 +747,140 @@ void main() {
 
         // Verify queue is compacted and now empty
         expect(repository.syncQueue.isEmpty, isTrue);
+      },
+    );
+
+    test(
+      'a failed restore is reported as an error and rethrown for retry, '
+      'never as "synced" (P2-12)',
+      () async {
+        firestoreSync.failFetchAll = true;
+        await expectLater(provider.syncFromFirestore(), throwsException);
+        expect(provider.syncStatus, SyncStatus.error);
+      },
+    );
+
+    test(
+      'an older offline edit never resurrects a transaction deleted on '
+      'another device, even before the tombstone listener fires (P2-4)',
+      () async {
+        await provider.loadTransactions();
+        repository.syncQueue.clear();
+        final editedAt = DateTime.now().subtract(const Duration(hours: 2));
+        // Deleted elsewhere an hour after this device's offline edit; the
+        // tombstone listener has not delivered anything yet.
+        firestoreSync.tombstones.add({
+          'id': 'zombie',
+          'deletedAt': DateTime.now()
+              .subtract(const Duration(hours: 1))
+              .toIso8601String(),
+        });
+        await repository.enqueueSyncAction(
+          'edit_zombie',
+          'zombie',
+          'update',
+          jsonEncode(TransactionRecord(
+            id: 'zombie',
+            amount: 75.0,
+            type: TransactionType.expense,
+            categoryId: 'food',
+            date: editedAt,
+            updatedAt: editedAt,
+          ).toMap()),
+          'test_user_id',
+        );
+
+        await provider.triggerSyncQueue(force: true);
+
+        expect(firestoreSync.remoteDb.any((t) => t.id == 'zombie'), isFalse);
+        expect(firestoreSync.tombstones.any((t) => t['id'] == 'zombie'), isTrue,
+            reason: 'the newer delete must keep its tombstone');
+        expect(repository.syncQueue, isEmpty);
+      },
+    );
+
+    test(
+      'repeated permission-denied parks a change instead of dropping it, '
+      'and later changes still sync (P2-5)',
+      () async {
+        await provider.loadTransactions();
+        repository.syncQueue.clear();
+        firestoreSync.deniedIds.add('blocked');
+        for (final id in ['blocked', 'fine']) {
+          await repository.enqueueSyncAction(
+            'a_$id',
+            id,
+            'create',
+            jsonEncode(TransactionRecord(
+              id: id,
+              amount: 10.0,
+              type: TransactionType.expense,
+              categoryId: 'food',
+              date: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ).toMap()),
+            'test_user_id',
+          );
+        }
+
+        for (var i = 0;
+            i < TransactionProvider.maxPermissionDeniedRetries;
+            i++) {
+          await provider.triggerSyncQueue(force: true);
+        }
+
+        // Never dropped: still queued (and counted for the sign-out warning).
+        expect(repository.syncQueue.map((a) => a['transactionId']),
+            contains('blocked'));
+        // But it no longer blocks the change queued after it.
+        expect(firestoreSync.remoteDb.any((t) => t.id == 'fine'), isTrue);
+      },
+    );
+
+    test(
+      'pendingSyncCount reports unsynced changes so sign-out can warn '
+      '(audit P1-4)',
+      () async {
+        await provider.loadTransactions();
+        repository.syncQueue.clear();
+        firestoreSync.shouldFailUpsert = true; // offline
+        await repository.enqueueSyncAction(
+          'a1',
+          't1',
+          'create',
+          jsonEncode(
+            TransactionRecord(
+              id: 't1',
+              amount: 99.0,
+              type: TransactionType.expense,
+              categoryId: 'food',
+              date: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ).toMap(),
+          ),
+          'test_user_id',
+        );
+
+        // Upload attempt fails → the change is still pending.
+        expect(
+          await provider.pendingSyncCount(
+            flushTimeout: const Duration(seconds: 2),
+          ),
+          1,
+        );
+
+        // Back online → the flush uploads it and nothing is pending.
+        firestoreSync.shouldFailUpsert = false;
+        expect(
+          await provider.pendingSyncCount(
+            flushTimeout: const Duration(seconds: 2),
+          ),
+          0,
+        );
+
+        // Guests have no cloud backup to protect.
+        firestoreSync.hasUser = false;
+        expect(await provider.pendingSyncCount(), 0);
       },
     );
 

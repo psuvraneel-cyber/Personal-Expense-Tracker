@@ -57,6 +57,30 @@ object EncryptedNotificationCache {
      */
     const val MAX_IN_MEMORY_CAPACITY = 200
 
+    /**
+     * Bounds for the persisted (encrypted) cache. Items are normally drained
+     * within minutes; anything still here after [MAX_PERSISTED_AGE_MS] is
+     * stale (e.g. processing kept failing) and shouldn't be kept or imported,
+     * and [MAX_PERSISTED_ITEMS] stops the store growing without limit.
+     */
+    const val MAX_PERSISTED_ITEMS = 1000
+    const val MAX_PERSISTED_AGE_MS = 7L * 24 * 60 * 60 * 1000
+
+    /** Drops items older than [MAX_PERSISTED_AGE_MS] (by their "date"), then the oldest beyond [MAX_PERSISTED_ITEMS]. */
+    @VisibleForTesting
+    fun prune(items: JSONArray, now: Long): JSONArray {
+        val fresh = mutableListOf<Any>()
+        for (i in 0 until items.length()) {
+            val obj = items.optJSONObject(i)
+            val date = obj?.optLong("date", 0L) ?: 0L
+            if (date > 0 && now - date > MAX_PERSISTED_AGE_MS) continue
+            fresh.add(items.get(i))
+        }
+        val kept = JSONArray()
+        for (item in fresh.takeLast(MAX_PERSISTED_ITEMS)) kept.put(item)
+        return kept
+    }
+
     @Volatile
     private var isMigrated = false
 
@@ -261,10 +285,11 @@ object EncryptedNotificationCache {
                     jsonObject.put(key, value)
                 }
                 jsonArray.put(jsonObject)
+                val pruned = prune(jsonArray, System.currentTimeMillis())
 
-                val commitSuccess = prefs.edit().putString(KEY_PENDING, jsonArray.toString()).commit()
+                val commitSuccess = prefs.edit().putString(KEY_PENDING, pruned.toString()).commit()
                 if (commitSuccess) {
-                    SafeLog.d(TAG, "Safely saved notification to encrypted cache. Total cached: ${jsonArray.length()}")
+                    SafeLog.d(TAG, "Safely saved notification to encrypted cache. Total cached: ${pruned.length()}")
                 } else {
                     SafeLog.w(TAG, "Failed to commit notification to EncryptedSharedPreferences. Buffering in RAM.")
                     enqueueInMemory(data)

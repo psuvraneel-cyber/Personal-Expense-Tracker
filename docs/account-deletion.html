@@ -200,9 +200,9 @@
         <ul>
             <li><strong>Firebase Authentication Record:</strong> Email, User UID, and OAuth provider tokens.</li>
             <li><strong>Cloud Firestore Collections:</strong> All synchronized transactions, budgets, custom categories, saving goals, recurring rules and bills, bill payment history, weekly limits, alerts, AI response reports, and tombstones.</li>
-            <li><strong>Subscription Entitlements:</strong> RevenueCat subscriber record dissociation.</li>
+            <li><strong>Subscription records:</strong> your customer record (app account ID and purchase history) at our billing provider RevenueCat. An active Google Play subscription is not cancelled automatically — cancel it in Google Play first.</li>
             <li><strong>Local Application Storage (in-app deletion):</strong> every table in the SQLCipher 256-bit encrypted database, cached SMS/notification data, scheduled notifications and app preferences.</li>
-            <li><strong>Retention:</strong> nothing is kept after deletion, except records we are legally required to keep (Google Play keeps its own purchase records).</li>
+            <li><strong>Retention:</strong> nothing is kept after deletion, except records we are legally required to keep (Google Play keeps its own purchase records) and — only if you redeemed an invite code — a one-way hash of your Google account ID, kept for 2 years so the same account can't claim a free month twice.</li>
         </ul>
 
         <div class="highlight-box">

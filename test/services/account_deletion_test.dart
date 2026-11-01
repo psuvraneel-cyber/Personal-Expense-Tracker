@@ -350,6 +350,39 @@ void main() {
       await sub.cancel();
     });
 
+    test(
+        'stops before deleting the sign-in account if server records '
+        "can't be removed (audit P2-6)", () async {
+      final failing = AccountDeletionService(
+        firestore: firestore,
+        auth: auth,
+        dbHelper: dbHelper,
+        leaveHouseholds: (_) async {},
+        forgetServerRecords: () async => false,
+      )..isTesting = true;
+      final sub = failing.progress.listen((_) {}, onError: (_) {});
+
+      await expectLater(
+        failing.deleteAccount(targetUid: 'test_uid_123'),
+        throwsA(isA<AccountDeletionException>()),
+      );
+      expect(currentUser.deleted, isFalse,
+          reason: 'retrying must still be possible with a valid ID token');
+      await sub.cancel();
+    });
+
+    test('a pending deletion can be cancelled (no stranded deletion mode)',
+        () async {
+      SharedPreferences.setMockInitialValues({'deletion_in_progress': true});
+      AccountDeletionService.isDeletionInProgress = true;
+
+      await AccountDeletionService.cancelPendingDeletion();
+
+      expect(AccountDeletionService.isDeletionInProgress, isFalse);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('deletion_in_progress'), isFalse);
+    });
+
     test('UID safety check validation', () async {
       // Trying to delete using mismatched target UID should fail
       expect(

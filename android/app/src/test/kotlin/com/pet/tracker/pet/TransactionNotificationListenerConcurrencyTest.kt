@@ -236,4 +236,28 @@ class TransactionNotificationListenerConcurrencyTest {
             deliveredCount + cachedCount
         )
     }
+
+    /** Audit P3-4: super-app offers and order updates are not payments. */
+    @Test
+    fun promotionalAndOrderNotificationsAreRecognised() {
+        val promos = listOf(
+            "Get ₹100 cashback on your next recharge",
+            "Flat 50% off on electronics — today only",
+            "Your order of ₹1,299 has been shipped",
+            "Out for delivery: Rs 499 order arriving today",
+            "Your bill of Rs 799 is due on 5 Nov. Pay now",
+        )
+        val payments = listOf(
+            "Paid Rs 450 to Swiggy",
+            "Rs 120 debited from A/c XX1234",
+            "₹2,000 received from Rahul",
+            "Payment of ₹350 to Starbucks successful",
+        )
+        promos.forEach {
+            assertTrue(it, TransactionNotificationListener.isPromotionalOrOrderUpdate(it))
+        }
+        payments.forEach {
+            assertFalse(it, TransactionNotificationListener.isPromotionalOrOrderUpdate(it))
+        }
+    }
 }

@@ -71,6 +71,42 @@ test("owner can delete anything under their tree (account deletion)", async () =
   await assertSucceeds(deleteDoc(doc(alice(), "users/alice/legacy_stuff/x")));
 });
 
+// ── Schema validation (audit P2-1) ─────────────────────────────────────────
+
+test("profile and sub-collections reject unknown or oversized fields", async () => {
+  await assertSucceeds(setDoc(doc(alice(), "users/alice"),
+    { displayName: "Alice", email: "a@example.com", syncVersion: 1 }));
+  await assertFails(setDoc(doc(alice(), "users/alice"), { isPremium: true }, { merge: true }));
+  await assertFails(setDoc(doc(alice(), "users/alice/categories/c1"), { junk: "y".repeat(900000) }));
+  await assertFails(setDoc(doc(alice(), "users/alice/categories/c2"),
+    { id: "c2", name: "x".repeat(101), isCustom: true }));
+  await assertSucceeds(setDoc(doc(alice(), "users/alice/categories/c3"),
+    { id: "c3", name: "Pets", iconCodePoint: 1, colorValue: 2, isCustom: true, type: "expense" }));
+});
+
+test("transactions need a timestamp date, sane amount and known fields", async () => {
+  await assertFails(setDoc(doc(alice(), "users/alice/transactions/t1"),
+    { ...txn, date: "not-a-date" }));
+  await assertFails(setDoc(doc(alice(), "users/alice/transactions/t2"), { ...txn, amount: 1e300 }));
+  await assertFails(setDoc(doc(alice(), "users/alice/transactions/t3"), { ...txn, extra: 1 }));
+  await assertFails(setDoc(doc(alice(), "users/alice/transactions/t4"), { ...txn, categoryId: 42 }));
+  await assertSucceeds(setDoc(doc(alice(), "users/alice/transactions/t5"),
+    { ...txn, note: "Lunch", merchantName: "Swiggy", source: "sms", updatedAt: new Date() }));
+});
+
+test("documents written by older app versions (extra fields) still update", async () => {
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), "users/alice/transactions/legacy"), { ...txn, legacyField: "x" }));
+  await assertSucceeds(updateDoc(doc(alice(), "users/alice/transactions/legacy"),
+    { amount: 300, updatedAt: new Date() }));
+  await assertFails(updateDoc(doc(alice(), "users/alice/transactions/legacy"), { newJunk: 1 }));
+});
+
+test("legacy collections are read/delete only", async () => {
+  await assertFails(setDoc(doc(alice(), "users/alice/linked_accounts/a"), { x: 1 }));
+  await assertFails(setDoc(doc(alice(), "users/alice/family_members/a"), { x: 1 }));
+});
+
 test("top-level collections outside users/ are denied", async () => {
   await assertFails(setDoc(doc(alice(), "global/x"), { a: 1 }));
 });
@@ -107,6 +143,39 @@ test("households: create only yourself as sole owner/member", async () => {
   await assertFails(setDoc(doc(alice(), "households/h2"),
     { ...household, memberUids: ["alice", "bob"], memberNames: { alice: "A", bob: "B" } }));
   await assertFails(setDoc(doc(bob(), "households/h3"), household));
+});
+
+test("households: guests (anonymous accounts) can't create one", async () => {
+  const guest = env.authenticatedContext("guest1",
+    { firebase: { sign_in_provider: "anonymous" } }).firestore();
+  await assertFails(setDoc(doc(guest, "households/h9"),
+    { ...household, ownerUid: "guest1", memberUids: ["guest1"], memberNames: { guest1: "G" } }));
+});
+
+test("households: owner can revoke any invite, so a removed member can't re-join", async () => {
+  await seedHousehold({ members: ["alice", "bob"], invite: null });
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), "householdInvites/BOBC2345"),
+      { householdId: "h1", createdBy: "bob", expiresAt: inDays(6) }));
+  // Owner finds and deletes every code for the household.
+  await assertSucceeds(getDocs(query(collection(alice(), "householdInvites"),
+    where("householdId", "==", "h1"))));
+  await assertSucceeds(deleteDoc(doc(alice(), "householdInvites/BOBC2345")));
+  // Non-owners still can't list or delete other people's codes.
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), "householdInvites/ALIC2345"),
+      { householdId: "h1", createdBy: "alice", expiresAt: inDays(6) }));
+  await assertFails(deleteDoc(doc(bob(), "householdInvites/ALIC2345")));
+  await assertFails(getDocs(query(collection(bob(), "householdInvites"),
+    where("householdId", "==", "h1"))));
+});
+
+test("household spending rejects negative totals", async () => {
+  await seedHousehold({ members: ["alice", "bob"] });
+  await assertFails(setDoc(doc(bob(), "households/h1/spending/bob_202611"), {
+    uid: "bob", month: "2026-11", byCategory: { food: 10 }, names: { food: "Food" },
+    total: -5, updatedAt: new Date(),
+  }));
 });
 
 test("households: only members can read; members can find theirs by query", async () => {

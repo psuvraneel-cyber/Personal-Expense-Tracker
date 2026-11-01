@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/firebase_auth_service.dart';
+import 'package:pet/services/local_data_wiper.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -17,6 +18,12 @@ class FakeFirebaseAuth implements FirebaseAuth {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+// ignore: subtype_of_sealed_class
+class _SignOutFakeAuth extends FakeFirebaseAuth {
+  @override
+  Future<void> signOut() async {}
 }
 
 void main() {
@@ -137,6 +144,37 @@ void main() {
         expect(authService.userName, equals('Test User'));
       },
     );
+  });
+
+  group('Sign-out persistence (audit P1-3)', () {
+    test(
+      'signOut clears the Google credential even when GoogleSignIn was never '
+      'initialised, and blocks silent re-sign-in on the next cold start',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final authService = FirebaseAuthService();
+        authService.firebaseAuth = _SignOutFakeAuth();
+        var googleSignOuts = 0;
+        authService.googleSignOutForTesting = () async => googleSignOuts++;
+        addTearDown(() => authService.googleSignOutForTesting = null);
+
+        await authService.signOut();
+
+        expect(googleSignOuts, 1);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getBool(FirebaseAuthService.kExplicitSignOutKey), isTrue);
+
+        // Cold start with no Firebase user: no lightweight auth attempt.
+        expect(await authService.tryRestoreSession(), isFalse);
+      },
+    );
+
+    test('the sign-out marker survives the local data wipe', () {
+      expect(
+        LocalDataWiper.deviceSettingKeys,
+        contains(FirebaseAuthService.kExplicitSignOutKey),
+      );
+    });
   });
 
   group('DatabaseHelper Encryption Gating Tests', () {

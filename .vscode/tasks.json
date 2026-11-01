@@ -2,46 +2,32 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Flutter: Clean (OneDrive-safe)",
+            "label": "Flutter: Clean",
             "type": "shell",
-            "command": "powershell",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build_helper.ps1", "-Target", "clean"],
+            "command": "flutter clean",
             "problemMatcher": [],
             "group": "build"
         },
         {
             "label": "Flutter: Build APK (Debug)",
             "type": "shell",
-            "command": "powershell",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build_helper.ps1", "-Target", "apk", "-Mode", "debug"],
+            "command": "flutter build apk --debug --dart-define-from-file=.env",
             "problemMatcher": [],
             "group": "build"
         },
         {
-            "label": "Flutter: Build APK (Release)",
+            "label": "Flutter: Build App Bundle (Release)",
             "type": "shell",
-            "command": "powershell",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build_helper.ps1", "-Target", "apk", "-Mode", "release"],
+            "command": "flutter build appbundle --release --dart-define-from-file=.env",
             "problemMatcher": [],
             "group": "build"
         },
         {
-            "label": "Flutter: Build Windows (Debug)",
+            "label": "Flutter: Test",
             "type": "shell",
-            "command": "powershell",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build_helper.ps1", "-Target", "windows", "-Mode", "debug"],
+            "command": "flutter test",
             "problemMatcher": [],
-            "group": "build"
-        },
-        {
-            "label": "Flutter: Pre-build OneDrive Fix",
-            "type": "shell",
-            "command": "attrib",
-            "args": ["+U", "-P", "${workspaceFolder}\\build", "/S", "/D"],
-            "problemMatcher": [],
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
+            "group": "test"
         }
     ]
 }

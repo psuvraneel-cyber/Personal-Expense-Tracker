@@ -234,6 +234,10 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _clearLocalDataOnStartup() async {
     await LocalDataWiper.wipe();
     try {
+      // Finishes an interrupted deletion: also forget the Google credential.
+      await FirebaseAuthService().signOut();
+    } catch (_) {}
+    try {
       await PremiumEntitlementService.logOut();
     } catch (_) {}
   }

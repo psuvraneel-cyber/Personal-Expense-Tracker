@@ -160,6 +160,19 @@ class TransactionNotificationListener : NotificationListenerService() {
             return true
         }
 
+        /** Offers and shopping updates: they mention amounts but aren't payments. */
+        private val promoOrOrderPatterns = listOf(
+            Regex("""(?i)\b(?:get|win|earn|save|flat)\s+(?:up\s*to\s+)?(?:₹|rs\.?|inr)\s?\d"""),
+            Regex("""(?i)\d+\s?%\s?off\b"""),
+            Regex("""(?i)\b(?:offer|coupon|voucher|deal|sale|discount|scratch\s*card|reward\s*points?)\b"""),
+            Regex("""(?i)\b(?:shipped|out\s+for\s+delivery|delivered|arriving|your\s+order|order\s+(?:placed|confirmed))\b"""),
+            Regex("""(?i)\b(?:recharge\s+now|pay\s+now|bill\s+(?:is\s+)?due|due\s+(?:on|by|date))\b"""),
+        )
+
+        @VisibleForTesting
+        fun isPromotionalOrOrderUpdate(text: String): Boolean =
+            promoOrOrderPatterns.any { it.containsMatchIn(text) }
+
         /**
          * Check if notification access is granted.
          */
@@ -287,6 +300,9 @@ class TransactionNotificationListener : NotificationListenerService() {
                 combinedText.contains("apply for loan", ignoreCase = true)
 
         if (isNegativePromoOrOtp) return
+        // Super-apps on the allow-list (Amazon, Tata Neu, Airtel Thanks…)
+        // also post offers and order updates that mention amounts.
+        if (isPromotionalOrOrderUpdate(combinedText)) return
 
         // Apps re-post/update the same notification (progress, grouping);
         // only the first copy of a given content is captured.

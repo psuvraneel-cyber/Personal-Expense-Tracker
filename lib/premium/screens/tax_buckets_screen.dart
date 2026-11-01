@@ -24,7 +24,7 @@ const _sectionDescriptions = {
   '80DP': 'Health insurance: parents (₹50,000 if they are 60+)',
   'HRA': 'Rent paid. The exemption depends on your salary; '
       'not counted in the estimate',
-  'LTA': 'Leave travel allowance',
+  'LTA': 'Leave travel allowance (limit set by your employer)',
   '80E': 'Education loan interest',
 };
 
@@ -332,7 +332,9 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Indicative limits only. Actual deductions depend on your income, age, and tax regime. Consult a Chartered Accountant for accurate advice.',
+                          'Indicative limits only. Actual deductions depend on your income, age, and tax regime. '
+                          'The saving estimate ignores the section 87A rebate (no tax up to ₹5 lakh taxable income in the old regime) and surcharge, '
+                          'and the LTA limit is set by your employer. Consult a Chartered Accountant for accurate advice.',
                           style: TextStyle(
                             fontSize: 11,
                             color: isDark

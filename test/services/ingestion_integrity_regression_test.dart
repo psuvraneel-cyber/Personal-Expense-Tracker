@@ -165,8 +165,28 @@ void main() {
     for (final r in rows) {
       expect(r['body'], '');
     }
+    // The masked copy kept for the "Original SMS" box expires too.
+    final smsRows = await db.query('sms_transactions');
+    expect(smsRows, isNotEmpty);
+    for (final r in smsRows) {
+      expect(r['rawSmsBody'], '');
+    }
     // Extracted ledger data is kept.
     expect(await ledgerCount(), 1);
+  });
+
+  test('P1-2: message text younger than 90 days is kept', () async {
+    await service.ingestMessage(debitSms());
+    // The fixture SMS is dated 24 Aug 2026; 30 days later it must survive.
+    await DatabaseHelper().purgeExpiredSensitiveData(
+      db: db,
+      now: DateTime(2026, 9, 23),
+    );
+    final smsRows = await db.query('sms_transactions');
+    expect(smsRows, isNotEmpty);
+    for (final r in smsRows) {
+      expect(r['rawSmsBody'], isNot(''));
+    }
   });
 
   test('P1-6: notification "Ignore" on an auto-imported item removes it',
@@ -217,9 +237,17 @@ void main() {
   });
 
   test('P1-10: permanent sync errors are recognised (no queue poisoning)', () {
+    // permission-denied can be temporary (App Check): retried, then parked —
+    // never silently dropped (audit P2-5).
     expect(
       TransactionProvider.isPermanentSyncError(
         FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
+      ),
+      isFalse,
+    );
+    expect(
+      TransactionProvider.isPermanentSyncError(
+        FirebaseException(plugin: 'cloud_firestore', code: 'invalid-argument'),
       ),
       isTrue,
     );

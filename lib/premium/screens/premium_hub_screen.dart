@@ -226,20 +226,9 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
             ),
           ];
 
-          final comingSoonFeatures = [
-            (
-              Icons.account_balance_rounded,
-              'Linked Bank Accounts',
-              'Connect your bank feeds automatically.',
-              const Color(0xFF3B82F6),
-            ),
-            (
-              Icons.receipt_long_rounded,
-              'Smart Receipt Scanner',
-              'Snap a picture of receipts to log transactions.',
-              const Color(0xFF10B981),
-            ),
-          ];
+          // No "Coming Soon" cards here: unbuilt features next to the paywall
+          // read as part of what a subscription buys (Play store-listing and
+          // subscription-transparency rules).
 
           return CustomScrollView(
             slivers: [
@@ -292,36 +281,6 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
                       locked: !isPremium && !_freeToTry.contains(f.$2),
                     );
                   }, childCount: features.length),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _buildSectionTitle(context, 'Coming Soon'),
-                    const SizedBox(height: 10),
-                  ]),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.1,
-                  ),
-                  delegate: SliverChildBuilderDelegate((_, i) {
-                    final f = comingSoonFeatures[i];
-                    return FeatureCard(
-                      icon: f.$1,
-                      title: f.$2,
-                      subtitle: f.$3,
-                      accentColor: f.$4,
-                      onTap: null,
-                    );
-                  }, childCount: comingSoonFeatures.length),
                 ),
               ),
               if (health.insights.isNotEmpty)
