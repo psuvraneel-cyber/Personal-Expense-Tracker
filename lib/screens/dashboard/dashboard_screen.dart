@@ -15,6 +15,7 @@ import 'package:pet/core/theme/color_tokens.dart';
 import 'package:pet/core/theme/motion.dart';
 import 'package:pet/core/theme/spacing.dart';
 import 'package:pet/core/widgets/amount_text.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:pet/core/widgets/category_avatar.dart';
 import 'package:pet/core/widgets/home_summary.dart';
 import 'package:pet/core/widgets/pet_section.dart';
@@ -48,8 +49,7 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
-    with TickerProviderStateMixin {
+class _DashboardScreenState extends State<DashboardScreen> {
   final List<String> _months = [
     'Jan',
     'Feb',
@@ -80,8 +80,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     'December',
   ];
 
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
   String _userName = '';
 
   // Statistics tab selection
@@ -104,15 +102,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeOutCubic,
-    );
-    _fadeController.forward();
     _loadUserName();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -141,10 +130,29 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  @override
-  void dispose() {
-    _fadeController.dispose();
-    super.dispose();
+  /// First appearance only: each block fades up a few pixels, 30 ms after
+  /// the one above. Spacers are left alone; reduced motion skips it all.
+  bool _revealed = false;
+
+  List<Widget> _reveal(List<Widget> children) {
+    if (_revealed || Motion.reduced(context)) return children;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealed = true);
+    var i = 0;
+    return [
+      for (final c in children)
+        if (c is SizedBox)
+          c
+        else
+          c
+              .animate(delay: Duration(milliseconds: 30 * i++))
+              .fadeIn(duration: Motion.emphasized, curve: Motion.easeOut)
+              .moveY(
+                begin: 10,
+                end: 0,
+                duration: Motion.emphasized,
+                curve: Motion.easeOut,
+              ),
+    ];
   }
 
   String _getGreeting() {
@@ -237,148 +245,148 @@ class _DashboardScreenState extends State<DashboardScreen>
               '${formatter.format(topCat.value)} this month. ${healthResult.tip}';
         }
 
-        return FadeTransition(
-          opacity: _fadeAnimation,
-          child: GradientBackground(
-            animate: isDark,
-            child: SafeArea(
-              bottom: false,
-              child: CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  // ─── App Bar with month selector ─────────────
-                  SliverAppBar(
-                    floating: true,
-                    snap: true,
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    flexibleSpace: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: Spacing.screenH,
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            'PET',
-                            style: AppTypography.titleLarge(
-                              color: isDark
-                                  ? AppTheme.textPrimary
-                                  : AppTheme.textPrimaryLight,
-                            ),
+        return GradientBackground(
+          animate: isDark,
+          child: SafeArea(
+            bottom: false,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // ─── App Bar with month selector ─────────────
+                SliverAppBar(
+                  // Scrolls away with the page: a floating transparent bar
+                  // let content slide underneath the title.
+                  backgroundColor: Colors.transparent,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                  flexibleSpace: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.screenH,
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'PET',
+                          style: AppTypography.titleLarge(
+                            color: isDark
+                                ? AppTheme.textPrimary
+                                : AppTheme.textPrimaryLight,
                           ),
-                          const Spacer(),
-                          _buildMonthChip(context, txnProvider, isDark),
-                          const SizedBox(width: 10),
-                          _buildIconButton(
-                            tooltip: 'Calculator',
-                            Icons.calculate_outlined,
-                            isDark,
-                            onTap: () => Navigator.push(
-                              context,
-                              PageRouteBuilder(
-                                pageBuilder: (context, anim, secAnim) =>
-                                    const CalculatorScreen(),
-                                transitionsBuilder:
-                                    (context, anim, secAnim, child) =>
-                                        SlideTransition(
-                                  position: Tween(
-                                    begin: const Offset(1, 0),
-                                    end: Offset.zero,
-                                  ).animate(
-                                    CurvedAnimation(
-                                      parent: anim,
-                                      curve: Curves.easeOutCubic,
-                                    ),
+                        ),
+                        const Spacer(),
+                        _buildMonthChip(context, txnProvider, isDark),
+                        const SizedBox(width: 10),
+                        _buildIconButton(
+                          tooltip: 'Calculator',
+                          Icons.calculate_outlined,
+                          isDark,
+                          onTap: () => Navigator.push(
+                            context,
+                            PageRouteBuilder(
+                              pageBuilder: (context, anim, secAnim) =>
+                                  const CalculatorScreen(),
+                              transitionsBuilder:
+                                  (context, anim, secAnim, child) =>
+                                      SlideTransition(
+                                position: Tween(
+                                  begin: const Offset(1, 0),
+                                  end: Offset.zero,
+                                ).animate(
+                                  CurvedAnimation(
+                                    parent: anim,
+                                    curve: Curves.easeOutCubic,
                                   ),
-                                  child: child,
                                 ),
-                                transitionDuration: const Duration(
-                                  milliseconds: 300,
-                                ),
+                                child: child,
+                              ),
+                              transitionDuration: const Duration(
+                                milliseconds: 300,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Consumer<AlertProvider>(
-                            builder: (context, alertProvider, _) {
-                              final unread = alertProvider.unreadCount;
-                              return GestureDetector(
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const AlertsScreen(),
-                                  ),
+                        ),
+                        const SizedBox(width: 8),
+                        Consumer<AlertProvider>(
+                          builder: (context, alertProvider, _) {
+                            final unread = alertProvider.unreadCount;
+                            return GestureDetector(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AlertsScreen(),
                                 ),
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? Colors.white.withAlpha(8)
-                                            : Colors.black.withAlpha(6),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Icon(
-                                        unread > 0
-                                            ? Icons.notifications_active_rounded
-                                            : Icons.notifications_none_rounded,
-                                        size: 20,
-                                        color: unread > 0
-                                            ? AppTheme.expenseRed
-                                            : (isDark
-                                                ? AppTheme.textSecondary
-                                                : AppTheme.textSecondaryLight),
-                                      ),
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.white.withAlpha(8)
+                                          : Colors.black.withAlpha(6),
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
-                                    if (unread > 0)
-                                      Positioned(
-                                        top: -3,
-                                        right: -3,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: AppTheme.expenseRed,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 16,
-                                            minHeight: 16,
-                                          ),
-                                          child: Text(
-                                            unread > 9 ? '9+' : '$unread',
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                              height: 1,
-                                            ),
+                                    child: Icon(
+                                      unread > 0
+                                          ? Icons.notifications_active_rounded
+                                          : Icons.notifications_none_rounded,
+                                      size: 20,
+                                      color: unread > 0
+                                          ? AppTheme.expenseRed
+                                          : (isDark
+                                              ? AppTheme.textSecondary
+                                              : AppTheme.textSecondaryLight),
+                                    ),
+                                  ),
+                                  if (unread > 0)
+                                    Positioned(
+                                      top: -3,
+                                      right: -3,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: AppTheme.expenseRed,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Text(
+                                          unread > 9 ? '9+' : '$unread',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            height: 1,
                                           ),
                                         ),
                                       ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
+                ),
 
-                  // ─── Content ─────────────────────────────────
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      Spacing.screenH,
-                      Spacing.sm,
-                      Spacing.screenH,
-                      Spacing.tabBottom(context),
-                    ),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        const NotificationPermissionBanner(),
+                // ─── Content ─────────────────────────────────
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    Spacing.screenH,
+                    Spacing.sm,
+                    Spacing.screenH,
+                    Spacing.tabBottom(context),
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      const NotificationPermissionBanner(),
+                      ..._reveal([
                         // ── Hero: this month's spend against the budget
                         HomeHero(
                           greeting: _userName.isNotEmpty
@@ -401,7 +409,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                         const SizedBox(height: Spacing.sectionGap),
 
-                        // ── Top Categories
+                        // ── Recent transactions
+                        _buildTransactionSection(
+                          context,
+                          txnProvider,
+                          catProvider,
+                          formatter,
+                          isDark,
+                        ),
+
+                        // ── Where the money went
                         if (categorySpending.isNotEmpty) ...[
                           _buildSectionHeader('Where it went', isDark),
                           const SizedBox(height: Spacing.md),
@@ -414,7 +431,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           const SizedBox(height: Spacing.sectionGap),
                         ],
 
-                        // ── Statistics (line chart — kept from original)
+                        // ── Spending trend
                         _buildStatisticsSection(
                           context,
                           txnProvider,
@@ -423,42 +440,31 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                         const SizedBox(height: Spacing.sectionGap),
 
-                        // ── Recent Transactions
-                        _buildTransactionSection(
-                          context,
-                          txnProvider,
-                          catProvider,
-                          formatter,
-                          isDark,
-                        ),
-
-                        // ── Recent UPI Activity
+                        // ── UPI tracking invite (only when it's off)
                         _buildRecentUpiSection(context, isDark, formatter),
 
-                        // ── Last month's Money Wrap (first week of the month)
+                        // ── Last month's Money Wrap (first week of month)
                         const MoneyWrapEntryCard(),
 
                         // ── Subscriptions found (moment-of-value insight)
                         const SubscriptionsFoundCard(),
 
-                        // ── Spend Health Score
-                        _buildSectionHeader('Spend Health', isDark),
-                        const SizedBox(height: Spacing.md),
+                        // ── Spend Health Score (the card has its title)
                         SpendHealthCard(result: healthResult),
-                        const SizedBox(height: Spacing.sectionGap),
+                        const SizedBox(height: Spacing.md),
 
-                        // ── AI Copilot Teaser (replaces premium CTA)
+                        // ── AI Copilot teaser
                         AiCopilotTeaserCard(insight: aiInsight),
                         const SizedBox(height: Spacing.sectionGap),
-
-                        // ── Empty state when no data
-                        if (categorySpending.isEmpty && dailySpending.isEmpty)
-                          _buildEmptyState(context, isDark),
                       ]),
-                    ),
+
+                      // ── Empty state when no data
+                      if (categorySpending.isEmpty && dailySpending.isEmpty)
+                        _buildEmptyState(context, isDark),
+                    ]),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
@@ -696,56 +702,117 @@ class _DashboardScreenState extends State<DashboardScreen>
     bool isDark,
   ) {
     final stats = _computeStatsSeries(txnProvider);
+    final muted = isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildSectionHeader('Statistics', isDark),
-        const SizedBox(height: 16),
-
-        // Tab selector
+        Row(
+          children: [
+            Expanded(child: _buildSectionHeader('Spending trend', isDark)),
+            _buildPeriodSwitch(isDark),
+          ],
+        ),
+        const SizedBox(height: Spacing.md),
         Container(
-          padding: const EdgeInsets.all(4),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           decoration: BoxDecoration(
-            color:
-                isDark ? Colors.white.withAlpha(6) : Colors.grey.withAlpha(15),
-            borderRadius: BorderRadius.circular(14),
+            color: isDark ? AppTheme.cardDark : AppTheme.surfaceLight,
+            borderRadius: BorderRadius.circular(Spacing.radiusLg),
+            border: isDark
+                ? null
+                : Border.all(color: Colors.black.withAlpha(8), width: 1),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _statsTabButton('Day', 0, isDark),
-              _statsTabButton('Month', 1, isDark),
-              _statsTabButton('Year', 2, isDark),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatIndicator(
+                      label: 'In',
+                      amount: stats.totalIncome,
+                      color: AppTheme.incomeGreen,
+                      isDark: isDark,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildStatIndicator(
+                      label: 'Out',
+                      amount: stats.totalExpenses,
+                      color: AppTheme.expenseRed,
+                      isDark: isDark,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Spacing.base),
+              if (stats.hasData)
+                _buildLineChart(context, stats.values, stats.labels, isDark)
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 28),
+                  child: Center(
+                    child: Text(
+                      'Nothing spent in this period yet',
+                      style: AppTypography.bodySmall(color: muted),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
-
-        // Income / Expense summary
-        Row(
-          children: [
-            _buildStatIndicator(
-              label: 'Income',
-              amount: formatter.format(stats.totalIncome),
-              color: AppTheme.incomeGreen,
-              isDark: isDark,
-            ),
-            const SizedBox(width: 24),
-            _buildStatIndicator(
-              label: 'Expense',
-              amount: formatter.format(stats.totalExpenses),
-              color: AppTheme.expenseRed,
-              isDark: isDark,
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-
-        // Line chart
-        if (stats.hasData)
-          _buildLineChart(context, stats.values, stats.labels, isDark)
-        else
-          _buildEmptyStatsState(isDark),
       ],
+    );
+  }
+
+  /// Compact Days / Months / Years switch that sits on the section title.
+  Widget _buildPeriodSwitch(bool isDark) {
+    const labels = ['Days', 'Months', 'Years'];
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(8),
+        borderRadius: BorderRadius.circular(Spacing.radiusSm + 2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Semantics(
+              selected: _statsTab == i,
+              button: true,
+              child: GestureDetector(
+                onTap: () => setState(() => _statsTab = i),
+                child: AnimatedContainer(
+                  duration: Motion.of(context, Motion.quick),
+                  curve: Motion.easeOut,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _statsTab == i
+                        ? (isDark ? AppTheme.cardDarkSurface : Colors.white)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(Spacing.radiusSm),
+                  ),
+                  child: Text(
+                    labels[i],
+                    style: AppTypography.labelMedium(
+                      color: _statsTab == i
+                          ? (isDark
+                              ? AppTheme.textPrimary
+                              : AppTheme.textPrimaryLight)
+                          : (isDark
+                              ? AppTheme.textSecondary
+                              : AppTheme.textSecondaryLight),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -758,12 +825,17 @@ class _DashboardScreenState extends State<DashboardScreen>
           0,
         ).day;
         final dailySpending = txnProvider.dailySpending;
+        final now = DateTime.now();
+        final isCurrentMonth = txnProvider.currentYear == now.year &&
+            txnProvider.currentMonth == now.month;
+        // Days that haven't happened yet aren't zero spend; leave them off.
+        final shownDays = isCurrentMonth ? now.day : daysInMonth;
         final values = List<double>.generate(
-          daysInMonth,
+          shownDays,
           (index) => dailySpending[index + 1] ?? 0.0,
         );
         final labels = List<String>.generate(
-          daysInMonth,
+          shownDays,
           (index) => '${index + 1}',
         );
         return _StatsSeries(
@@ -786,9 +858,11 @@ class _DashboardScreenState extends State<DashboardScreen>
             values[txn.date.month - 1] += txn.amount;
           }
         }
+        final now = DateTime.now();
+        final shownMonths = year == now.year ? now.month : 12;
         return _StatsSeries(
-          values: values,
-          labels: _months,
+          values: values.sublist(0, shownMonths),
+          labels: _months.sublist(0, shownMonths),
           totalIncome: income,
           totalExpenses: expenses,
         );
@@ -825,89 +899,35 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  Widget _buildEmptyStatsState(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      alignment: Alignment.centerLeft,
-      child: Text(
-        'No stats for this period yet.',
-        style: TextStyle(
-          fontSize: 12,
-          color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
-        ),
-      ),
-    );
-  }
-
-  Widget _statsTabButton(String label, int index, bool isDark) {
-    final isSelected = _statsTab == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _statsTab = index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? AppTheme.accentPurple : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected
-                    ? Colors.white
-                    : (isDark
-                        ? AppTheme.textSecondary
-                        : AppTheme.textSecondaryLight),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatIndicator({
     required String label,
-    required String amount,
+    required double amount,
     required Color color,
     required bool isDark,
   }) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Row(
           children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 12,
+              style: AppTypography.bodySmall(
                 color: isDark
-                    ? AppTheme.textTertiary
+                    ? AppTheme.textSecondary
                     : AppTheme.textSecondaryLight,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-            Text(
-              amount,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color:
-                    isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 2),
+        AmountText(amount, size: 17),
       ],
     );
   }
@@ -1029,7 +1049,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 return FlSpot(index.toDouble(), values[index]);
               }),
               isCurved: true,
-              curveSmoothness: 0.3,
+              curveSmoothness: 0.25,
+              preventCurveOverShooting: true,
               color: AppTheme.accentPurple,
               barWidth: 2.5,
               dotData: FlDotData(

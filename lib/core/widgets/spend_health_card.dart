@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pet/core/theme/color_tokens.dart';
+import 'package:pet/core/theme/spacing.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/typography.dart';
 import 'package:pet/services/spend_health_service.dart';
@@ -26,19 +27,10 @@ class SpendHealthCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(6),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : Colors.grey).withAlpha(
-              isDark ? 15 : 10,
-            ),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
+        border: isDark
+            ? null
+            : Border.all(color: Colors.black.withAlpha(8), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,7 +99,13 @@ class SpendHealthCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('💡', style: TextStyle(fontSize: 14)),
+                Icon(
+                  Icons.lightbulb_outline_rounded,
+                  size: 16,
+                  color: isDark
+                      ? AppTheme.textSecondary
+                      : AppTheme.textSecondaryLight,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -134,9 +132,21 @@ class SpendHealthCard extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const PremiumHubScreen()),
               );
             },
-            child: Text(
-              'See Full Report →',
-              style: AppTypography.labelMedium(color: AppTheme.accentPurple),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'See full report',
+                  style: AppTypography.labelMedium(
+                    color: AppTheme.accentPurple,
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: AppTheme.accentPurple,
+                ),
+              ],
             ),
           ),
         ],
@@ -151,7 +161,12 @@ class SpendHealthCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          Text(dim.emoji, style: const TextStyle(fontSize: 14)),
+          Icon(
+            _dimensionIcon(dim.emoji),
+            size: 16,
+            color:
+                isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+          ),
           const SizedBox(width: 8),
           Expanded(
             flex: 2,
@@ -200,4 +215,13 @@ class SpendHealthCard extends StatelessWidget {
   }
 
   static Color _scoreColor(int score) => ColorTokens.score(score);
+
+  /// The service tags each dimension with an emoji; show a matching icon.
+  static IconData _dimensionIcon(String emoji) => switch (emoji) {
+        '\u{1F3AF}' => Icons.track_changes_rounded,
+        '\u{1F3E6}' => Icons.savings_outlined,
+        '\u{1F4CA}' => Icons.insights_rounded,
+        '\u{1F9D8}' => Icons.self_improvement_rounded,
+        _ => Icons.circle_outlined,
+      };
 }

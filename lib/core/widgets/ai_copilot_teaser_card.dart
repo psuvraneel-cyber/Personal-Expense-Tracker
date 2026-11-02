@@ -39,7 +39,7 @@ class AiCopilotTeaserCard extends StatelessWidget {
               AppTheme.accentTeal.withAlpha(isDark ? 20 : 12),
             ],
           ),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color:
                 isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(6),
@@ -54,7 +54,11 @@ class AiCopilotTeaserCard extends StatelessWidget {
                 color: AppTheme.accentPurple.withAlpha(isDark ? 35 : 22),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Text('🤖', style: TextStyle(fontSize: 18)),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                size: 18,
+                color: AppTheme.accentPurple,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -79,11 +83,21 @@ class AiCopilotTeaserCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Ask Copilot →',
-                    style: AppTypography.labelMedium(
-                      color: AppTheme.accentPurple,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Ask Copilot',
+                        style: AppTypography.labelMedium(
+                          color: AppTheme.accentPurple,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: AppTheme.accentPurple,
+                      ),
+                    ],
                   ),
                 ],
               ),
