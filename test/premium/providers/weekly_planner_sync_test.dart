@@ -60,6 +60,20 @@ class MockWeeklyPlannerSyncService implements FirestoreSyncService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// Remote events are written to SQLite on a background isolate before the
+/// provider reloads, so draining microtasks isn't enough: wait (up to a
+/// limit) for the outcome itself.
+Future<void> _until(bool Function() done) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (!done() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
+/// Gives an event that should be ignored time to (wrongly) land.
+Future<void> _settle() =>
+    Future<void>.delayed(const Duration(milliseconds: 300));
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -129,7 +143,7 @@ void main() {
       );
 
       fakeSync.weeklyLimitsController.add([remoteLimit]);
-      await pumpEventQueue();
+      await _until(() => provider.entries.isNotEmpty);
 
       expect(provider.entries, hasLength(1));
       expect(provider.entries.first.categoryId, 'dining');
@@ -155,7 +169,7 @@ void main() {
       );
 
       fakeSync.weeklyLimitsController.add([staleLimit]);
-      await pumpEventQueue();
+      await _settle();
 
       // Should be ignored due to mismatched session guard
       expect(provider.entries, isEmpty);
@@ -180,7 +194,7 @@ void main() {
       );
 
       fakeSync.weeklyLimitsController.add([ghostLimit]);
-      await pumpEventQueue();
+      await _settle();
 
       expect(provider.entries, isEmpty);
     });
