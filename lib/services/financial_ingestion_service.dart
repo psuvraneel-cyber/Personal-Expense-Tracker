@@ -15,7 +15,8 @@ import 'package:pet/premium/repositories/linked_account_repository.dart';
 import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/services/merchant_normalizer.dart';
 import 'package:pet/premium/services/notification_service.dart';
-import 'package:pet/core/constants/categories.dart' show kFromPeopleCategoryId;
+import 'package:pet/core/constants/categories.dart'
+    show defaultCategories, kFromPeopleCategoryId;
 import 'package:pet/services/canonical_identity_resolver.dart';
 import 'package:pet/services/counterparty_classifier.dart';
 import 'package:pet/services/firestore_sync_service.dart';
@@ -457,7 +458,8 @@ class FinancialIngestionService {
 
     // 5. Ingestion Decision
     final isIncome = classified.transactionType == 'credit';
-    final mappedCategoryId = learnedRule?.learnedCategoryId ??
+    final mappedCategoryId = learnedCategoryFits(learnedRule?.learnedCategoryId,
+            isIncome: isIncome) ??
         importCategoryId(
           classified: classified,
           merchant: merchant,
@@ -1098,6 +1100,33 @@ class FinancialIngestionService {
     await BillPaymentMatcher.recordIfBillPayment(txn);
     // Focus Mode: tell the user a paused category was spent in.
     await FocusModeNotifier.notifyIfPaused(txn, userId: _syncUserId());
+  }
+
+  /// Remembers the user's "Count as income" choice for the payee of [txn],
+  /// so future credits from them land in the same category. Keyed on the
+  /// payee name the import matched against (the stored observation text has
+  /// phone numbers masked, so re-reading it would give a different UPI ID).
+  Future<void> rememberIncomeChoice(TransactionRecord txn) async {
+    if (txn.type != TransactionType.income) return;
+    final merchant = txn.merchantName;
+    if (merchant == null || merchant.isEmpty || merchant == 'Unknown') return;
+    await _merchantRuleService.learnRule(
+      identifier: merchant,
+      learnedMerchantName: merchant,
+      categoryId: txn.categoryId,
+    );
+  }
+
+  /// A learned category is only reused for money moving the same way: a
+  /// "From people" rule for a friend must not label what you pay them.
+  /// Custom categories (not in the defaults) are trusted as learned.
+  @visibleForTesting
+  static String? learnedCategoryFits(String? categoryId,
+      {required bool isIncome}) {
+    if (categoryId == null) return null;
+    final known = defaultCategories.where((c) => c.id == categoryId);
+    if (known.isEmpty) return categoryId;
+    return (known.first.type == 'income') == isIncome ? categoryId : null;
   }
 
   /// Re-categorises the ledger transaction created from an SMS/notification

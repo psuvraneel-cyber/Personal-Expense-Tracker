@@ -166,8 +166,7 @@ void main() {
     });
 
     group('Money received from people', () {
-      test('a UPI credit from a person is "From people", not income',
-          () async {
+      test('a UPI credit from a person is "From people", not income', () async {
         final txn = await ingestionService.ingestMessage(NativeSmsMessage(
           address: 'JM-HDFCBK-S',
           body: 'Rs 1,500.00 credited to HDFC Bank A/c XX1234 on 24-Aug-26 '
@@ -206,6 +205,53 @@ void main() {
         ));
         expect(txn, isNotNull);
         expect(txn!.categoryId, isNot(kFromPeopleCategoryId));
+      });
+
+      test('"Count as income" sticks for future credits from that payee',
+          () async {
+        NativeSmsMessage credit(int day, String ref) => NativeSmsMessage(
+              address: 'JM-HDFCBK-S',
+              body: 'Rs 2,000.00 credited to HDFC Bank A/c XX1234 on '
+                  '$day-Sep-26 from VPA 9876500001@ybl (NEHA VERMA). '
+                  'UPI Ref $ref.',
+              dateMillis: DateTime(2026, 9, day, 18).millisecondsSinceEpoch,
+              source: 'sms',
+            );
+        final first =
+            await ingestionService.ingestMessage(credit(3, '412300000001'));
+        expect(first!.categoryId, kFromPeopleCategoryId);
+
+        // The user flips "Count as income" on (e.g. rent from a tenant).
+        await ingestionService.rememberIncomeChoice(
+            first.copyWith(categoryId: 'cat_other_income'));
+
+        final next =
+            await ingestionService.ingestMessage(credit(10, '412300000002'));
+        expect(next!.categoryId, 'cat_other_income');
+        expect(next.countsAsIncome, isTrue);
+      });
+
+      test('a "From people" rule never labels money paid to that person', () {
+        expect(
+          FinancialIngestionService.learnedCategoryFits(kFromPeopleCategoryId,
+              isIncome: false),
+          isNull,
+        );
+        expect(
+          FinancialIngestionService.learnedCategoryFits(kFromPeopleCategoryId,
+              isIncome: true),
+          kFromPeopleCategoryId,
+        );
+        expect(
+          FinancialIngestionService.learnedCategoryFits('cat_food',
+              isIncome: true),
+          isNull,
+        );
+        expect(
+          FinancialIngestionService.learnedCategoryFits('my_custom_cat',
+              isIncome: false),
+          'my_custom_cat',
+        );
       });
     });
 

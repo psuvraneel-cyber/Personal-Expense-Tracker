@@ -14,6 +14,8 @@ import 'package:pet/core/widgets/category_chip.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/premium/services/tax_category_service.dart';
 import 'package:pet/premium/providers/spend_pause_provider.dart';
+import 'package:pet/core/constants/categories.dart' show kFromPeopleCategoryId;
+import 'package:pet/services/financial_ingestion_service.dart';
 
 class AddEditTransactionScreen extends StatefulWidget {
   final TransactionRecord? transaction;
@@ -46,7 +48,12 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
   bool _updateFutureRecurrences = false;
   String? _taxCategory;
 
+  /// The income category to go back to when "Count as income" is turned
+  /// back on after being turned off.
+  String? _incomeCategoryBeforeFromPeople;
+
   bool get _isEditing => widget.transaction != null;
+  bool get _isFromPeople => _selectedCategoryId == kFromPeopleCategoryId;
 
   final List<Map<String, dynamic>> _paymentIcons = [
     {'method': 'UPI', 'icon': Icons.phone_android},
@@ -165,6 +172,10 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                 ),
                 const SizedBox(height: 8),
                 _buildCategoryGrid(categories, isDark),
+                if (_type == TransactionType.income) ...[
+                  const SizedBox(height: 8),
+                  _buildCountAsIncomeSwitch(),
+                ],
                 const SizedBox(height: 24),
 
                 // Payment method
@@ -469,6 +480,35 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
     );
   }
 
+  /// One tap to move money between "income" and "From people" (money from
+  /// friends or family, tracked but kept out of income totals).
+  Widget _buildCountAsIncomeSwitch() {
+    final merchant = widget.transaction?.merchantName;
+    final hasPayee =
+        merchant != null && merchant.isNotEmpty && merchant != 'Unknown';
+    return SwitchListTile(
+      key: const Key('count_as_income_switch'),
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Count as income'),
+      subtitle: Text(
+        _isFromPeople
+            ? 'Shown as "From people" and left out of your income'
+                '${hasPayee ? '. Future money from $merchant will be too.' : '.'}'
+            : 'Turn off for money from friends or family',
+      ),
+      value: !_isFromPeople,
+      onChanged: (countAsIncome) => setState(() {
+        if (countAsIncome) {
+          _selectedCategoryId =
+              _incomeCategoryBeforeFromPeople ?? 'cat_other_income';
+        } else {
+          _incomeCategoryBeforeFromPeople = _selectedCategoryId;
+          _selectedCategoryId = kFromPeopleCategoryId;
+        }
+      }),
+    );
+  }
+
   Widget _buildCategoryGrid(List<dynamic> categories, bool isDark) {
     return Wrap(
       spacing: 8,
@@ -739,6 +779,18 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
               taxCategory: _taxCategory,
             ),
           );
+        }
+        // "Count as income" changed: remember it for this payee.
+        if (_type == TransactionType.income &&
+            existingTxn.isFromPeople != _isFromPeople) {
+          try {
+            await FinancialIngestionService().rememberIncomeChoice(
+              existingTxn.copyWith(
+                  type: _type, categoryId: _selectedCategoryId),
+            );
+          } catch (_) {
+            // The edit itself is saved; only the payee rule failed.
+          }
         }
       } else {
         if (_isRecurring) {
