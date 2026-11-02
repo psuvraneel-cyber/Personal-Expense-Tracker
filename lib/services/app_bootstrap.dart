@@ -1,6 +1,6 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/firebase_options.dart';
@@ -26,7 +26,7 @@ class AppBootstrap {
     tz.initializeTimeZones();
     try {
       final info = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(info.identifier));
+      tz.setLocalLocation(locationFor(info.identifier));
     } catch (e) {
       // Fall back to India Standard Time — the app's primary market.
       try {
@@ -35,6 +35,36 @@ class AppBootstrap {
       AppLogger.debug('[Bootstrap] Local time zone lookup failed: $e');
     }
     _timeZonesReady = true;
+  }
+
+  /// Old zone names many Android devices still report, which the bundled
+  /// time-zone database only knows by their current names.
+  static const Map<String, String> _legacyZoneNames = {
+    'Asia/Calcutta': 'Asia/Kolkata',
+    'Asia/Katmandu': 'Asia/Kathmandu',
+    'Asia/Dacca': 'Asia/Dhaka',
+    'Asia/Rangoon': 'Asia/Yangon',
+    'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+    'Asia/Thimbu': 'Asia/Thimphu',
+    'Asia/Ujung_Pandang': 'Asia/Makassar',
+    'Asia/Ulan_Bator': 'Asia/Ulaanbaatar',
+    'Atlantic/Faeroe': 'Atlantic/Faroe',
+    'Europe/Kiev': 'Europe/Kyiv',
+    'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
+    'America/Indianapolis': 'America/Indiana/Indianapolis',
+  };
+
+  /// The location for a device zone name, translating old names.
+  /// Requires [tz.initializeTimeZones]; throws if the zone is unknown.
+  @visibleForTesting
+  static tz.Location locationFor(String identifier) {
+    try {
+      return tz.getLocation(identifier);
+    } on tz.LocationNotFoundException {
+      final current = _legacyZoneNames[identifier];
+      if (current == null) rethrow;
+      return tz.getLocation(current);
+    }
   }
 
   /// Activates Firebase App Check so Firestore and the AI Worker can verify

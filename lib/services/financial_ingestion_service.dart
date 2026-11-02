@@ -1442,6 +1442,9 @@ class FinancialIngestionService {
     required bool isIncome,
     required String text,
   }) {
+    // The payee is usually just the employer ("ACME TECHNOLOGIES"), so the
+    // salary cue is only in the message.
+    if (isIncome && looksLikeSalary(text)) return 'cat_salary';
     if (isIncome &&
         classified != null &&
         _plainTransferSubTypes.contains(classified.transactionSubType) &&
@@ -1460,6 +1463,19 @@ class FinancialIngestionService {
       isIncome: isIncome,
     );
   }
+
+  static final RegExp _salaryAccount =
+      RegExp(r'\bsal(?:ary)?\s*(?:a/?c|acc(?:oun)?t)\b', caseSensitive: false);
+  static final RegExp _salaryCue = RegExp(
+    r'\b(?:salary|payroll|sal\s+cr(?:edit(?:ed)?)?|sal\s+for\s+\w+)\b',
+    caseSensitive: false,
+  );
+
+  /// A credit that says it is salary. "Credited to your Salary A/c" only
+  /// names the account type, so it doesn't count.
+  @visibleForTesting
+  static bool looksLikeSalary(String text) =>
+      _salaryCue.hasMatch(text.replaceAll(_salaryAccount, ' '));
 
   /// Messages about paying a credit-card bill or moving money between the
   /// user's own accounts. Card *purchases* ("spent on your credit card at
