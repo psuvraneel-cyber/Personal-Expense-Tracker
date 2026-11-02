@@ -317,6 +317,46 @@ void main() {
         expect(
             pending.map((o) => o.stateReason), contains('possible_transfer'));
       });
+
+      test('accepting it as a transfer keeps it out of income and spending',
+          () async {
+        await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'HDFCBK',
+          body: 'Rs 15000.00 debited from HDFC Bank A/c XX1234 on 24-Aug-26 '
+              'for Credit Card Bill payment. Ref 4455667788.',
+          dateMillis: DateTime(2026, 8, 24, 10).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        final id = (await ingestionService.getPendingReviewObservations())
+            .single
+            .observationId;
+
+        final txn = await ingestionService.confirmObservation(
+          observationId: id,
+          overrideType: TransactionType.transfer,
+        );
+
+        expect(txn!.type, TransactionType.transfer);
+        expect(txn.categoryId, kTransferCategoryId);
+        expect(txn.countsAsIncome, isFalse);
+        // The SMS list keeps the direction the message shows.
+        final sms = await db
+            .query('sms_transactions', where: 'id = ?', whereArgs: [id]);
+        expect(sms.single['transactionType'], 'debit');
+      });
+
+      test('a learned Transfer category fits either direction', () {
+        expect(
+          FinancialIngestionService.learnedCategoryFits(kTransferCategoryId,
+              isIncome: false),
+          kTransferCategoryId,
+        );
+        expect(
+          FinancialIngestionService.learnedCategoryFits(kTransferCategoryId,
+              isIncome: true),
+          kTransferCategoryId,
+        );
+      });
     });
 
     group('Cross-source dedup edge cases (audit P2-9)', () {

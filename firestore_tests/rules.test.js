@@ -46,7 +46,12 @@ test("other users and signed-out clients cannot access it", async () => {
 test("invalid transactions are rejected (non-positive, NaN, bad type)", async () => {
   await assertFails(setDoc(doc(alice(), "users/alice/transactions/t1"), { ...txn, amount: 0 }));
   await assertFails(setDoc(doc(alice(), "users/alice/transactions/t2"), { ...txn, amount: NaN }));
-  await assertFails(setDoc(doc(alice(), "users/alice/transactions/t3"), { ...txn, type: "transfer" }));
+  await assertFails(setDoc(doc(alice(), "users/alice/transactions/t3"), { ...txn, type: "loan" }));
+});
+
+test("transfers between own accounts are accepted", async () => {
+  await assertSucceeds(setDoc(doc(alice(), "users/alice/transactions/t4"),
+    { ...txn, type: "transfer", categoryId: "cat_transfer" }));
 });
 
 test("weekly_limits and recurring_payment_history are writable by owner (P1-9)", async () => {

@@ -40,6 +40,10 @@ class CategoryProvider extends ChangeNotifier {
       .toList();
   List<Category> get incomeCategories =>
       _categories.where((c) => c.type == 'income' || c.type == 'both').toList();
+
+  /// Categories for transfers between the user's own accounts.
+  List<Category> get transferCategories =>
+      _categories.where((c) => c.type == 'transfer').toList();
   bool get isLoading => _isLoading;
 
   Future<void> loadCategories() async {

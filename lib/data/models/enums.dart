@@ -7,7 +7,11 @@ library;
 /// Transaction type — income received or expense paid.
 enum TransactionType {
   income,
-  expense;
+  expense,
+
+  /// Money moved between the user's own accounts (a credit-card bill
+  /// payment, a self-transfer). Counted as neither income nor spending.
+  transfer;
 
   /// Serialize to string for SQLite/Firestore storage.
   String toJson() => name;
@@ -16,13 +20,22 @@ enum TransactionType {
   String get displayName => switch (this) {
         TransactionType.income => 'Income',
         TransactionType.expense => 'Expense',
+        TransactionType.transfer => 'Transfer',
+      };
+
+  /// Sign shown before an amount. A transfer neither adds nor removes money.
+  String get amountSign => switch (this) {
+        TransactionType.income => '+',
+        TransactionType.expense => '-',
+        TransactionType.transfer => '',
       };
 
   /// Deserialize from string, defaulting to [expense].
-  static TransactionType fromJson(String? value) {
-    if (value == 'income') return TransactionType.income;
-    return TransactionType.expense;
-  }
+  static TransactionType fromJson(String? value) => switch (value) {
+        'income' => TransactionType.income,
+        'transfer' => TransactionType.transfer,
+        _ => TransactionType.expense,
+      };
 }
 
 /// Payment method for a transaction.

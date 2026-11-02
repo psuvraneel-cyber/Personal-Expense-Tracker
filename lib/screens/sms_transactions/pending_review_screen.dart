@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/color_tokens.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:pet/screens/sms_transactions/sms_detail_widgets.dart';
@@ -207,13 +208,26 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
 
 /// Shown after every accept: accepting also trusts messages of the same
 /// shape from the same sender ("Always add messages like this"), with an
-/// undo right here and a list in Settings.
+/// undo right here and a list in Settings. Transfers trust nothing.
 void _showAcceptedSnack(
   ScaffoldMessengerState messenger,
   SmsTransactionProvider provider,
   String id,
-  String message,
-) {
+  String message, {
+  bool isTransfer = false,
+}) {
+  if (isTransfer) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Saved as a transfer. It is not counted as income or spending.',
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: ColorTokens.transfer,
+      ),
+    );
+    return;
+  }
   messenger.showSnackBar(
     SnackBar(
       content: Text('$message. Similar messages will be added automatically.'),
@@ -388,7 +402,8 @@ Future<void> _showReviewDetail(
   Future<void> accept(BuildContext sheetCtx, String type) async {
     Navigator.pop(sheetCtx);
     await provider.acceptUncertainTransaction(txn.id, overrideType: type);
-    _showAcceptedSnack(messenger, provider, txn.id, 'Accepted as $type');
+    _showAcceptedSnack(messenger, provider, txn.id, 'Accepted as $type',
+        isTransfer: type == 'transfer');
   }
 
   return showModalBottomSheet<void>(
@@ -526,6 +541,23 @@ Future<void> _showReviewDetail(
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => accept(sheetCtx, 'transfer'),
+                        icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                        label: const Text(
+                          'Transfer between my accounts',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: ColorTokens.transfer,
+                          side: BorderSide(
+                            color: ColorTokens.transfer.withAlpha(60),
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -667,7 +699,8 @@ class _UncertainTransactionCard extends StatelessWidget {
           await provider.acceptUncertainTransaction(txn.id, overrideType: type);
           if (!context.mounted) return false;
           _showAcceptedSnack(ScaffoldMessenger.of(context), provider, txn.id,
-              'Accepted as $type');
+              'Accepted as $type',
+              isTransfer: type == 'transfer');
           return false; // Already handled
         } else {
           // Reject
@@ -856,7 +889,8 @@ class _UncertainTransactionCard extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Transaction Type'),
         content: const Text(
-          'Is this a debit (money out) or credit (money in)?',
+          'Is this a debit (money out), a credit (money in), or a transfer '
+          'between your own accounts (like a credit-card bill payment)?',
         ),
         actions: [
           TextButton(
@@ -872,6 +906,11 @@ class _UncertainTransactionCard extends StatelessWidget {
             onPressed: () => Navigator.pop(ctx, 'credit'),
             style: TextButton.styleFrom(foregroundColor: AppTheme.incomeGreen),
             child: const Text('Credit'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'transfer'),
+            style: TextButton.styleFrom(foregroundColor: ColorTokens.transfer),
+            child: const Text('Transfer'),
           ),
         ],
       ),

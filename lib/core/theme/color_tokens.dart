@@ -39,6 +39,9 @@ abstract final class ColorTokens {
   static const Color warning = Color(0xFFF59E0B);
   static const Color info = Color(0xFF3B82F6);
 
+  /// Transfers between the user's own accounts: neither income nor spending.
+  static const Color transfer = info;
+
   // ─────────────────────────── Dark palette ────────────────────────────────
   static const Color darkBg = Color(0xFF0D0B1E);
   static const Color darkSurface = Color(0xFF141127);
@@ -128,6 +131,13 @@ abstract final class ColorTokens {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+  );
+
+  /// Transfer gradient
+  static const LinearGradient transferGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
   );
 
   /// Purple accent gradient
