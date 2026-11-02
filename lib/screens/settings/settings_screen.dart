@@ -11,6 +11,9 @@ import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/spacing.dart';
+import 'package:pet/core/theme/typography.dart';
+import 'package:pet/core/widgets/category_avatar.dart';
+import 'package:pet/core/widgets/pet_section.dart';
 import 'package:pet/core/theme/theme_mode_notifier.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/services/auth_service.dart';
@@ -137,8 +140,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Spacing.tabBottom(context, fab: false),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _grouped([
             // Profile section
             if (_userName.isNotEmpty) ...[
               _buildProfileCard(context, isDark),
@@ -274,7 +277,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             Consumer<PremiumProvider>(
               builder: (context, premium, _) {
-                return Column(
+                return PetSection(
                   children: [
                     _buildSettingTile(
                       context,
@@ -294,7 +297,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       },
                     ),
-                    const SizedBox(height: 8),
                     _buildSettingTile(
                       context,
                       isDark: isDark,
@@ -347,7 +349,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 8),
               Consumer<SmsTransactionProvider>(
                 builder: (context, smsProvider, _) {
-                  return Column(
+                  return PetSection(
                     children: [
                       _buildSettingTile(
                         context,
@@ -667,10 +669,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _signOut(context),
             ),
             _buildDangerZoneSection(context),
-          ],
+          ]),
         ),
       ),
     );
+  }
+
+  /// Runs of setting tiles become one grouped surface with hairlines, so
+  /// the page reads as a few sections instead of a stack of boxes. Small
+  /// spacers between tiles in a run are dropped; everything else (titles,
+  /// the profile card, the theme picker, larger gaps) passes through.
+  static List<Widget> _grouped(List<Widget> children) {
+    final out = <Widget>[];
+    var run = <Widget>[];
+    void flush() {
+      if (run.isNotEmpty) out.add(PetSection(children: run));
+      run = <Widget>[];
+    }
+
+    for (final w in children) {
+      if (w is _SettingTile) {
+        run.add(w);
+      } else if (w is SizedBox &&
+          w.child == null &&
+          (w.height ?? 0) <= 8 &&
+          run.isNotEmpty) {
+        continue;
+      } else {
+        flush();
+        out.add(w);
+      }
+    }
+    flush();
+    return out;
   }
 
   Widget _buildDangerZoneSection(BuildContext context) {
@@ -738,12 +769,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSectionTitle(BuildContext context, String title) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: Spacing.sm),
+      child: Semantics(
+        header: true,
+        child: Text(
+          title.toUpperCase(),
+          style: AppTypography.overline(
+            color: isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
           ),
+        ),
+      ),
     );
   }
 
@@ -767,12 +804,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               color: isSelected
                   ? AppTheme.accentPurple.withAlpha(isDark ? 50 : 30)
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? AppTheme.accentPurple.withAlpha(120)
-                    : Colors.transparent,
-              ),
+              borderRadius: BorderRadius.circular(Spacing.radiusMd),
             ),
             child: Column(
               children: [
@@ -809,10 +841,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
-        ),
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
+        border: isDark
+            ? null
+            : Border.all(color: Colors.black.withAlpha(8), width: 1),
       ),
       child: Row(
         children: [
@@ -836,56 +868,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Widget? trailing,
     VoidCallback? onTap,
   }) {
-    return GestureDetector(
+    return _SettingTile(
+      icon: icon,
+      iconColor: iconColor,
+      title: title,
+      subtitle: subtitle,
+      trailing: trailing,
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-        margin: const EdgeInsets.only(bottom: 4),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.cardDark : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color:
-                isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: iconColor.withAlpha(25),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) trailing,
-          ],
-        ),
-      ),
     );
   }
 
@@ -1558,5 +1547,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     }
+  }
+}
+
+/// One setting: icon tile, title, optional subtitle and trailing control.
+/// Its own type so [_SettingsScreenState._grouped] can find runs of them.
+class _SettingTile extends StatelessWidget {
+  const _SettingTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PetRow(
+      title: title,
+      subtitle: subtitle,
+      leading: CategoryAvatar(icon: icon, color: iconColor, size: 36),
+      trailing: trailing,
+      // Rows that open something get a chevron; rows with a control don't.
+      showChevron: onTap != null && trailing == null,
+      onTap: onTap,
+    );
   }
 }

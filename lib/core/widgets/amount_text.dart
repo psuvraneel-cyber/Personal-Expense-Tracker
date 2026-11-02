@@ -77,7 +77,7 @@ class AmountText extends StatelessWidget {
       child: Text.rich(
         TextSpan(
           children: [
-            if (sign.isNotEmpty) TextSpan(text: '$sign '),
+            if (sign.isNotEmpty) TextSpan(text: sign),
             TextSpan(
               text: '₹',
               style: style.copyWith(

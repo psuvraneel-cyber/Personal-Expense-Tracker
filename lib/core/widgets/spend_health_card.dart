@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pet/core/theme/pet_colors.dart';
+import 'package:pet/core/theme/color_tokens.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/typography.dart';
 import 'package:pet/services/spend_health_service.dart';
@@ -199,9 +199,5 @@ class SpendHealthCard extends StatelessWidget {
     );
   }
 
-  static Color _scoreColor(int score) {
-    if (score >= 70) return PETColors.success;
-    if (score >= 40) return PETColors.warning;
-    return PETColors.alert;
-  }
+  static Color _scoreColor(int score) => ColorTokens.score(score);
 }

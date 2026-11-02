@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -573,18 +574,28 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
                 // While locked, the app underneath is removed from the
                 // accessibility tree (TalkBack can't read balances) and can't
                 // receive touches.
-                return Stack(
-                  children: [
-                    ExcludeSemantics(
-                      excluding: _showBiometricLock,
-                      child: AbsorbPointer(
-                        absorbing: _showBiometricLock,
-                        child: child ?? const SizedBox.shrink(),
+                // Screens without an AppBar draw under the status bar, so
+                // set its icons to contrast with the theme (dark icons on
+                // the light theme, light icons on the dark one).
+                final dark = Theme.of(context).brightness == Brightness.dark;
+                return AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: (dark
+                          ? SystemUiOverlayStyle.light
+                          : SystemUiOverlayStyle.dark)
+                      .copyWith(statusBarColor: Colors.transparent),
+                  child: Stack(
+                    children: [
+                      ExcludeSemantics(
+                        excluding: _showBiometricLock,
+                        child: AbsorbPointer(
+                          absorbing: _showBiometricLock,
+                          child: child ?? const SizedBox.shrink(),
+                        ),
                       ),
-                    ),
-                    if (_showBiometricLock)
-                      BiometricLockScreen(onUnlocked: _onBiometricUnlocked),
-                  ],
+                      if (_showBiometricLock)
+                        BiometricLockScreen(onUnlocked: _onBiometricUnlocked),
+                    ],
+                  ),
                 );
               },
               routes: {
