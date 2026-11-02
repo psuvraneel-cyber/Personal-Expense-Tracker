@@ -1,3 +1,5 @@
+import 'dart:math' show min;
+
 import 'package:flutter/foundation.dart';
 
 /// Risk level classification for cashflow stability over the forecast window.
@@ -128,6 +130,13 @@ class CashflowForecast {
   /// Optional scenario forecast overlay when What-If simulation is active.
   final CashflowForecast? scenarioOverlay;
 
+  /// Day of the month salary usually arrives, when history shows a monthly
+  /// pattern; null means all income is spread evenly over the days.
+  final int? paydayDayOfMonth;
+
+  /// Salary expected within the horizon (part of [expectedIncome]).
+  final double expectedSalary;
+
   const CashflowForecast({
     required this.referenceDate,
     this.horizonDays = 30,
@@ -156,6 +165,8 @@ class CashflowForecast {
     this.hasInsufficientData = false,
     this.hasNegativeStartingBalance = false,
     this.scenarioOverlay,
+    this.paydayDayOfMonth,
+    this.expectedSalary = 0.0,
   });
 
   /// Alias for startingBalance for domain alignment.
@@ -179,6 +190,9 @@ class CashflowPoint {
   final bool isFirstDeficit;
   final double? scenarioBalance;
 
+  /// Salary expected on this day (included in [incomeAmount]).
+  final double salaryAmount;
+
   const CashflowPoint({
     required this.date,
     required this.balance,
@@ -190,11 +204,27 @@ class CashflowPoint {
     this.isLowestPoint = false,
     this.isFirstDeficit = false,
     this.scenarioBalance,
+    this.salaryAmount = 0.0,
   });
 
-  bool get isSalaryDeposit => incomeAmount > 0;
+  /// Payday. (Averaged daily income alone isn't an event.)
+  bool get isSalaryDeposit => salaryAmount > 0;
   bool get isRecurringBillDue => billsAmount > 0;
   String? get eventTitle => billNames.isNotEmpty
       ? billNames.join(', ')
-      : (incomeAmount > 0 ? 'Expected Income' : null);
+      : (salaryAmount > 0 ? 'Expected salary' : null);
+}
+
+/// A monthly salary found in history: about [amount] around [dayOfMonth].
+@immutable
+class SalarySchedule {
+  const SalarySchedule({required this.dayOfMonth, required this.amount});
+
+  final int dayOfMonth;
+  final double amount;
+
+  /// The payday in a given month (the 31st becomes the 30th in a
+  /// 30-day month, and so on).
+  int dayIn(int year, int month) =>
+      min(dayOfMonth, DateTime(year, month + 1, 0).day);
 }
