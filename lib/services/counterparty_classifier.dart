@@ -68,19 +68,47 @@ class CounterpartyClassifier {
     'paytmqr',
   };
 
-  static final RegExp _phoneVpaLocal = RegExp(r'^(?:\+?91)?[6-9]\d{9}(?:-\d)?$');
+  static final RegExp _phoneVpaLocal =
+      RegExp(r'^(?:\+?91)?[6-9]\d{9}(?:-\d)?$');
 
   /// Words that are never part of a person's name in these messages.
   static const Set<String> _notNameWords = {
-    'upi', 'imps', 'neft', 'rtgs', 'payment', 'payments', 'transfer', 'bank',
-    'credit', 'debit', 'card', 'account', 'wallet', 'unknown', 'refund',
-    'cashback', 'salary', 'interest', 'charges', 'charge', 'fee', 'atm',
-    'cash', 'online', 'india', 'the', 'and', 'for', 'via', 'ref', 'txn',
+    'upi',
+    'imps',
+    'neft',
+    'rtgs',
+    'payment',
+    'payments',
+    'transfer',
+    'bank',
+    'credit',
+    'debit',
+    'card',
+    'account',
+    'wallet',
+    'unknown',
+    'refund',
+    'cashback',
+    'salary',
+    'interest',
+    'charges',
+    'charge',
+    'fee',
+    'atm',
+    'cash',
+    'online',
+    'india',
+    'the',
+    'and',
+    'for',
+    'via',
+    'ref',
+    'txn',
   };
 
-  static final RegExp _honorific =
-      RegExp(r'^(?:mr|mrs|ms|miss|shri|sri|smt|dr|kumari)\.?\s+',
-          caseSensitive: false);
+  static final RegExp _honorific = RegExp(
+      r'^(?:mr|mrs|ms|miss|shri|sri|smt|dr|kumari)\.?\s+',
+      caseSensitive: false);
 
   /// Classifies the other party of a payment.
   ///
@@ -98,7 +126,9 @@ class CounterpartyClassifier {
     final lowerText = text.toLowerCase();
 
     if (name.isNotEmpty && name.toLowerCase() != 'unknown') {
-      if (MerchantNormalizer.isKnownBrand(name)) return CounterpartyType.company;
+      if (MerchantNormalizer.isKnownBrand(name)) {
+        return CounterpartyType.company;
+      }
       if (_legalEntity.hasMatch(name)) return CounterpartyType.company;
       if (_tradeWords.hasMatch(name)) return CounterpartyType.shop;
     }
@@ -118,7 +148,8 @@ class CounterpartyClassifier {
     }
     if (lowerText.contains('salary')) return CounterpartyType.company;
     final ch = channel.toLowerCase();
-    if (ch.contains('card') || ch.contains('pos') ||
+    if (ch.contains('card') ||
+        ch.contains('pos') ||
         RegExp(r'\b(?:pos|card\s+(?:xx|ending))').hasMatch(lowerText)) {
       return CounterpartyType.shop;
     }
@@ -136,10 +167,8 @@ class CounterpartyClassifier {
     var name = raw.trim();
     if (name.isEmpty || RegExp(r'\d|@').hasMatch(name)) return false;
     name = name.replaceFirst(_honorific, '');
-    final words = name
-        .split(RegExp(r'[\s.]+'))
-        .where((w) => w.isNotEmpty)
-        .toList();
+    final words =
+        name.split(RegExp(r'[\s.]+')).where((w) => w.isNotEmpty).toList();
     if (words.isEmpty || words.length > 4) return false;
     if (!words.every((w) => RegExp(r"^[A-Za-z']{1,15}$").hasMatch(w))) {
       return false;

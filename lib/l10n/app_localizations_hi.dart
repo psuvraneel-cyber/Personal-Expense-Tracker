@@ -346,6 +346,13 @@ class AppLocalizationsHi extends AppLocalizations {
       'बजट, असामान्य खर्च, बिल और रिपोर्ट नोटिफ़िकेशन';
 
   @override
+  String get settingsTrustedMessages => 'अपने-आप जुड़ने वाले मैसेज';
+
+  @override
+  String get settingsTrustedMessagesSubtitle =>
+      'पेंडिंग रिव्यू से हमेशा जोड़ने के लिए चुने गए मैसेज';
+
+  @override
   String get settingsBattery => 'बैटरी और ऑटोस्टार्ट सेटिंग्स';
 
   @override

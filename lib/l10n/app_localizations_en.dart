@@ -348,6 +348,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Manage budget, anomaly, bill and report notifications';
 
   @override
+  String get settingsTrustedMessages => 'Auto-added messages';
+
+  @override
+  String get settingsTrustedMessagesSubtitle =>
+      'Message types you chose to always add from Pending Review';
+
+  @override
   String get settingsBattery => 'Battery & Autostart Settings';
 
   @override

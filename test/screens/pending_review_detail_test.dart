@@ -29,9 +29,13 @@ class _FakeProvider extends SmsTransactionProvider {
     double? overrideAmount,
     String? overrideMerchant,
     String? overrideCategoryId,
+    bool trustSimilar = true,
   }) async {
     accepted[id] = overrideType;
   }
+
+  @override
+  Future<void> stopTrustingSimilar(String id) async {}
 
   @override
   Future<void> rejectUncertainTransaction(String id) async {

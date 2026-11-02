@@ -110,6 +110,8 @@
   "settingsWidgetManual": "होम स्क्रीन को देर तक दबाएँ, विजेट चुनें, फिर P.E.T चुनें।",
   "settingsNotificationPrefs": "नोटिफ़िकेशन पसंद",
   "settingsNotificationPrefsSubtitle": "बजट, असामान्य खर्च, बिल और रिपोर्ट नोटिफ़िकेशन",
+  "settingsTrustedMessages": "अपने-आप जुड़ने वाले मैसेज",
+  "settingsTrustedMessagesSubtitle": "पेंडिंग रिव्यू से हमेशा जोड़ने के लिए चुने गए मैसेज",
   "settingsBattery": "बैटरी और ऑटोस्टार्ट सेटिंग्स",
   "settingsPremiumHub": "प्रीमियम हब",
   "settingsPremiumActive": "चालू",

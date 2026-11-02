@@ -439,6 +439,65 @@ void main() {
       expect(ledgerAfter.first['merchantName'], equals('Local Shop'));
     });
 
+    group('Always add messages like this', () {
+      NativeSmsMessage shopDebit(String amount, int hour) => NativeSmsMessage(
+            address: 'HDFCBK',
+            body: 'Rs $amount debited at Unknown Shop. Info txn.',
+            dateMillis: DateTime(2026, 8, 25, hour).millisecondsSinceEpoch,
+            source: 'sms',
+          );
+
+      test('after accepting with trust, the next one is added directly',
+          () async {
+        expect(await ingestionService.ingestMessage(shopDebit('150.00', 9)),
+            isNull);
+        final pending = await ingestionService.getPendingReviewObservations();
+        final id = pending.single.observationId;
+        await ingestionService.confirmObservation(observationId: id);
+        expect(
+          await ingestionService.trustObservation(id,
+              type: TransactionType.expense),
+          isNotNull,
+        );
+
+        final next =
+            await ingestionService.ingestMessage(shopDebit('275.50', 13));
+        expect(next, isNotNull);
+        expect(next!.amount, 275.50);
+        final obs = await db.query('financial_observations',
+            where: 'canonicalTransactionId = ?', whereArgs: [next.id]);
+        expect(obs.single['stateReason'], 'trusted_template_auto_promotion');
+      });
+
+      test('without trust, or after undo, it still goes to review', () async {
+        await ingestionService.ingestMessage(shopDebit('150.00', 9));
+        final id = (await ingestionService.getPendingReviewObservations())
+            .single
+            .observationId;
+        await ingestionService.confirmObservation(observationId: id);
+        final hash = await ingestionService.trustObservation(id,
+            type: TransactionType.expense);
+        await ingestionService.untrustTemplate(hash!);
+
+        expect(await ingestionService.ingestMessage(shopDebit('80.00', 15)),
+            isNull);
+      });
+
+      test('a trusted debit shape does not accept money in', () async {
+        await ingestionService.ingestMessage(shopDebit('150.00', 9));
+        final id = (await ingestionService.getPendingReviewObservations())
+            .single
+            .observationId;
+        await ingestionService.confirmObservation(observationId: id);
+        // The user (wrongly) accepted it as money in: debits of this shape
+        // must still be reviewed.
+        await ingestionService.trustObservation(id,
+            type: TransactionType.income);
+        expect(await ingestionService.ingestMessage(shopDebit('60.00', 16)),
+            isNull);
+      });
+    });
+
     test(
         'Test F — Rejected transaction records persistent tombstone and prevents resurrection on re-scan',
         () async {

@@ -28,6 +28,7 @@ import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/services/sms_parser/sender_identity.dart';
 import 'package:pet/services/sms_parser/transaction_evidence.dart';
 import 'package:pet/services/sms_service.dart';
+import 'package:pet/services/trusted_template_service.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
@@ -53,6 +54,8 @@ class FinancialIngestionService {
   final LinkedAccountRepository _accountRepository = LinkedAccountRepository();
   final IngestionDiagnostics _diagnostics = IngestionDiagnostics.instance;
   final MerchantRuleService _merchantRuleService = MerchantRuleService();
+  TrustedTemplateService get _trustedTemplates =>
+      TrustedTemplateService(dbHelper: _dbHelper);
   final RecurringPaymentRepository _recurringRepository =
       RecurringPaymentRepository();
   static const Uuid _uuid = Uuid();
@@ -498,11 +501,25 @@ class FinancialIngestionService {
       balanceAfter: classified.balanceAfter,
     );
     final looksLikeOffer = offerVerdict == OfferVerdict.review;
+    // The user accepted a message of this exact shape from this sender
+    // before and asked to always add them. Never overrides the transfer or
+    // offer checks, and a credit template never accepts a debit.
+    final trustedTemplate = (possibleTransfer ||
+            offerVerdict != OfferVerdict.clean ||
+            !(isIncome || classified.transactionType == 'debit'))
+        ? null
+        : await _trustedTemplates.match(
+            sender: sender,
+            isIncome: isIncome,
+            text: normalizedText,
+            payee: classified.merchantName,
+          );
     final isAutoAccept = !possibleTransfer &&
         !looksLikeOffer &&
         ((confidence >= autoAcceptConfidenceThreshold) ||
             hasHighEvidence ||
-            isVerifiedBankAlert);
+            isVerifiedBankAlert ||
+            trustedTemplate != null);
     final reviewReason = possibleTransfer
         ? 'possible_transfer'
         : looksLikeOffer
@@ -645,7 +662,9 @@ class FinancialIngestionService {
       observationHash: observationHash,
       sourceFingerprint: fingerprint,
       state: FinancialObservationState.promoted,
-      stateReason: 'high_confidence_auto_promotion',
+      stateReason: trustedTemplate != null
+          ? 'trusted_template_auto_promotion'
+          : 'high_confidence_auto_promotion',
       confidence: confidence,
       canonicalTransactionId: txnId,
     );
@@ -915,6 +934,43 @@ class FinancialIngestionService {
           overrideType: overrideType,
         ),
       );
+
+  /// "Always add messages like this": trusts the shape of an observation
+  /// the user just accepted, so the next one from the same sender is added
+  /// without review. Returns the template hash (for undo), or null when the
+  /// message can't be read any more.
+  Future<String?> trustObservation(String observationId,
+      {TransactionType? type}) async {
+    final db = await _dbHelper.database;
+    final rows = await db.query(
+      'financial_observations',
+      where: 'observationId = ?',
+      whereArgs: [observationId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final observation = FinancialObservation.fromMap(rows.first);
+    if (observation.normalizedText.isEmpty) return null;
+    final sender = observation.sender ?? observation.sourceIdentifier;
+    final classified = await ClassificationRuleEngine.classify(
+      observation.normalizedText,
+      sender,
+      observation.sourceTimestamp,
+    );
+    final isIncome = type != null
+        ? type == TransactionType.income
+        : classified?.transactionType == 'credit';
+    return _trustedTemplates.trust(
+      sender: sender,
+      isIncome: isIncome,
+      text: observation.normalizedText,
+      payee: classified?.merchantName,
+    );
+  }
+
+  /// Stops trusting a message shape (undo, or removed in Settings).
+  Future<void> untrustTemplate(String templateHash) =>
+      _trustedTemplates.remove(templateHash);
 
   Future<TransactionRecord?> _confirmObservationUnlocked({
     required String observationId,

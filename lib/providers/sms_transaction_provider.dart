@@ -396,13 +396,22 @@ class SmsTransactionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Message shapes trusted by accepts in this session, by observation id,
+  /// so the "Don't auto-add" undo can find them.
+  final Map<String, String> _trustedTemplateByObservation = {};
+
   /// Accept an uncertain transaction — mark as verified and move to main list.
+  ///
+  /// With [trustSimilar] (the default: "Always add messages like this"),
+  /// later messages of the same shape from the same sender are added
+  /// without review. [stopTrustingSimilar] undoes that.
   Future<void> acceptUncertainTransaction(
     String id, {
     String? overrideType,
     double? overrideAmount,
     String? overrideMerchant,
     String? overrideCategoryId,
+    bool trustSimilar = true,
   }) async {
     final index = _uncertainTransactions.indexWhere((t) => t.id == id);
     if (index == -1) return;
@@ -439,6 +448,20 @@ class SmsTransactionProvider extends ChangeNotifier {
           '[PET-SMS] Error promoting confirmed observation to ledger: $e');
     }
 
+    if (trustSimilar && (finalType == 'credit' || finalType == 'debit')) {
+      try {
+        final hash = await FinancialIngestionService().trustObservation(
+          id,
+          type: finalType == 'credit'
+              ? TransactionType.income
+              : TransactionType.expense,
+        );
+        if (hash != null) _trustedTemplateByObservation[id] = hash;
+      } catch (e) {
+        AppLogger.debug('[PET-SMS] Could not trust message shape: $e');
+      }
+    }
+
     // Record feedback for future learning
     final feedback = UserFeedbackStore.recordFeedback(
       smsBody: txn.rawSmsBody,
@@ -454,6 +477,13 @@ class SmsTransactionProvider extends ChangeNotifier {
         _uncertainTransactions.where((t) => t.id != id).toList();
     _transactions = [updated, ..._transactions];
     notifyListeners();
+  }
+
+  /// Undo for "Always add messages like this" on the accept of [id].
+  Future<void> stopTrustingSimilar(String id) async {
+    final hash = _trustedTemplateByObservation.remove(id);
+    if (hash == null) return;
+    await FinancialIngestionService().untrustTemplate(hash);
   }
 
   /// Reject an uncertain transaction — mark as not a transaction.

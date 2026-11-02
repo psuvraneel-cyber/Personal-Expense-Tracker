@@ -30,8 +30,8 @@ void main() {
     });
 
     test('a brand behind a UPI ID', () {
-      expect(classify('Unknown', upi: 'swiggy@icici'),
-          CounterpartyType.company);
+      expect(
+          classify('Unknown', upi: 'swiggy@icici'), CounterpartyType.company);
     });
   });
 
@@ -61,15 +61,15 @@ void main() {
     });
 
     test('card / POS payments', () {
-      expect(classify('RELIANCE SMART', channel: 'CARD'),
-          CounterpartyType.shop);
+      expect(
+          classify('RELIANCE SMART', channel: 'CARD'), CounterpartyType.shop);
     });
   });
 
   group('people', () {
     test('phone-number UPI IDs', () {
-      expect(classify('Unknown', upi: '9876543210@ybl'),
-          CounterpartyType.person);
+      expect(
+          classify('Unknown', upi: '9876543210@ybl'), CounterpartyType.person);
       expect(classify('Unknown', upi: '919812345678@paytm'),
           CounterpartyType.person);
     });
