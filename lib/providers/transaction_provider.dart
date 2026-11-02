@@ -137,7 +137,7 @@ class TransactionProvider extends ChangeNotifier {
       if (t.date.month != _currentMonth || t.date.year != _currentYear) {
         continue;
       }
-      if (t.type == TransactionType.income) {
+      if (t.countsAsIncome) {
         income += t.amount;
       } else if (t.type == TransactionType.expense) {
         expenses += t.amount;

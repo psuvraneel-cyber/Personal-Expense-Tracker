@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:pet/core/constants/categories.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/financial_observation.dart';
@@ -162,6 +163,50 @@ void main() {
 
       // Diagnostics check
       expect(IngestionDiagnostics().crossSourceMerged, equals(1));
+    });
+
+    group('Money received from people', () {
+      test('a UPI credit from a person is "From people", not income',
+          () async {
+        final txn = await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'JM-HDFCBK-S',
+          body: 'Rs 1,500.00 credited to HDFC Bank A/c XX1234 on 24-Aug-26 '
+              'from VPA 9876543210@ybl (RAHUL SHARMA). UPI Ref 412345678901.',
+          dateMillis: DateTime(2026, 8, 24, 20).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(txn, isNotNull);
+        expect(txn!.type, TransactionType.income);
+        expect(txn.categoryId, kFromPeopleCategoryId);
+        expect(txn.isFromPeople, isTrue);
+        expect(txn.countsAsIncome, isFalse);
+      });
+
+      test('a salary credit stays income', () async {
+        final txn = await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'JM-HDFCBK-S',
+          body: 'Rs 50,000.00 credited to HDFC Bank A/c XX1234 on 01-Sep-26 '
+              'by NEFT from ACME TECHNOLOGIES PVT LTD - SALARY. '
+              'Ref N244260012345.',
+          dateMillis: DateTime(2026, 9, 1, 10).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(txn, isNotNull);
+        expect(txn!.categoryId, isNot(kFromPeopleCategoryId));
+        expect(txn.countsAsIncome, isTrue);
+      });
+
+      test('a refund from a shop stays a refund', () async {
+        final txn = await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'JM-HDFCBK-S',
+          body: 'Refund of Rs 299.00 credited to HDFC Bank A/c XX1234 from '
+              'AMAZON on 02-Sep-26. Ref 512345678901.',
+          dateMillis: DateTime(2026, 9, 2, 12).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(txn, isNotNull);
+        expect(txn!.categoryId, isNot(kFromPeopleCategoryId));
+      });
     });
 
     group('Transfers and card-bill payments (audit P2-10)', () {

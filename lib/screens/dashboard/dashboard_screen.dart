@@ -889,7 +889,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         double expenses = 0.0;
         for (final txn in txnProvider.allTransactions) {
           if (txn.date.year != year) continue;
-          if (txn.type == TransactionType.income) {
+          if (txn.countsAsIncome) {
             income += txn.amount;
           } else if (txn.type == TransactionType.expense) {
             expenses += txn.amount;
@@ -912,7 +912,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         for (final txn in txnProvider.allTransactions) {
           if (txn.date.year < startYear || txn.date.year > endYear) continue;
           final index = txn.date.year - startYear;
-          if (txn.type == TransactionType.income) {
+          if (txn.countsAsIncome) {
             income += txn.amount;
           } else if (txn.type == TransactionType.expense) {
             expenses += txn.amount;

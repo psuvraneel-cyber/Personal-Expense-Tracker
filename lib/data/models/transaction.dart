@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pet/core/constants/categories.dart' show kFromPeopleCategoryId;
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/services/category_mapper.dart';
 
@@ -45,6 +46,15 @@ class TransactionRecord {
 
   /// Serialize to SQLite row — enums are stored as their string representation
   /// for backward compatibility with existing databases.
+  /// Money a person sent you (category "From people"): real money in, but
+  /// not earnings, so it's left out of income totals.
+  bool get isFromPeople =>
+      type == TransactionType.income && categoryId == kFromPeopleCategoryId;
+
+  /// Whether this counts towards income totals (dashboards, summaries,
+  /// forecasts, AI). Balances still include every income transaction.
+  bool get countsAsIncome => type == TransactionType.income && !isFromPeople;
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

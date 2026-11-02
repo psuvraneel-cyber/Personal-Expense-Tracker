@@ -66,7 +66,7 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
       double expense = 0.0;
       for (final t in _lastTxns!) {
         if (t.date.isAfter(cutoff)) {
-          if (t.type == TransactionType.income) {
+          if (t.countsAsIncome) {
             income += t.amount;
           } else if (t.type == TransactionType.expense) {
             expense += t.amount;

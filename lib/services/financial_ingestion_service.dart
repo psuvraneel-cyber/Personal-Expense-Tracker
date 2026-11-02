@@ -15,7 +15,9 @@ import 'package:pet/premium/repositories/linked_account_repository.dart';
 import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/services/merchant_normalizer.dart';
 import 'package:pet/premium/services/notification_service.dart';
+import 'package:pet/core/constants/categories.dart' show kFromPeopleCategoryId;
 import 'package:pet/services/canonical_identity_resolver.dart';
+import 'package:pet/services/counterparty_classifier.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/category_mapper.dart';
 import 'package:pet/services/classification_rule_engine.dart';
@@ -456,10 +458,11 @@ class FinancialIngestionService {
     // 5. Ingestion Decision
     final isIncome = classified.transactionType == 'credit';
     final mappedCategoryId = learnedRule?.learnedCategoryId ??
-        CategoryMapper.mapToCategoryId(
-          parserCategory: classified.category,
-          merchantName: merchant,
+        importCategoryId(
+          classified: classified,
+          merchant: merchant,
           isIncome: isIncome,
+          text: normalizedText,
         );
 
     // Evidence-based high-confidence determination (P2.2)
@@ -942,10 +945,11 @@ class FinancialIngestionService {
             ? TransactionType.income
             : TransactionType.expense);
     final finalCategoryId = overrideCategoryId ??
-        CategoryMapper.mapToCategoryId(
-          parserCategory: classified?.category,
-          merchantName: finalMerchant,
+        importCategoryId(
+          classified: classified,
+          merchant: finalMerchant,
           isIncome: finalType == TransactionType.income,
+          text: observation.normalizedText,
         );
 
     final txnId = 'txn_$observationId';
@@ -1276,6 +1280,45 @@ class FinancialIngestionService {
     return classified.transactionType == 'credit'
         ? '$channel credit'
         : '$channel payment';
+  }
+
+  /// Sub-types that are plain money movements (not refunds, cashback or
+  /// reversals, which keep their own categories).
+  static const Set<String> _plainTransferSubTypes = {
+    'payment',
+    'transfer',
+    'collect',
+    'unknown',
+    '',
+  };
+
+  /// Category for an imported transaction (when the user hasn't taught one
+  /// for this payee): money a *person* sent you is "From people" — tracked,
+  /// but not counted as income; everything else uses the usual mapping.
+  @visibleForTesting
+  static String importCategoryId({
+    required ClassifiedTransaction? classified,
+    required String merchant,
+    required bool isIncome,
+    required String text,
+  }) {
+    if (isIncome &&
+        classified != null &&
+        _plainTransferSubTypes.contains(classified.transactionSubType) &&
+        CounterpartyClassifier.classify(
+              payeeName: classified.merchantName,
+              upiId: classified.upiId,
+              channel: classified.channel,
+              text: text,
+            ) ==
+            CounterpartyType.person) {
+      return kFromPeopleCategoryId;
+    }
+    return CategoryMapper.mapToCategoryId(
+      parserCategory: classified?.category,
+      merchantName: merchant,
+      isIncome: isIncome,
+    );
   }
 
   /// Messages about paying a credit-card bill or moving money between the

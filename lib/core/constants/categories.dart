@@ -131,4 +131,16 @@ final List<Category> defaultCategories = [
     color: const Color(0xFF6B7280),
     type: 'income',
   ),
+  // Money a person sent you (a friend paying back, family): shown and
+  // tracked, but not counted as income. See TransactionRecord.countsAsIncome.
+  Category(
+    id: kFromPeopleCategoryId,
+    name: 'From people',
+    icon: Icons.people_alt_rounded,
+    color: const Color(0xFF0EA5E9),
+    type: 'income',
+  ),
 ];
+
+/// Category for money received from people (not counted as income).
+const String kFromPeopleCategoryId = 'cat_from_people';

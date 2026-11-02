@@ -126,7 +126,7 @@ class CashflowForecastService {
     }
 
     final double baselineIncome = baselineTransactions
-        .where((t) => t.type == TransactionType.income)
+        .where((t) => t.countsAsIncome)
         .fold(0.0, (sum, t) => sum + t.amount);
 
     final avgDailyIncome = baselineIncome / effectiveDays;
