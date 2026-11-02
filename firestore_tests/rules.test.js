@@ -138,11 +138,21 @@ async function seedHousehold({ members = ["alice"], invite = "ABCD2345", expires
   });
 }
 
+// Households are Premium-only: the Worker sets a `premium` claim on the token.
+const alicePremium = () => env.authenticatedContext("alice", { premium: true }).firestore();
+
 test("households: create only yourself as sole owner/member", async () => {
-  await assertSucceeds(setDoc(doc(alice(), "households/h1"), household));
-  await assertFails(setDoc(doc(alice(), "households/h2"),
+  await assertSucceeds(setDoc(doc(alicePremium(), "households/h1"), household));
+  await assertFails(setDoc(doc(alicePremium(), "households/h2"),
     { ...household, memberUids: ["alice", "bob"], memberNames: { alice: "A", bob: "B" } }));
   await assertFails(setDoc(doc(bob(), "households/h3"), household));
+});
+
+test("households: only Premium accounts can create one", async () => {
+  await assertFails(setDoc(doc(alice(), "households/h5"), household));
+  const lapsed = env.authenticatedContext("alice", { premium: false }).firestore();
+  await assertFails(setDoc(doc(lapsed, "households/h6"), household));
+  await assertSucceeds(setDoc(doc(alicePremium(), "households/h7"), household));
 });
 
 test("households: guests (anonymous accounts) can't create one", async () => {

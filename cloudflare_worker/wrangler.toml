@@ -32,6 +32,10 @@ REFERRAL_MAX_PER_YEAR = "12"
 #
 # GROQ_API_KEY         — Groq API key for LLM inference
 # REVENUECAT_API_KEY   — RevenueCat secret API key for entitlement verification
+# FIREBASE_SERVICE_ACCOUNT — JSON key of a service account with the "Firebase
+#                        Authentication Admin" role; /premium/claim uses it to
+#                        set the `premium` custom claim that Firestore rules
+#                        require for creating a household
 #
 # Optional:
 # DELETION_ALERT_WEBHOOK — URL that is POSTed (no personal data) when someone

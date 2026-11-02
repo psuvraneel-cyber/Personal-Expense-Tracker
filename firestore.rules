@@ -236,7 +236,10 @@ service cloud.firestore {
     match /households/{hid} {
       allow read: if signedIn() && request.auth.uid in resource.data.memberUids;
 
+      // Premium-only, enforced here: the Worker copies the RevenueCat
+      // entitlement onto the ID token as a `premium` claim (/premium/claim).
       allow create: if isRegisteredUser()
+        && request.auth.token.get('premium', false) == true
         && request.resource.data.keys().hasOnly(['name', 'ownerUid', 'memberUids', 'memberNames', 'createdAt'])
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.memberUids == [request.auth.uid]

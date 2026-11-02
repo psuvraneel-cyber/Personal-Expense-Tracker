@@ -87,6 +87,8 @@ class _SharedBudgetsScreenState extends State<SharedBudgetsScreen> {
       await _service.create(uid: _user!.uid, displayName: _myName, name: name);
       HouseholdSync.reset();
       AnalyticsService.instance.logEvent('household_created');
+    } on PremiumRequiredException {
+      _toast('Creating a household needs Premium. You can still join one.');
     } catch (_) {
       _toast("Couldn't create the household. Check your connection.");
     }

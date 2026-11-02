@@ -10,7 +10,15 @@ Hosting: `firebase.json` ignores `*.md`.)
 | Firestore rules | `npx firebase-tools@14 deploy --only firestore:rules --project personal-expense-tracker-6891b` | Run `cd firestore_tests && npm test` first |
 | Legal pages (`docs/*.html`) | `npx firebase-tools@14 deploy --only hosting --project personal-expense-tracker-6891b` | Then check all three URLs return 200 |
 | Worker | `cd cloudflare_worker && npm test && npx wrangler deploy` | First deploy after the Durable Object change applies migration `v1` |
-| Worker secret | `cd cloudflare_worker && npx wrangler secret put <NAME>` | `GROQ_API_KEY`, `REVENUECAT_API_KEY`; optional `DELETION_ALERT_WEBHOOK`, `REFERRAL_ID_SALT` |
+| Worker secret | `cd cloudflare_worker && npx wrangler secret put <NAME>` | `GROQ_API_KEY`, `REVENUECAT_API_KEY`, `FIREBASE_SERVICE_ACCOUNT`; optional `DELETION_ALERT_WEBHOOK`, `REFERRAL_ID_SALT` |
+
+### Premium-only households (`FIREBASE_SERVICE_ACCOUNT`)
+
+Firestore rules only let accounts with a `premium` custom claim create a household. The Worker sets that claim from RevenueCat (`POST /premium/claim`), which needs a service account:
+
+1. Google Cloud console → IAM & Admin → Service accounts → **Create** (e.g. `pet-premium-claims`), role **Firebase Authentication Admin**.
+2. Keys → Add key → JSON. Then `npx wrangler secret put FIREBASE_SERVICE_ACCOUNT` and paste the whole JSON. Delete the downloaded file.
+3. Deploy the Worker, then the app version that calls `/premium/claim`, and **only then** the Firestore rules. Deploying the rules first would block household creation for everyone.
 
 ## Roll back
 
@@ -40,6 +48,7 @@ Promise in the privacy policy: done within 30 days (usually 48 hours).
 |---|---|---|
 | Groq API key | Groq console → API keys | `npx wrangler secret put GROQ_API_KEY`; revoke the old key |
 | RevenueCat secret key | RevenueCat → Project settings → API keys | `npx wrangler secret put REVENUECAT_API_KEY`; revoke the old key |
+| Premium-claims service account | Google Cloud → IAM & Admin → Service accounts → Keys | Add a new JSON key, `npx wrangler secret put FIREBASE_SERVICE_ACCOUNT`, then delete the old key |
 | Google / Firebase API key | Google Cloud → APIs & Services → Credentials | Firebase client keys are public; keep them restricted to the Android app (package + SHA-1) and Firebase APIs |
 | Upload keystore | Play Console → App integrity → upload key reset | Never commit `*.jks` or `key.properties` |
 

@@ -370,6 +370,99 @@ async function isUserPremium(uid, revenueCatApiKey) {
   }
 }
 
+// ── Premium custom claim ─────────────────────────────────────────────────
+// Firestore rules can't call RevenueCat, so the Worker copies Premium
+// status onto the user's Firebase account as a custom claim (`premium`),
+// which rules read from the ID token (household creation is Premium-only).
+// Needs the FIREBASE_SERVICE_ACCOUNT secret: the JSON key of a service
+// account with the "Firebase Authentication Admin" role.
+
+function base64UrlEncodeBytes(bytes) {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function pemToDer(pem) {
+  const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+/** OAuth access token for a Google service account (JWT bearer grant). */
+async function googleAccessToken(serviceAccountJson, scope) {
+  const sa = JSON.parse(serviceAccountJson);
+  const now = Math.floor(Date.now() / 1000);
+  const encode = (obj) => base64UrlEncodeBytes(new TextEncoder().encode(JSON.stringify(obj)));
+  const unsigned = `${encode({ alg: "RS256", typ: "JWT" })}.${encode({
+    iss: sa.client_email,
+    scope,
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  })}`;
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToDer(sa.private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: `${unsigned}.${base64UrlEncodeBytes(new Uint8Array(signature))}`,
+    }),
+  });
+  if (!res.ok) throw new Error(`Google token exchange failed: ${res.status}`);
+  return (await res.json()).access_token;
+}
+
+/**
+ * Sets the `premium` custom claim. Note: this replaces all custom claims on
+ * the account; `premium` is the only one the app uses.
+ */
+async function setPremiumClaim(env, uid, premium) {
+  const accessToken = await googleAccessToken(
+    env.FIREBASE_SERVICE_ACCOUNT, "https://www.googleapis.com/auth/identitytoolkit");
+  const res = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/accounts:update`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ localId: uid, customAttributes: JSON.stringify({ premium }) }),
+    },
+  );
+  if (!res.ok) throw new Error(`Setting the premium claim failed: ${res.status}`);
+}
+
+/**
+ * POST /premium/claim: refreshes the caller's `premium` claim from
+ * RevenueCat (uncached, so a fresh purchase counts at once). The client then
+ * reloads its ID token so Firestore rules see the new value.
+ */
+async function handlePremiumClaim(uid, isAnonymous, claims, env) {
+  if (isAnonymous) {
+    return jsonResponse(403, { errorCode: "SIGN_IN_REQUIRED", error: "Sign in with Google first" });
+  }
+  if (!env.REVENUECAT_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT) {
+    return jsonResponse(503, { errorCode: "PREMIUM_CLAIM_UNAVAILABLE", error: "Not configured" });
+  }
+  const premium = await isUserPremium(uid, env.REVENUECAT_API_KEY);
+  if (claims.premium !== premium) {
+    try {
+      await setPremiumClaim(env, uid, premium);
+    } catch (e) {
+      console.error(`Premium claim update failed: ${e.message}`);
+      return jsonResponse(502, { errorCode: "PREMIUM_CLAIM_FAILED", error: "Couldn't update account" });
+    }
+  }
+  return jsonResponse(200, { premium, changed: claims.premium !== premium });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const startTime = Date.now();
@@ -511,6 +604,11 @@ export default {
     // ── 6.2 Referral programme (no premium check needed) ─────────────────
     if (url.pathname.startsWith("/referral/")) {
       return handleReferral(url.pathname, body, uid, isAnonymous, env, claims);
+    }
+
+    // ── 6.3 Premium claim for Firestore rules (household creation) ───────
+    if (url.pathname === "/premium/claim") {
+      return handlePremiumClaim(uid, isAnonymous, claims, env);
     }
 
     // Generate a secure hashed UID for logging purposes (privacy safety)
