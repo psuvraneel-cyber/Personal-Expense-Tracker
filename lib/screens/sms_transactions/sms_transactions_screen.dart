@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/spacing.dart';
+import 'package:pet/core/theme/typography.dart';
+import 'package:pet/core/widgets/amount_text.dart';
+import 'package:pet/core/widgets/category_avatar.dart';
+import 'package:pet/core/widgets/pet_section.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:pet/screens/sms_transactions/pending_review_screen.dart';
@@ -582,140 +587,68 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
         .where((t) => t.transactionType == 'credit')
         .fold(0.0, (sum, t) => sum + t.amount);
 
+    final muted = isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Date header
         Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 8),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: AppTheme.accentPurple.withAlpha(isDark ? 22 : 16),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  dateLabel,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.accentPurple,
+          padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+          child: Semantics(
+            header: true,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    dateLabel,
+                    style: AppTypography.labelLarge(color: muted),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Mini summary for this day
-              if (dailyDebit > 0)
-                Text(
-                  '-${_currencyFormat.format(dailyDebit)}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.expenseRed,
+                if (dailyDebit > 0)
+                  AmountText(
+                    dailyDebit,
+                    size: 12.5,
+                    weight: FontWeight.w500,
+                    tone: AmountTone.expense,
+                    showSign: true,
                   ),
-                ),
-              if (dailyDebit > 0 && dailyCredit > 0)
-                Text(
-                  '  ',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: isDark
-                        ? AppTheme.textTertiary
-                        : AppTheme.textSecondaryLight,
+                if (dailyDebit > 0 && dailyCredit > 0)
+                  const SizedBox(width: 10),
+                if (dailyCredit > 0)
+                  AmountText(
+                    dailyCredit,
+                    size: 12.5,
+                    weight: FontWeight.w500,
+                    tone: AmountTone.income,
+                    showSign: true,
                   ),
-                ),
-              if (dailyCredit > 0)
-                Text(
-                  '+${_currencyFormat.format(dailyCredit)}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.incomeGreen,
-                  ),
-                ),
-              const Spacer(),
-              Text(
-                '${transactions.length} txn${transactions.length > 1 ? 's' : ''}',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: isDark
-                      ? AppTheme.textTertiary
-                      : AppTheme.textSecondaryLight,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-        // Timeline-style transactions
-        ...transactions.asMap().entries.map((entry) {
-          final index = entry.key;
-          final txn = entry.value;
-          final isLast = index == transactions.length - 1;
-          return _buildTimelineTile(txn, isDark, isLast);
-        }),
-        if (transactions.isNotEmpty) const SizedBox(height: 4),
+        PetSection(
+          children: [
+            for (final txn in transactions)
+              _buildTimelineTile(txn, isDark, false),
+          ],
+        ),
       ],
     );
   }
 
-  /// Build a single transaction tile with a timeline connector.
+  /// One detected transaction as a row inside its day's section.
   Widget _buildTimelineTile(SmsTransaction txn, bool isDark, bool isLast) {
     final isDebit = txn.transactionType == 'debit';
     final amountColor = isDebit ? AppTheme.expenseRed : AppTheme.incomeGreen;
     final amountPrefix = isDebit ? '- ' : '+ ';
     final timeStr = txn.timestampIsApproximate
         ? '--:--'
-        : DateFormat('hh:mm a').format(txn.timestamp);
-
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Timeline line + dot
-          SizedBox(
-            width: 24,
-            child: Column(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: amountColor.withAlpha(isDark ? 50 : 40),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: amountColor, width: 2),
-                  ),
-                ),
-                if (!isLast)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      color: isDark
-                          ? Colors.white.withAlpha(10)
-                          : Colors.black.withAlpha(8),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Transaction content
-          Expanded(
-            child: _buildTransactionTileContent(
-              txn,
-              isDark,
-              amountColor,
-              amountPrefix,
-              timeStr,
-            ),
-          ),
-        ],
-      ),
+        : DateFormat('h:mm a').format(txn.timestamp);
+    return _buildTransactionTileContent(
+      txn,
+      isDark,
+      amountColor,
+      amountPrefix,
+      timeStr,
     );
   }
 
@@ -725,14 +658,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: AppTheme.heroGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.accentPurple.withAlpha(40),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
       ),
       child: Row(
         children: [
@@ -849,12 +775,8 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          color: AppTheme.expenseRed.withAlpha(30),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Icon(Icons.delete_rounded, color: AppTheme.expenseRed),
+        color: AppTheme.expenseRed,
+        child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
       ),
       confirmDismiss: (_) async {
         return await showDialog<bool>(
@@ -887,148 +809,132 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
           listen: false,
         ).deleteTransaction(txn.id);
       },
-      child: GestureDetector(
-        onTap: () => _showTransactionDetail(txn, isDark),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withAlpha(6)
-                  : Colors.black.withAlpha(6),
-            ),
-          ),
-          child: Row(
-            children: [
-              // Icon
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: amountColor.withAlpha(isDark ? 25 : 18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  txn.transactionType == 'debit'
-                      ? Icons.arrow_upward_rounded
-                      : Icons.arrow_downward_rounded,
+      // Transparent Material so the ripple paints on the section surface.
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: () => _showTransactionDetail(txn, isDark),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                CategoryAvatar(
+                  icon: txn.transactionType == 'debit'
+                      ? Icons.north_east_rounded
+                      : Icons.south_west_rounded,
                   color: amountColor,
-                  size: 22,
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
 
-              // Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      txn.merchantName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? AppTheme.textPrimary
-                            : AppTheme.textPrimaryLight,
+                // Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        txn.merchantName,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppTheme.textPrimary
+                              : AppTheme.textPrimaryLight,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Text(
-                          txn.bankName,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: isDark
-                                ? AppTheme.textTertiary
-                                : AppTheme.textSecondaryLight,
-                          ),
-                        ),
-                        Text(
-                          '  •  ',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isDark
-                                ? AppTheme.textTertiary
-                                : AppTheme.textSecondaryLight,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            txn.category,
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Text(
+                            txn.bankName,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              color: AppTheme.accentPurple.withAlpha(180),
+                              color: isDark
+                                  ? AppTheme.textTertiary
+                                  : AppTheme.textSecondaryLight,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        if (txn.source != 'sms') ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
+                          Text(
+                            '  •  ',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isDark
+                                  ? AppTheme.textTertiary
+                                  : AppTheme.textSecondaryLight,
                             ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.accentPurple.withAlpha(
-                                isDark ? 20 : 14,
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
+                          ),
+                          Flexible(
                             child: Text(
-                              txn.source == 'notification'
-                                  ? '🔔 notif'
-                                  : txn.source,
-                              style: const TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.accentPurple,
+                              txn.category,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.accentPurple.withAlpha(180),
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          if (txn.source != 'sms') ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentPurple.withAlpha(
+                                  isDark ? 20 : 14,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                txn.source == 'notification'
+                                    ? 'app alert'
+                                    : txn.source,
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.accentPurple,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Amount & time
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    AmountText(
+                      txn.amount,
+                      decimals: 2,
+                      tone: amountPrefix.startsWith('-')
+                          ? AmountTone.expense
+                          : AmountTone.income,
+                      showSign: true,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      timeStr,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isDark
+                            ? AppTheme.textTertiary
+                            : AppTheme.textSecondaryLight,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-
-              // Amount & time
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '$amountPrefix${_currencyFormat.format(txn.amount)}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: amountColor,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    timeStr,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isDark
-                          ? AppTheme.textTertiary
-                          : AppTheme.textSecondaryLight,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

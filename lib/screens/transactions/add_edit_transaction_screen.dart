@@ -8,6 +8,10 @@ import 'package:pet/providers/recurring_transaction_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/color_tokens.dart';
+import 'package:pet/core/theme/motion.dart';
+import 'package:pet/core/theme/typography.dart';
+import 'package:pet/core/widgets/category_avatar.dart';
+import 'package:pet/core/widgets/pet_section.dart';
 import 'package:pet/core/theme/spacing.dart';
 import 'package:pet/core/widgets/gradient_background.dart';
 import 'package:pet/core/widgets/category_chip.dart';
@@ -106,294 +110,279 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
       TransactionType.transfer => catProvider.transferCategories,
     };
 
+    final muted = isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
+    final accent = _colorFor(_type);
+
+    Widget label(String text) => Padding(
+          padding: const EdgeInsets.fromLTRB(4, Spacing.xl, 0, Spacing.sm),
+          child: Text(
+            text.toUpperCase(),
+            style: AppTypography.overline(
+              color:
+                  isDark ? AppTheme.textTertiary : AppTheme.textSecondaryLight,
+            ),
+          ),
+        );
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Edit Transaction' : 'Add Transaction'),
+        title: Text(_isEditing ? 'Edit transaction' : 'New transaction'),
         actions: [
           if (_isEditing)
             IconButton(
               tooltip: 'Delete',
               onPressed: _deleteTransaction,
               icon: const Icon(
-                Icons.delete_outline,
+                Icons.delete_outline_rounded,
                 color: AppTheme.expenseRed,
               ),
             ),
         ],
+      ),
+      // The save button stays in reach above the gesture bar, however long
+      // the form gets.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Spacing.base,
+            Spacing.sm,
+            Spacing.base,
+            Spacing.sm,
+          ),
+          child: SizedBox(
+            height: 52,
+            child: FilledButton(
+              onPressed: _saveTransaction,
+              style: FilledButton.styleFrom(backgroundColor: accent),
+              child: Text(_isEditing ? 'Save changes' : 'Save transaction'),
+            ),
+          ),
+        ),
       ),
       body: GradientBackground(
         animate: false,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Spacing.base),
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.base,
+              Spacing.sm,
+              Spacing.base,
+              Spacing.xl,
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Income/Expense toggle
                 _buildTypeToggle(isDark),
-                const SizedBox(height: 24),
+                const SizedBox(height: Spacing.xl),
 
-                // Amount
-                Text(
-                  'Amount (₹)',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: AmountInput.formatters,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: _colorFor(_type),
-                      ),
-                  decoration: InputDecoration(
-                    prefixText: '₹ ',
-                    prefixStyle: TextStyle(
-                      color: _colorFor(_type),
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    hintText: '0',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Enter amount';
-                    return AmountInput.validate(value);
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                // Category
-                Text(
-                  'Category',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                _buildCategoryGrid(categories, isDark),
-                if (_type == TransactionType.income) ...[
-                  const SizedBox(height: 8),
-                  _buildCountAsIncomeSwitch(),
-                ],
-                const SizedBox(height: 24),
-
-                // Payment method
-                Text(
-                  'Payment Method',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                _buildPaymentMethodSelector(isDark),
-                const SizedBox(height: 24),
-
-                // Date
-                Text('Date', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                _buildDatePicker(context, isDark),
-                const SizedBox(height: 24),
-
-                // Note
-                Text(
-                  'Note (optional)',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _noteController,
-                  decoration: const InputDecoration(hintText: 'Add a note...'),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 24),
-
-                // Tax category
-                Text(
-                  'Tax Category (optional)',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: TaxCategoryService.defaults.any(
-                    (e) => e.id == _taxCategory,
-                  )
-                      ? _taxCategory
-                      : null,
-                  decoration: const InputDecoration(
-                    hintText: 'Select tax category',
-                  ),
-                  items: TaxCategoryService.defaults
-                      .map(
-                        (t) => DropdownMenuItem<String>(
-                          value: t.id,
-                          child: Text(t.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setState(() => _taxCategory = value),
-                ),
-                const SizedBox(height: 24),
-
-                // Recurring
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppTheme.cardDark : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isDark
-                          ? Colors.white.withAlpha(15)
-                          : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: Column(
+                // The amount is the point of this screen: large, centred,
+                // in the colour of the kind of money it is.
+                // The rupee sign sits right against the digits and the pair
+                // stays centred as the number grows.
+                Semantics(
+                  label: 'Amount in rupees',
+                  textField: true,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.repeat,
-                                color: AppTheme.accentTeal,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Recurring Transaction',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ],
-                          ),
-                          Switch(
-                            value: _isRecurring,
-                            onChanged: (value) {
-                              setState(() => _isRecurring = value);
-                            },
-                            activeThumbColor: AppTheme.accentTeal,
-                          ),
-                        ],
-                      ),
-                      if (_isRecurring) ...[
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          children: RecurringFrequency.values.map((freq) {
-                            final isSelected = _recurringFrequency == freq;
-                            return ChoiceChip(
-                              label: Text(freq.displayName),
-                              selected: isSelected,
-                              onSelected: (_) {
-                                setState(() => _recurringFrequency = freq);
-                              },
-                              selectedColor: AppTheme.accentTeal.withAlpha(50),
-                            );
-                          }).toList(),
+                      Text(
+                        '₹',
+                        style: AppTypography.amount(
+                          size: 30,
+                          weight: FontWeight.w500,
+                          color: accent.withAlpha(190),
                         ),
-                      ],
-                      if (_isEditing &&
-                          widget.transaction?.recurringRuleId != null) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppTheme.surfaceDark
-                                : const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.white.withAlpha(15)
-                                  : const Color(0xFFE2E8F0),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: IntrinsicWidth(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 48),
+                            child: TextFormField(
+                              controller: _amountController,
+                              autofocus: !_isEditing,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              inputFormatters: AmountInput.formatters,
+                              style:
+                                  AppTypography.amount(size: 44, color: accent),
+                              decoration: InputDecoration(
+                                filled: false,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                focusedErrorBorder: InputBorder.none,
+                                hintText: '0',
+                                hintStyle: AppTypography.amount(
+                                  size: 44,
+                                  color: muted.withAlpha(110),
+                                ),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Enter an amount';
+                                }
+                                return AmountInput.validate(value);
+                              },
                             ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Apply changes to:',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: ChoiceChip(
-                                      label: const Text('This occurrence only',
-                                          style: TextStyle(fontSize: 12)),
-                                      selected: !_updateFutureRecurrences,
-                                      onSelected: (_) => setState(() =>
-                                          _updateFutureRecurrences = false),
-                                      selectedColor:
-                                          AppTheme.accentTeal.withAlpha(50),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: ChoiceChip(
-                                      label: const Text(
-                                          'All future recurrences',
-                                          style: TextStyle(fontSize: 12)),
-                                      selected: _updateFutureRecurrences,
-                                      onSelected: (_) => setState(() =>
-                                          _updateFutureRecurrences = true),
-                                      selectedColor:
-                                          AppTheme.accentTeal.withAlpha(50),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: Spacing.sm),
 
-                // Save button
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: switch (_type) {
-                        TransactionType.expense => ColorTokens.expenseGradient,
-                        TransactionType.income => ColorTokens.incomeGradient,
-                        TransactionType.transfer =>
-                          ColorTokens.transferGradient,
-                      },
-                      borderRadius: BorderRadius.circular(Spacing.chipRadius),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _colorFor(_type).withAlpha(60),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
+                label('Category'),
+                _buildCategoryGrid(categories, isDark),
+                if (_type == TransactionType.income) ...[
+                  const SizedBox(height: Spacing.sm),
+                  _buildCountAsIncomeSwitch(),
+                ],
+
+                label('Paid with'),
+                _buildPaymentMethodSelector(isDark),
+
+                label('Details'),
+                PetSection(
+                  children: [
+                    _buildDatePicker(context, isDark),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                      child: TextFormField(
+                        controller: _noteController,
+                        decoration: InputDecoration(
+                          hintText: 'Add a note',
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          prefixIcon: Icon(
+                            Icons.notes_rounded,
+                            size: 20,
+                            color: muted,
+                          ),
                         ),
-                      ],
-                    ),
-                    child: ElevatedButton(
-                      onPressed: _saveTransaction,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                      ),
-                      child: Text(
-                        _isEditing ? 'Update Transaction' : 'Save Transaction',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+                        maxLines: 2,
+                        minLines: 1,
                       ),
                     ),
-                  ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                      child: DropdownButtonFormField<String>(
+                        initialValue: TaxCategoryService.defaults.any(
+                          (e) => e.id == _taxCategory,
+                        )
+                            ? _taxCategory
+                            : null,
+                        decoration: InputDecoration(
+                          hintText: 'Tax category (optional)',
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          prefixIcon: Icon(
+                            Icons.receipt_long_outlined,
+                            size: 20,
+                            color: muted,
+                          ),
+                        ),
+                        items: TaxCategoryService.defaults
+                            .map(
+                              (t) => DropdownMenuItem<String>(
+                                value: t.id,
+                                child: Text(t.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => _taxCategory = value),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: Spacing.lg),
+
+                label('Repeat'),
+                PetSection(
+                  children: [
+                    PetRow(
+                      title: 'Recurring',
+                      subtitle: _isRecurring
+                          ? 'Added again ${_recurringFrequency.displayName.toLowerCase()}'
+                          : 'Add this again automatically',
+                      leading: const CategoryAvatar(
+                        icon: Icons.event_repeat_rounded,
+                        color: AppTheme.accentTeal,
+                        size: 36,
+                      ),
+                      trailing: Switch(
+                        value: _isRecurring,
+                        onChanged: (value) =>
+                            setState(() => _isRecurring = value),
+                      ),
+                    ),
+                    if (_isRecurring)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: RecurringFrequency.values.map((freq) {
+                            return ChoiceChip(
+                              label: Text(freq.displayName),
+                              selected: _recurringFrequency == freq,
+                              onSelected: (_) =>
+                                  setState(() => _recurringFrequency = freq),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    if (_isEditing &&
+                        widget.transaction?.recurringRuleId != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Apply changes to',
+                              style: AppTypography.bodySmall(color: muted),
+                            ),
+                            const SizedBox(height: Spacing.sm),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('This one only'),
+                                  selected: !_updateFutureRecurrences,
+                                  onSelected: (_) => setState(
+                                    () => _updateFutureRecurrences = false,
+                                  ),
+                                ),
+                                ChoiceChip(
+                                  label: const Text('All future ones'),
+                                  selected: _updateFutureRecurrences,
+                                  onSelected: (_) => setState(
+                                    () => _updateFutureRecurrences = true,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -404,9 +393,10 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
 
   Widget _buildTypeToggle(bool isDark) {
     return Container(
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.surfaceDark : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(Spacing.radiusMd),
       ),
       child: Row(
         children: [
@@ -436,11 +426,12 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
               type == TransactionType.transfer ? kTransferCategoryId : null;
         }),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          duration: Motion.of(context, Motion.quick),
+          curve: Motion.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: selected ? _colorFor(type) : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(Spacing.radiusMd - 4),
           ),
           child: Center(
             child: Text(
@@ -452,7 +443,7 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                         ? AppTheme.textSecondary
                         : AppTheme.textSecondaryLight),
                 fontWeight: FontWeight.w600,
-                fontSize: 15,
+                fontSize: 14,
               ),
             ),
           ),
@@ -521,20 +512,19 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
             ),
           ),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            duration: Motion.of(context, Motion.quick),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppTheme.accentPurple.withAlpha(30)
+                  ? AppTheme.accentPurple.withAlpha(isDark ? 45 : 25)
                   : (isDark ? AppTheme.cardDark : Colors.white),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(Spacing.radiusSm + 2),
               border: Border.all(
                 color: isSelected
-                    ? AppTheme.accentPurple
+                    ? AppTheme.accentPurple.withAlpha(160)
                     : (isDark
                         ? Colors.white.withAlpha(15)
                         : const Color(0xFFE2E8F0)),
-                width: isSelected ? 2 : 1,
               ),
             ),
             child: Row(
@@ -571,7 +561,15 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
   }
 
   Widget _buildDatePicker(BuildContext context, bool isDark) {
-    return GestureDetector(
+    return PetRow(
+      title: DateFormat('EEE, d MMM yyyy').format(_selectedDate),
+      subtitle: DateFormat('h:mm a').format(_selectedDate),
+      leading: Icon(
+        Icons.event_rounded,
+        size: 20,
+        color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+      ),
+      showChevron: true,
       onTap: () async {
         final date = await showDatePicker(
           context: context,
@@ -597,27 +595,6 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
           });
         }
       },
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.surfaceDark : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.calendar_today, size: 18),
-            const SizedBox(width: 12),
-            Text(
-              DateFormat('dd MMM yyyy, hh:mm a').format(_selectedDate),
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ],
-        ),
-      ),
     );
   }
 
