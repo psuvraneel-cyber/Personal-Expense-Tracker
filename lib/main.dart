@@ -53,6 +53,7 @@ import 'package:pet/screens/reports/money_wrap_screen.dart';
 import 'package:pet/services/report_notifier.dart';
 
 import 'package:pet/services/app_bootstrap.dart';
+import 'package:pet/services/financial_ingestion_service.dart';
 import 'package:pet/core/l10n/app_language.dart';
 import 'package:pet/l10n/app_localizations.dart';
 import 'package:pet/services/analytics_service.dart';
@@ -68,6 +69,9 @@ void main() async {
   }
 
   WidgetsFlutterBinding.ensureInitialized();
+  // Before anything loads: background imports (WorkManager, notification
+  // actions) report their ledger/review changes to this isolate.
+  FinancialIngestionService.listenForOtherIsolates();
   await AppBootstrap.initTimeZones();
 
   // Prevent Google Fonts from downloading at runtime — use bundled fonts only
