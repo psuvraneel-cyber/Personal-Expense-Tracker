@@ -68,7 +68,7 @@ tells real payments from look-alike ads, and keeps money from friends separate f
 ## 🧠 How SMS tracking works
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[Bank SMS /<br/>payment notification] --> B{Sender & offer check}
     B -- promo / ad --> X[Dropped]
     B -- looks real --> C[Parse amount, account,<br/>reference, payee]
