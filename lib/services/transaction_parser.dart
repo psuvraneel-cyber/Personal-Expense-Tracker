@@ -1,6 +1,7 @@
 library;
 
 import 'package:pet/core/utils/app_logger.dart';
+import 'package:pet/services/sms_parser/entity_extractor.dart';
 
 /// TransactionParser — Production-grade on-device regex engine for extracting
 /// UPI/bank transaction details from Indian bank SMS messages.
@@ -745,6 +746,10 @@ class TransactionParser {
 
   static String _extractMerchant(String body, String? upiId, String txnType) {
     String? merchant;
+
+    // 0. "to VPA x@y (NAME)" — the bracketed name is the counterparty
+    final vpaName = EntityExtractor.extractVpaPayee(body, txnType)?.name;
+    if (vpaName != null) return vpaName;
 
     // Try bank-specific patterns first (higher accuracy)
 

@@ -439,13 +439,59 @@ class EntityExtractor {
     ),
   ];
 
+  /// Counterparty VPA, optionally followed by the bracketed payee name:
+  /// "to VPA shop@okbizaxis (SHARMA KIRANA STORE)".
+  static final RegExp _vpaPayeePattern = RegExp(
+    r'\b(to|from|by)\s+VPA\s*[:-]?\s*([a-zA-Z0-9][a-zA-Z0-9._-]{0,49}@[a-zA-Z][a-zA-Z0-9]{1,20})\b(?:\s*\(\s*([^()]{2,60}?)\s*\))?',
+    caseSensitive: false,
+  );
+
+  static final RegExp _hasLetter = RegExp(r'[A-Za-z]');
+
+  /// Extract the counterparty named after "to VPA" (debit) or
+  /// "from/by VPA" (credit). The account the money left or reached
+  /// ("debited from HDFC Bank A/c XX1234") is the user's own, never the payee.
+  ///
+  /// Returns the VPA and the bracketed name when present, or null.
+  static ({String vpa, String? name})? extractVpaPayee(
+    String body,
+    String txnType,
+  ) {
+    for (final match in _vpaPayeePattern.allMatches(body)) {
+      final keyword = match.group(1)!.toLowerCase();
+      final matchesDirection = txnType == 'credit'
+          ? keyword != 'to'
+          : txnType == 'debit'
+              ? keyword == 'to'
+              : true;
+      if (!matchesDirection) continue;
+
+      final rawName = match.group(3)?.trim();
+      final name = rawName != null && _hasLetter.hasMatch(rawName)
+          ? _cleanMerchant(rawName)
+          : null;
+      return (
+        vpa: match.group(2)!,
+        name: name == null || name == 'Unknown' ? null : name,
+      );
+    }
+    return null;
+  }
+
   /// Extract merchant name from body.
   static String extractMerchant(
     String body,
     String? upiId,
     String txnType,
-    List<String> reasons,
-  ) {
+    List<String> reasons, {
+    ({String vpa, String? name})? vpaPayee,
+  }) {
+    final payeeName = (vpaPayee ?? extractVpaPayee(body, txnType))?.name;
+    if (payeeName != null) {
+      reasons.add('Merchant extracted via VPA payee name: "$payeeName"');
+      return payeeName;
+    }
+
     for (final (pattern, name) in _merchantPatterns) {
       final match = pattern.firstMatch(body);
       if (match != null) {
@@ -695,9 +741,16 @@ class EntityExtractor {
     final reasons = <String>[];
 
     final bank = detectBank(body, sender, reasons);
-    final upiId = extractUpiId(body, reasons);
+    final vpaPayee = extractVpaPayee(body, txnType);
+    final upiId = vpaPayee?.vpa ?? extractUpiId(body, reasons);
     final ref = extractReferenceId(body, reasons);
-    final merchant = extractMerchant(body, upiId, txnType, reasons);
+    final merchant = extractMerchant(
+      body,
+      upiId,
+      txnType,
+      reasons,
+      vpaPayee: vpaPayee,
+    );
     final account = extractAccountTail(body, reasons);
     final date = extractDate(body, reasons, smsTimestamp: smsTimestamp);
 
