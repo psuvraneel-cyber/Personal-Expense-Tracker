@@ -130,10 +130,11 @@ class RecurringTransactionsScreen extends StatelessWidget {
                         final rule = rules[index];
                         final category =
                             catProvider.getCategoryById(rule.categoryId);
-                        final isExpense = rule.type == TransactionType.expense;
-                        final amountColor = isExpense
-                            ? ColorTokens.expense
-                            : ColorTokens.income;
+                        final amountColor = switch (rule.type) {
+                          TransactionType.expense => ColorTokens.expense,
+                          TransactionType.income => ColorTokens.income,
+                          TransactionType.transfer => ColorTokens.transfer,
+                        };
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: Spacing.md),
@@ -215,7 +216,7 @@ class RecurringTransactionsScreen extends StatelessWidget {
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       Text(
-                                        '${isExpense ? '-' : '+'}${currFmt.format(rule.amount)}',
+                                        '${rule.type.amountSign}${currFmt.format(rule.amount)}',
                                         style: TextStyle(
                                           color: amountColor,
                                           fontWeight: FontWeight.bold,

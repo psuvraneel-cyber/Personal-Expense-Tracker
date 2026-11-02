@@ -62,7 +62,7 @@ service cloud.firestore {
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
           && request.resource.data.amount < 1000000000000
-          && request.resource.data.type in ['income', 'expense']
+          && request.resource.data.type in ['income', 'expense', 'transfer']
           && request.resource.data.categoryId is string
           && request.resource.data.categoryId.size() <= 100
           && request.resource.data.date is timestamp

@@ -3,6 +3,7 @@ import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/data/models/category.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/color_tokens.dart';
 import 'package:intl/intl.dart';
 
 class TransactionTile extends StatelessWidget {
@@ -47,8 +48,11 @@ class TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isExpense = transaction.type == TransactionType.expense;
-    final amountColor = isExpense ? AppTheme.expenseRed : AppTheme.incomeGreen;
+    final amountColor = switch (transaction.type) {
+      TransactionType.expense => AppTheme.expenseRed,
+      TransactionType.income => AppTheme.incomeGreen,
+      TransactionType.transfer => ColorTokens.transfer,
+    };
     final formatter = _formatter;
     final dateFormatter = _dateFormatter;
 
@@ -176,7 +180,7 @@ class TransactionTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${isExpense ? '-' : '+'}${formatter.format(transaction.amount)}',
+                  '${transaction.type.amountSign}${formatter.format(transaction.amount)}',
                   style: TextStyle(
                     color: amountColor,
                     fontWeight: FontWeight.bold,

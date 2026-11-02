@@ -140,7 +140,19 @@ final List<Category> defaultCategories = [
     color: const Color(0xFF0EA5E9),
     type: 'income',
   ),
+  // Money moved between your own accounts (credit-card bill payment,
+  // self-transfer): counted as neither income nor spending.
+  Category(
+    id: kTransferCategoryId,
+    name: 'Transfer',
+    icon: Icons.swap_horiz_rounded,
+    color: const Color(0xFF3B82F6),
+    type: 'transfer',
+  ),
 ];
 
 /// Category for money received from people (not counted as income).
 const String kFromPeopleCategoryId = 'cat_from_people';
+
+/// Category for transfers between the user's own accounts.
+const String kTransferCategoryId = 'cat_transfer';

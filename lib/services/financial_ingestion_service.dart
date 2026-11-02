@@ -18,7 +18,7 @@ import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/services/merchant_normalizer.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/core/constants/categories.dart'
-    show defaultCategories, kFromPeopleCategoryId;
+    show defaultCategories, kFromPeopleCategoryId, kTransferCategoryId;
 import 'package:pet/services/canonical_identity_resolver.dart';
 import 'package:pet/services/counterparty_classifier.dart';
 import 'package:pet/services/firestore_sync_service.dart';
@@ -687,7 +687,9 @@ class FinancialIngestionService {
     final promotedTxn = TransactionRecord(
       id: txnId,
       amount: amount,
-      type: isIncome ? TransactionType.income : TransactionType.expense,
+      type: mappedCategoryId == kTransferCategoryId
+          ? TransactionType.transfer
+          : (isIncome ? TransactionType.income : TransactionType.expense),
       categoryId: mappedCategoryId,
       date: classified.parsedDate,
       note: '$displayMerchant ($bank)',
@@ -1053,17 +1055,22 @@ class FinancialIngestionService {
     final finalAmount = overrideAmount ?? classified?.amount ?? 0.0;
     final finalMerchant =
         overrideMerchant ?? classified?.merchantName ?? 'Unknown';
-    final finalType = overrideType ??
-        (classified?.transactionType == 'credit'
-            ? TransactionType.income
-            : TransactionType.expense);
+    final isCredit = classified?.transactionType == 'credit';
+    final requestedType = overrideType ??
+        (isCredit ? TransactionType.income : TransactionType.expense);
     final finalCategoryId = overrideCategoryId ??
-        importCategoryId(
-          classified: classified,
-          merchant: finalMerchant,
-          isIncome: finalType == TransactionType.income,
-          text: observation.normalizedText,
-        );
+        (requestedType == TransactionType.transfer
+            ? kTransferCategoryId
+            : importCategoryId(
+                classified: classified,
+                merchant: finalMerchant,
+                isIncome: requestedType == TransactionType.income,
+                text: observation.normalizedText,
+              ));
+    // The Transfer category and the transfer type always go together.
+    final finalType = finalCategoryId == kTransferCategoryId
+        ? TransactionType.transfer
+        : requestedType;
 
     final txnId = 'txn_$observationId';
     final nowIso = DateTime.now().toIso8601String();
@@ -1130,8 +1137,12 @@ class FinancialIngestionService {
             amount: finalAmount,
             merchantName: finalMerchant,
             bankName: classified?.bankName ?? 'Unknown Bank',
-            transactionType:
-                finalType == TransactionType.income ? 'credit' : 'debit',
+            // A transfer keeps the direction the message shows.
+            transactionType: switch (finalType) {
+              TransactionType.income => 'credit',
+              TransactionType.expense => 'debit',
+              TransactionType.transfer => isCredit ? 'credit' : 'debit',
+            },
             timestamp: observation.sourceTimestamp,
             rawSmsBody: SmsService.redactSensitiveData(observation.body),
             smsSender: observation.sender ?? observation.sourceIdentifier,
@@ -1237,6 +1248,8 @@ class FinancialIngestionService {
     if (categoryId == null) return null;
     final known = defaultCategories.where((c) => c.id == categoryId);
     if (known.isEmpty) return categoryId;
+    // A transfer (card bill, own account) can move either way.
+    if (known.first.type == 'transfer') return categoryId;
     return (known.first.type == 'income') == isIncome ? categoryId : null;
   }
 

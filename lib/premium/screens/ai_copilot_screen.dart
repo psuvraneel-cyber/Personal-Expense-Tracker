@@ -14,7 +14,6 @@ import 'package:pet/premium/screens/purchase_screen.dart';
 import 'package:pet/services/analytics_service.dart';
 
 import 'package:pet/core/theme/app_theme.dart';
-import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/category.dart';
 import 'package:pet/premium/models/copilot_message.dart';
 import 'package:pet/premium/services/ai_copilot_service.dart';
@@ -143,7 +142,7 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
     final recent = txnProv.allTransactions.take(10).map((t) {
       final catName = catById(t.categoryId)?.name ?? t.categoryId;
       final date = DateFormat('d MMM').format(t.date);
-      final sign = t.type == TransactionType.income ? '+' : '-';
+      final sign = t.type.amountSign;
       final rawNote = t.note.isNotEmpty ? ' (${t.note})' : '';
       final note = SmsService.redactSensitiveData(rawNote);
       final merchant = t.merchantName != null

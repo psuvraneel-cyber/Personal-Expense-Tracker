@@ -64,8 +64,11 @@ class ExpenseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isExpense = transaction.type == TransactionType.expense;
-    final amountColor = isExpense ? ColorTokens.expense : ColorTokens.income;
+    final amountColor = switch (transaction.type) {
+      TransactionType.expense => ColorTokens.expense,
+      TransactionType.income => ColorTokens.income,
+      TransactionType.transfer => ColorTokens.transfer,
+    };
     final catColor = category?.color ?? Colors.grey;
 
     return GestureDetector(
@@ -179,7 +182,7 @@ class ExpenseCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${isExpense ? '-' : '+'}${_formatter.format(transaction.amount)}',
+                  '${transaction.type.amountSign}${_formatter.format(transaction.amount)}',
                   style: TextStyle(
                     color: amountColor,
                     fontWeight: FontWeight.bold,

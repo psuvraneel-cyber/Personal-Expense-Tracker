@@ -14,7 +14,8 @@ import 'package:pet/core/widgets/category_chip.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/premium/services/tax_category_service.dart';
 import 'package:pet/premium/providers/spend_pause_provider.dart';
-import 'package:pet/core/constants/categories.dart' show kFromPeopleCategoryId;
+import 'package:pet/core/constants/categories.dart'
+    show kFromPeopleCategoryId, kTransferCategoryId;
 import 'package:pet/services/financial_ingestion_service.dart';
 
 class AddEditTransactionScreen extends StatefulWidget {
@@ -99,9 +100,11 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final catProvider = context.watch<CategoryProvider>();
-    final categories = _type == TransactionType.expense
-        ? catProvider.expenseCategories
-        : catProvider.incomeCategories;
+    final categories = switch (_type) {
+      TransactionType.expense => catProvider.expenseCategories,
+      TransactionType.income => catProvider.incomeCategories,
+      TransactionType.transfer => catProvider.transferCategories,
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -143,16 +146,12 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                       const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: AmountInput.formatters,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: _type == TransactionType.expense
-                            ? AppTheme.expenseRed
-                            : AppTheme.incomeGreen,
+                        color: _colorFor(_type),
                       ),
                   decoration: InputDecoration(
                     prefixText: '₹ ',
                     prefixStyle: TextStyle(
-                      color: _type == TransactionType.expense
-                          ? AppTheme.expenseRed
-                          : AppTheme.incomeGreen,
+                      color: _colorFor(_type),
                       fontSize: 22,
                       fontWeight: FontWeight.w600,
                     ),
@@ -362,16 +361,16 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
                   height: 52,
                   child: Container(
                     decoration: BoxDecoration(
-                      gradient: _type == TransactionType.expense
-                          ? ColorTokens.expenseGradient
-                          : ColorTokens.incomeGradient,
+                      gradient: switch (_type) {
+                        TransactionType.expense => ColorTokens.expenseGradient,
+                        TransactionType.income => ColorTokens.incomeGradient,
+                        TransactionType.transfer =>
+                          ColorTokens.transferGradient,
+                      },
                       borderRadius: BorderRadius.circular(Spacing.chipRadius),
                       boxShadow: [
                         BoxShadow(
-                          color: (_type == TransactionType.expense
-                                  ? ColorTokens.expense
-                                  : ColorTokens.income)
-                              .withAlpha(60),
+                          color: _colorFor(_type).withAlpha(60),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
@@ -411,71 +410,53 @@ class _AddEditTransactionScreenState extends State<AddEditTransactionScreen> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() {
-                _type = TransactionType.expense;
-                _selectedCategoryId = null;
-              }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: _type == TransactionType.expense
-                      ? AppTheme.expenseRed
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Text(
-                    'Expense',
-                    style: TextStyle(
-                      color: _type == TransactionType.expense
-                          ? Colors.white
-                          : (isDark
-                              ? AppTheme.textSecondary
-                              : AppTheme.textSecondaryLight),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() {
-                _type = TransactionType.income;
-                _selectedCategoryId = null;
-              }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: _type == TransactionType.income
-                      ? AppTheme.incomeGreen
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Text(
-                    'Income',
-                    style: TextStyle(
-                      color: _type == TransactionType.income
-                          ? Colors.white
-                          : (isDark
-                              ? AppTheme.textSecondary
-                              : AppTheme.textSecondaryLight),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _buildTypeSegment(TransactionType.expense, isDark),
+          _buildTypeSegment(TransactionType.income, isDark),
+          _buildTypeSegment(TransactionType.transfer, isDark),
         ],
+      ),
+    );
+  }
+
+  /// Color for [type]: red spending, green income, neutral blue transfer.
+  static Color _colorFor(TransactionType type) => switch (type) {
+        TransactionType.expense => AppTheme.expenseRed,
+        TransactionType.income => AppTheme.incomeGreen,
+        TransactionType.transfer => ColorTokens.transfer,
+      };
+
+  Widget _buildTypeSegment(TransactionType type, bool isDark) {
+    final selected = _type == type;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _type = type;
+          // A transfer has one category; the others must be picked again.
+          _selectedCategoryId =
+              type == TransactionType.transfer ? kTransferCategoryId : null;
+        }),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: selected ? _colorFor(type) : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Center(
+            child: Text(
+              type.displayName,
+              style: TextStyle(
+                color: selected
+                    ? Colors.white
+                    : (isDark
+                        ? AppTheme.textSecondary
+                        : AppTheme.textSecondaryLight),
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

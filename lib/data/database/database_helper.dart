@@ -16,7 +16,7 @@ import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
 
 /// Current SQLite schema version.
-const int kDatabaseVersion = 23;
+const int kDatabaseVersion = 24;
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -529,6 +529,21 @@ class DatabaseHelper {
     }
     if (oldVersion < 23 && newVersion >= 23) {
       await _migrateToV23(db);
+    }
+    if (oldVersion < 24 && newVersion >= 24) {
+      await _insertDefaultCategories(db);
+    }
+  }
+
+  /// Adds any default category the database doesn't have yet (v24: the
+  /// "Transfer" category). Existing and custom categories are untouched.
+  Future<void> _insertDefaultCategories(Database db) async {
+    for (final category in defaultCategories) {
+      await db.insert(
+        'categories',
+        category.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
     }
   }
 

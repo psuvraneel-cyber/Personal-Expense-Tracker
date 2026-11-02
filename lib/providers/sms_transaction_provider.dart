@@ -413,9 +413,13 @@ class SmsTransactionProvider extends ChangeNotifier {
 
   /// Accept an uncertain transaction — mark as verified and move to main list.
   ///
+  /// [overrideType] is `debit`, `credit` or `transfer` (money moved between
+  /// the user's own accounts: kept out of income and spending).
+  ///
   /// With [trustSimilar] (the default: "Always add messages like this"),
   /// later messages of the same shape from the same sender are added
-  /// without review. [stopTrustingSimilar] undoes that.
+  /// without review. [stopTrustingSimilar] undoes that. Transfers are never
+  /// added without review, so accepting one trusts nothing.
   Future<void> acceptUncertainTransaction(
     String id, {
     String? overrideType,
@@ -428,7 +432,12 @@ class SmsTransactionProvider extends ChangeNotifier {
     if (index == -1) return;
 
     final txn = _uncertainTransactions[index];
-    final finalType = overrideType ?? txn.transactionType;
+    final isTransfer = overrideType == 'transfer';
+    // The SMS row keeps the message's direction; only the ledger entry is
+    // marked as a transfer.
+    final finalType = isTransfer
+        ? txn.transactionType
+        : (overrideType ?? txn.transactionType);
     final finalAmount = overrideAmount ?? txn.amount;
     final finalMerchant = overrideMerchant ?? txn.merchantName;
     final finalCategory = overrideCategoryId ?? txn.category;
@@ -450,16 +459,20 @@ class SmsTransactionProvider extends ChangeNotifier {
         overrideAmount: overrideAmount,
         overrideMerchant: overrideMerchant,
         overrideCategoryId: overrideCategoryId,
-        overrideType: finalType == 'credit'
-            ? TransactionType.income
-            : (finalType == 'debit' ? TransactionType.expense : null),
+        overrideType: isTransfer
+            ? TransactionType.transfer
+            : finalType == 'credit'
+                ? TransactionType.income
+                : (finalType == 'debit' ? TransactionType.expense : null),
       );
     } catch (e) {
       AppLogger.debug(
           '[PET-SMS] Error promoting confirmed observation to ledger: $e');
     }
 
-    if (trustSimilar && (finalType == 'credit' || finalType == 'debit')) {
+    if (trustSimilar &&
+        !isTransfer &&
+        (finalType == 'credit' || finalType == 'debit')) {
       try {
         final hash = await FinancialIngestionService().trustObservation(
           id,

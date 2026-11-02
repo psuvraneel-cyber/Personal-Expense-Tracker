@@ -21,6 +21,15 @@ void main() {
     test('displayName returns capitalized label', () {
       expect(TransactionType.income.displayName, 'Income');
       expect(TransactionType.expense.displayName, 'Expense');
+      expect(TransactionType.transfer.displayName, 'Transfer');
+    });
+
+    test('transfer round-trips and shows no sign', () {
+      expect(TransactionType.transfer.toJson(), 'transfer');
+      expect(TransactionType.fromJson('transfer'), TransactionType.transfer);
+      expect(TransactionType.income.amountSign, '+');
+      expect(TransactionType.expense.amountSign, '-');
+      expect(TransactionType.transfer.amountSign, '');
     });
   });
 
