@@ -443,6 +443,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
               onPressed: () => provider.undoDismiss(alert),
             ),
             duration: const Duration(seconds: 4),
+            // An action makes a SnackBar persist by default; let it time out.
+            persist: false,
           ),
         );
       },
