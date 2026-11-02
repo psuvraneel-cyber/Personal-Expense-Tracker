@@ -4,8 +4,6 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
 import androidx.annotation.VisibleForTesting
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Queue
@@ -15,8 +13,11 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * Production-grade encrypted storage for pending transaction notifications.
  *
  * ## Security & Privacy Architecture:
- * - Uses Jetpack Security Crypto (`EncryptedSharedPreferences` + `MasterKey` AES256_GCM).
- * - Stores pending notification payloads strictly in encrypted storage at `pet_notification_cache_v2`.
+ * - Encrypts the cached JSON with AES-256-GCM under a non-exportable Android Keystore key
+ *   ([EncryptedStringPrefs] + [KeystoreStringCipher]), stored at `pet_notification_cache_v3`.
+ *   This replaced the deprecated Jetpack `security-crypto` library (`..._v2`), whose file is
+ *   deleted on upgrade: it can't be read without that library, and items in it are normally
+ *   drained within minutes.
  * - Migrates legacy plaintext `pet_notification_cache` and legacy fallback files on first launch,
  *   wiping plaintext files from disk.
  *
@@ -46,7 +47,10 @@ object EncryptedNotificationCache {
     private const val TAG = "EncryptedNotifCache"
     private const val LEGACY_PREF_NAME = "pet_notification_cache"
     private const val FALLBACK_PREF_NAME = "pet_notification_cache_v2_fallback"
-    private const val ENCRYPTED_PREF_NAME = "pet_notification_cache_v2"
+    private const val ENCRYPTED_PREF_NAME = "pet_notification_cache_v3"
+    /** Store written by the deprecated `security-crypto` library; unreadable now, deleted. */
+    private const val OLD_ENCRYPTED_PREF_NAME = "pet_notification_cache_v2"
+    private const val KEY_ALIAS = "pet_notification_cache_key"
     private const val KEY_PENDING = "pending_notifications"
     const val KEY_CACHE_ID = "cacheId"
 
@@ -123,6 +127,7 @@ object EncryptedNotificationCache {
             // Perform one-time migration of legacy plaintext caches (if any exist from older app versions)
             if (!isMigrated) {
                 migrateLegacyPlaintext(context, prefs)
+                deleteOldEncryptedStore(context)
                 isMigrated = true
             }
             // Flush any in-memory queued notifications into encrypted storage
@@ -133,17 +138,14 @@ object EncryptedNotificationCache {
     }
 
     private fun createEncryptedPrefs(context: Context): SharedPreferences {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        return EncryptedSharedPreferences.create(
-            context,
-            ENCRYPTED_PREF_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        val prefs = EncryptedStringPrefs(
+            context.getSharedPreferences(ENCRYPTED_PREF_NAME, Context.MODE_PRIVATE),
+            KeystoreStringCipher(KEY_ALIAS)
         )
+        // A value that no longer decrypts (key lost after a restore or a
+        // Keystore reset) throws here, so getPrefs() resets the store.
+        prefs.getString(KEY_PENDING, null)
+        return prefs
     }
 
     private fun resetEncryptedPrefs(context: Context) {
@@ -153,9 +155,23 @@ object EncryptedNotificationCache {
             } else {
                 context.getSharedPreferences(ENCRYPTED_PREF_NAME, Context.MODE_PRIVATE).edit().clear().apply()
             }
+            KeystoreStringCipher(KEY_ALIAS).deleteKey()
             SafeLog.i(TAG, "Successfully cleared corrupted encrypted SharedPreferences file.")
         } catch (e: Exception) {
             SafeLog.e(TAG, "Failed to delete corrupted prefs: ${e.message}")
+        }
+    }
+
+    /** Deletes the old `security-crypto` store (encrypted; unreadable without that library). */
+    private fun deleteOldEncryptedStore(context: Context) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                context.deleteSharedPreferences(OLD_ENCRYPTED_PREF_NAME)
+            } else {
+                context.getSharedPreferences(OLD_ENCRYPTED_PREF_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+            }
+        } catch (e: Exception) {
+            SafeLog.e(TAG, "Failed to delete old encrypted store: ${e.message}")
         }
     }
 
