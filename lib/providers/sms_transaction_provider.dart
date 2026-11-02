@@ -141,20 +141,29 @@ class SmsTransactionProvider extends ChangeNotifier {
       _runReconciliationSweep();
 
       // Resume live listening + background tasks if SMS service is supported locally (Android).
-      if (SmsService.isSupported) {
-        final smsPermission = await Permission.sms.status;
-        if (smsPermission.isGranted) {
-          _smsService.startListening(
-            onNewTransaction: (transaction) {
-              _transactions = [transaction, ..._transactions];
-              _invalidateComputedCache();
-              notifyListeners();
-            },
-          );
-          await initSmsBackgroundService();
-        }
+      if (await _startLiveListening()) {
+        await initSmsBackgroundService();
       }
     }
+  }
+
+  /// Start the live EventChannel listener if SMS is supported and permitted.
+  /// Returns `true` if the listener is (or already was) running.
+  ///
+  /// Without this, SmsReaderPlugin has no event sink and the native receiver
+  /// routes every incoming SMS through a slower WorkManager scan instead.
+  Future<bool> _startLiveListening() async {
+    if (!SmsService.isSupported) return false;
+    final smsPermission = await Permission.sms.status;
+    if (!smsPermission.isGranted) return false;
+    _smsService.startListening(
+      onNewTransaction: (transaction) {
+        _transactions = [transaction, ..._transactions];
+        _invalidateComputedCache();
+        notifyListeners();
+      },
+    );
+    return true;
   }
 
   /// Load persisted user feedback records into UserFeedbackStore.
@@ -262,6 +271,7 @@ class SmsTransactionProvider extends ChangeNotifier {
       _smsFeatureEnabled = true;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('smsFeatureEnabled', true);
+      await _startLiveListening();
       notifyListeners();
     }
     return _permissionsGranted;
@@ -349,7 +359,8 @@ class SmsTransactionProvider extends ChangeNotifier {
       // Reload transactions after scan
       await loadTransactions();
 
-      // Enable background scanning (listener is already started in initialize)
+      // Enable background scanning (the live listener is started when
+      // permission is granted, or in initialize on later launches).
       await initSmsBackgroundService();
     } catch (e) {
       AppLogger.debug('[PET-SMS] Error during scan: $e');
