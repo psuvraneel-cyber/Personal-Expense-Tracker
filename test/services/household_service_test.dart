@@ -1,9 +1,17 @@
 import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/services/household_service.dart';
+
+/// Fails the test if Firestore is touched at all.
+class _UntouchableFirestore implements FirebaseFirestore {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      fail('Firestore was used: ${invocation.memberName}');
+}
 
 TransactionRecord _txn(String id, double amount, String category,
         {TransactionType type = TransactionType.expense}) =>
@@ -42,5 +50,21 @@ void main() {
       _txn('d', 20, 'travel'),
     ]);
     expect(totals, {'food': 150.5, 'travel': 20});
+  });
+
+  test('without Premium, creating a household writes nothing', () async {
+    var asked = false;
+    final service = HouseholdService(
+      firestore: _UntouchableFirestore(),
+      refreshPremiumClaim: () async {
+        asked = true;
+        throw const PremiumRequiredException();
+      },
+    );
+    await expectLater(
+      service.create(uid: 'u1', displayName: 'Me', name: 'Home'),
+      throwsA(isA<PremiumRequiredException>()),
+    );
+    expect(asked, isTrue);
   });
 }

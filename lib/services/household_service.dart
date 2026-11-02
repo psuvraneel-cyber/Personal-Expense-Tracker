@@ -11,6 +11,12 @@ import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/data/repositories/category_repository.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
+import 'package:pet/services/worker_api.dart';
+
+/// Thrown when creating a household for an account without Premium.
+class PremiumRequiredException implements Exception {
+  const PremiumRequiredException();
+}
 
 /// A group of up to [Household.maxMembers] people sharing monthly budgets.
 class Household {
@@ -76,10 +82,29 @@ class MemberSpending {
 /// Members share category budgets and see each other's monthly totals per
 /// category — never individual transactions, merchants or notes.
 class HouseholdService {
-  HouseholdService({FirebaseFirestore? firestore})
-      : _db = firestore ?? FirebaseFirestore.instance;
+  HouseholdService({
+    FirebaseFirestore? firestore,
+    Future<void> Function()? refreshPremiumClaim,
+  })  : _db = firestore ?? FirebaseFirestore.instance,
+        _refreshPremiumClaim =
+            refreshPremiumClaim ?? refreshPremiumClaimViaWorker;
 
   final FirebaseFirestore _db;
+  final Future<void> Function() _refreshPremiumClaim;
+
+  /// Creating a household is Premium-only, enforced by Firestore rules
+  /// through a `premium` claim on the sign-in token. Asks the Worker to copy
+  /// the current Premium status onto the account, then reloads the token so
+  /// the rules see it. Throws [PremiumRequiredException] without Premium.
+  static Future<void> refreshPremiumClaimViaWorker() async {
+    final res = await WorkerApi.post('/premium/claim', const {});
+    if (res.statusCode != 200) {
+      throw Exception('Premium check failed (${res.statusCode})');
+    }
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    if (body['premium'] != true) throw const PremiumRequiredException();
+    await FirebaseAuth.instance.currentUser?.getIdToken(true);
+  }
 
   static const inviteAlphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   static const inviteLength = 8;
@@ -126,6 +151,7 @@ class HouseholdService {
     required String displayName,
     required String name,
   }) async {
+    await _refreshPremiumClaim();
     final ref = _households.doc();
     await ref.set({
       'name': name.trim(),

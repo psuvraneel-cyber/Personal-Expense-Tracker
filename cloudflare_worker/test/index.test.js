@@ -1558,3 +1558,111 @@ test("Inviter yearly cap holds under parallel redemptions (Durable Object)", asy
     worker.fetch(referralRequest(googleUserToken(uid, `g-${uid}`), "/referral/redeem", { code }), env)));
   assert.strictEqual(grants.filter((g) => g === "inviter").length, 2);
 });
+
+// ── Premium custom claim (/premium/claim) ────────────────────────────────
+
+const { privateKey: saPrivateKey, publicKey: saPublicKey } = crypto.generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+});
+const serviceAccount = JSON.stringify({
+  client_email: "claims@test-project.iam.gserviceaccount.com",
+  private_key: saPrivateKey.export({ type: "pkcs8", format: "pem" }),
+});
+
+function premiumClaimFetchMock({ premium, updates = [], assertions = [] }) {
+  setupFetchMock([
+    googleJwksHandler,
+    {
+      matches: (url) => url === "https://oauth2.googleapis.com/token",
+      handle: (url, opts) => {
+        assertions.push(new URLSearchParams(opts.body).get("assertion"));
+        return new Response(JSON.stringify({ access_token: "ya29.test" }), { status: 200 });
+      },
+    },
+    {
+      matches: (url) => url.includes("identitytoolkit.googleapis.com") && url.endsWith("/accounts:update"),
+      handle: (url, opts) => {
+        assert.strictEqual(opts.headers.Authorization, "Bearer ya29.test");
+        updates.push(JSON.parse(opts.body));
+        return new Response("{}", { status: 200 });
+      },
+    },
+    {
+      matches: (url) => url.includes("api.revenuecat.com/v1/subscribers/"),
+      handle: () => new Response(JSON.stringify({
+        subscriber: {
+          entitlements: premium
+            ? { "P.E.T Premium": { expires_date: new Date(Date.now() + 86400000).toISOString() } }
+            : {},
+        },
+      }), { status: 200 }),
+    },
+  ]);
+}
+
+function tokenWithClaims(sub, extra = {}) {
+  return createToken({
+    payload: {
+      iss: `https://securetoken.google.com/${MOCK_PROJECT_ID}`,
+      aud: MOCK_PROJECT_ID,
+      sub,
+      iat: Math.floor(Date.now() / 1000) - 10,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      firebase: { sign_in_provider: "google.com" },
+      ...extra,
+    },
+  });
+}
+
+const claimEnv = { ...mockEnv, FIREBASE_SERVICE_ACCOUNT: serviceAccount };
+
+test("Premium claim: a Premium user gets premium=true, signed with the service account", async () => {
+  const updates = [];
+  const assertions = [];
+  premiumClaimFetchMock({ premium: true, updates, assertions });
+
+  const res = await worker.fetch(referralRequest(tokenWithClaims("paid-user"), "/premium/claim"), claimEnv);
+
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(await res.json(), { premium: true, changed: true });
+  assert.deepStrictEqual(updates, [{ localId: "paid-user", customAttributes: '{"premium":true}' }]);
+  // The Google token request is a JWT signed with the service-account key.
+  const [h, p, s] = assertions[0].split(".");
+  const verify = crypto.createVerify("RSA-SHA256");
+  verify.update(`${h}.${p}`);
+  assert.ok(verify.verify(saPublicKey, Buffer.from(s, "base64url")));
+  const claimSet = JSON.parse(Buffer.from(p, "base64url").toString());
+  assert.strictEqual(claimSet.iss, "claims@test-project.iam.gserviceaccount.com");
+  assert.strictEqual(claimSet.scope, "https://www.googleapis.com/auth/identitytoolkit");
+});
+
+test("Premium claim: a lapsed subscriber is set back to premium=false", async () => {
+  const updates = [];
+  premiumClaimFetchMock({ premium: false, updates });
+  const res = await worker.fetch(
+    referralRequest(tokenWithClaims("lapsed", { premium: true }), "/premium/claim"), claimEnv);
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(await res.json(), { premium: false, changed: true });
+  assert.deepStrictEqual(updates, [{ localId: "lapsed", customAttributes: '{"premium":false}' }]);
+});
+
+test("Premium claim: no update when the token already says so", async () => {
+  const updates = [];
+  premiumClaimFetchMock({ premium: true, updates });
+  const res = await worker.fetch(
+    referralRequest(tokenWithClaims("paid-user", { premium: true }), "/premium/claim"), claimEnv);
+  assert.deepStrictEqual(await res.json(), { premium: true, changed: false });
+  assert.strictEqual(updates.length, 0);
+});
+
+test("Premium claim: guests are refused and a missing secret is reported", async () => {
+  premiumClaimFetchMock({ premium: true });
+  const guest = await worker.fetch(
+    referralRequest(freeUserToken("guest", "anonymous"), "/premium/claim"), claimEnv);
+  assert.strictEqual(guest.status, 403);
+
+  const unconfigured = await worker.fetch(
+    referralRequest(tokenWithClaims("paid-user"), "/premium/claim"), mockEnv);
+  assert.strictEqual(unconfigured.status, 503);
+  assert.strictEqual((await unconfigured.json()).errorCode, "PREMIUM_CLAIM_UNAVAILABLE");
+});
