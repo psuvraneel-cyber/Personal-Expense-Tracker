@@ -117,6 +117,62 @@ service cloud.firestore {
 
       // ── Premium Feature Collections ──────────────────────────────
 
+      // Invoices the user sends (line items and payments embedded; rules
+      // can't loop over lists, so their sizes are capped instead).
+      match /invoices/{invoiceId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['id', 'number', 'clientId',
+            'billTo', 'issueDate', 'dueDate', 'status', 'gstEnabled',
+            'placeOfSupply', 'items', 'discount', 'notes', 'payments',
+            'createdAt', 'updatedAt'])
+          && request.resource.data.id == invoiceId
+          && request.resource.data.number is string
+          && request.resource.data.number.size() <= 16
+          && request.resource.data.status in ['draft', 'sent', 'cancelled']
+          && request.resource.data.billTo is map
+          && request.resource.data.billTo.keys().hasOnly(['name', 'address',
+              'phone', 'email', 'gstin', 'stateCode'])
+          && request.resource.data.items is list
+          && request.resource.data.items.size() <= 100
+          && request.resource.data.payments is list
+          && request.resource.data.payments.size() <= 100
+          && optString('notes', 2000)
+          && optString('placeOfSupply', 4)
+          && optAmount('discount');
+      }
+
+      match /invoice_clients/{clientId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if ownerWrite(uid, ['id', 'name', 'address',
+            'phone', 'email', 'gstin', 'stateCode', 'upiId', 'createdAt',
+            'updatedAt'])
+          && request.resource.data.id == clientId
+          && optString('name', 200)
+          && optString('address', 500)
+          && optString('phone', 30)
+          && optString('email', 200)
+          && optString('gstin', 15)
+          && optString('stateCode', 4)
+          && optString('upiId', 260);
+      }
+
+      // The business details printed on invoices (one document).
+      match /invoice_profile/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if docId == 'default'
+          && ownerWrite(uid, ['businessName', 'address', 'phone', 'email',
+              'upiId', 'gstEnabled', 'gstin', 'stateCode', 'prefix', 'dueDays',
+              'defaultGstRate', 'terms', 'updatedAt'])
+          && optString('businessName', 200)
+          && optString('address', 500)
+          && optString('phone', 30)
+          && optString('email', 200)
+          && optString('upiId', 260)
+          && optString('gstin', 15)
+          && optString('prefix', 5)
+          && optString('terms', 2000);
+      }
+
       // Savings Goals
       match /saving_goals/{goalId} {
         allow read, delete: if isOwner(uid);

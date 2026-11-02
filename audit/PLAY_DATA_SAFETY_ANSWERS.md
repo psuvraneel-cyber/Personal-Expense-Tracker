@@ -22,11 +22,13 @@ Items marked **⚠ Decide** need your judgement or a fact only you can confirm.
 
 | Category → Data type | Collected | Shared | Ephemeral only? | Required / Optional | Purposes | Source in the app |
 |---|---|---|---|---|---|---|
-| **Personal info → Name** | Yes | No | No | Optional | App functionality, Account management | Google sign-in display name; Firestore profile; household member names |
-| **Personal info → Email address** | Yes | No | No | Optional | Account management | Firebase Auth; Firestore profile (`users/{uid}`) |
+| **Personal info → Name** | Yes | No | No | Optional | App functionality, Account management | Google sign-in display name; Firestore profile; household member names; invoice business and client names (`invoice_profile`, `invoice_clients`, `invoices`) |
+| **Personal info → Email address** | Yes | No | No | Optional | App functionality, Account management | Firebase Auth; Firestore profile (`users/{uid}`); business and client emails entered for invoices |
+| **Personal info → Phone number** | Yes | No | No | Optional | App functionality | Business and client phone numbers entered for invoices (synced for signed-in users) |
+| **Personal info → Address** | Yes | No | No | Optional | App functionality | Business and client addresses entered for invoices (synced for signed-in users) |
 | **Personal info → User IDs** | Yes | No | No | **Required** | App functionality, Account management, Fraud prevention/security | Firebase UID (also created for anonymous guests), Google account ID, RevenueCat app user ID; Worker quota and referral records |
 | **Financial info → Purchase history** | Yes | No | No | Optional | App functionality, Analytics | RevenueCat subscription and entitlement records; purchase events forwarded to Analytics only for users who opted in |
-| **Financial info → Other financial info** | Yes | **⚠ Decide** (see note A) | No | Optional | App functionality | Transactions (amount, type, category, date, note, merchant, payment method), budgets, goals, bills, weekly limits synced to Firestore; household category totals; AI Copilot finance summary **including the bank balance** sent through the Worker to Groq |
+| **Financial info → Other financial info** | Yes | **⚠ Decide** (see note A) | No | Optional | App functionality | Transactions (amount, type, category, date, note, merchant, payment method), budgets, goals, bills, weekly limits and invoices (items, amounts, payments, GSTIN, UPI IDs) synced to Firestore; household category totals; AI Copilot finance summary **including the bank balance** sent through the Worker to Groq |
 | **Financial info → User payment info** | **No** | — | — | — | — | Card and UPI details are handled by Google Play; the app never sees them |
 | **Financial info → Credit score** | No | — | — | — | — | — |
 | **Messages → SMS or MMS** | **No** (see note B) | — | — | — | — | SMS text is read and parsed only on the device and never uploaded; the extracted fields are declared under "Other financial info" |
@@ -37,7 +39,7 @@ Items marked **⚠ Decide** need your judgement or a fact only you can confirm.
 | **Device or other IDs** | Yes | No | No | **Required** | App functionality, Analytics, Fraud prevention/security | Firebase installation ID (Remote Config, App Check, Crashlytics); Analytics app-instance ID (opt-in) |
 | **Location → Approximate location** | Yes | No | No | Optional | Analytics | Google Analytics derives country/city from the IP address, **only when the user opts in** (note D) |
 | **Location → Precise location** | No | — | — | — | — | — |
-| Contacts, Calendar, Photos/videos, Audio, Files and docs, Health and fitness, Web browsing, Installed apps, Search history, Emails, Phone number, Address, Race/religion/politics | **No** | — | — | — | — | Not accessed or sent |
+| Contacts, Calendar, Photos/videos, Audio, Files and docs, Health and fitness, Web browsing, Installed apps, Search history, Emails, Race/religion/politics | **No** | — | — | — | — | Not accessed or sent (invoice client details are typed in by the user; the app does not read the phone's contacts) |
 
 ---
 

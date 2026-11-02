@@ -96,7 +96,7 @@ class ExportService {
     }
 
     // The default PDF font has no "₹" glyph; embed the bundled Poppins.
-    final pdf = pw.Document(theme: await _pdfTheme());
+    final pdf = pw.Document(theme: await pdfTheme());
     final dateRange = startDate != null && endDate != null
         ? '${_dateFormat.format(startDate)} – ${_dateFormat.format(endDate)}'
         : 'All time';
@@ -225,7 +225,8 @@ class ExportService {
     return file;
   }
 
-  static Future<pw.ThemeData?> _pdfTheme() async {
+  /// Poppins (it has the ₹ glyph), or null to fall back to the default font.
+  static Future<pw.ThemeData?> pdfTheme() async {
     try {
       final regular = await rootBundle.load(
         'assets/google_fonts/Poppins-Regular.ttf',
@@ -269,5 +270,13 @@ class ExportService {
         if (await file.exists()) await file.delete();
       } catch (_) {}
     }
+  }
+
+  /// Writes [bytes] to a temporary [fileName] and opens the share sheet
+  /// (the file is deleted afterwards). Used for invoice PDFs.
+  Future<void> shareBytes(
+      String fileName, List<int> bytes, String subject) async {
+    final file = await _writeTempFile(fileName, null, bytes: bytes);
+    await _shareFile(file, subject);
   }
 }

@@ -263,3 +263,61 @@ test("household invites: members create short-lived codes; anyone signed in can 
   await assertSucceeds(getDoc(doc(bob(), "householdInvites/QWER2345")));
   await assertFails(getDocs(collection(bob(), "householdInvites")));
 });
+
+// ── Invoices ─────────────────────────────────────────────────────────────
+
+const invoice = {
+  id: "inv1",
+  number: "INV/26-27/0001",
+  clientId: "c1",
+  billTo: { name: "Acme", address: "", phone: "", email: "", gstin: "", stateCode: "27" },
+  issueDate: "2026-11-02T00:00:00.000",
+  dueDate: "2026-11-17T00:00:00.000",
+  status: "sent",
+  gstEnabled: true,
+  placeOfSupply: "27",
+  items: [{ description: "Design", quantity: 1, unit: "", rate: 10000, hsnSac: "998391", gstRate: 18 }],
+  discount: 0,
+  notes: "",
+  payments: [],
+  createdAt: "2026-11-02T10:00:00.000",
+  updatedAt: "2026-11-02T10:00:00.000",
+};
+
+test("invoices: owner can write a well-formed invoice; others can't read it", async () => {
+  await assertSucceeds(setDoc(doc(alice(), "users/alice/invoices/inv1"), invoice));
+  await assertSucceeds(getDoc(doc(alice(), "users/alice/invoices/inv1")));
+  await assertFails(getDoc(doc(bob(), "users/alice/invoices/inv1")));
+  await assertFails(setDoc(doc(bob(), "users/alice/invoices/inv2"), { ...invoice, id: "inv2" }));
+});
+
+test("invoices: bad shapes are rejected", async () => {
+  const write = (id, data) => setDoc(doc(alice(), `users/alice/invoices/${id}`), { ...data, id });
+  await assertFails(write("a", { ...invoice, status: "paid" }));
+  await assertFails(write("b", { ...invoice, number: "INV/2026-2027/00001" }));
+  await assertFails(write("c", { ...invoice, extra: true }));
+  await assertFails(write("d", { ...invoice, billTo: { ...invoice.billTo, secret: "x" } }));
+  await assertFails(write("e", { ...invoice, items: Array(101).fill(invoice.items[0]) }));
+  await assertFails(write("f", { ...invoice, discount: -5 }));
+  // The document id must match the invoice id.
+  await assertFails(setDoc(doc(alice(), "users/alice/invoices/other"), invoice));
+});
+
+test("invoice clients and the business profile: owner only, capped fields", async () => {
+  const client = {
+    id: "c1", name: "Acme", address: "", phone: "", email: "", gstin: "27AAPFU0939F1ZV",
+    stateCode: "27", upiId: "acme@okaxis", createdAt: "2026-11-02", updatedAt: "2026-11-02",
+  };
+  await assertSucceeds(setDoc(doc(alice(), "users/alice/invoice_clients/c1"), client));
+  await assertFails(setDoc(doc(alice(), "users/alice/invoice_clients/c2"), { ...client, id: "c2", gstin: "X".repeat(16) }));
+  await assertFails(getDoc(doc(bob(), "users/alice/invoice_clients/c1")));
+
+  const profile = {
+    businessName: "Alice Studio", address: "", phone: "", email: "", upiId: "alice@okaxis",
+    gstEnabled: false, gstin: "", stateCode: "27", prefix: "INV", dueDays: 15,
+    defaultGstRate: 18, terms: "", updatedAt: "2026-11-02",
+  };
+  await assertSucceeds(setDoc(doc(alice(), "users/alice/invoice_profile/default"), profile));
+  await assertFails(setDoc(doc(alice(), "users/alice/invoice_profile/other"), profile));
+  await assertFails(setDoc(doc(alice(), "users/alice/invoice_profile/default"), { ...profile, prefix: "TOOLONG" }));
+});

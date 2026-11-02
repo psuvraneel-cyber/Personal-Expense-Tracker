@@ -14,6 +14,7 @@ import 'package:pet/premium/services/spend_health_service.dart';
 import 'package:pet/premium/screens/recurring_bills_screen.dart';
 import 'package:pet/premium/screens/cashflow_screen.dart';
 import 'package:pet/premium/screens/goals_screen.dart';
+import 'package:pet/premium/screens/invoices_screen.dart';
 import 'package:pet/premium/screens/ai_copilot_screen.dart';
 import 'package:pet/premium/providers/alert_provider.dart';
 import 'package:pet/premium/screens/alerts_screen.dart';
@@ -201,6 +202,14 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
               () => _push(context, const TaxBucketsScreen()),
             ),
             (
+              Icons.request_quote_rounded,
+              'Invoices',
+              'Bill clients, get paid by UPI',
+              const Color(0xFF6366F1),
+              isPremium ? null : 'Try free',
+              () => _push(context, const InvoicesScreen()),
+            ),
+            (
               Icons.auto_awesome_rounded,
               'AI Copilot',
               'Ask your finances anything',
@@ -312,7 +321,7 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
 
   /// Features free users can use in part (AI allowance, joining a
   /// household).
-  static const _freeToTry = {'AI Copilot', 'Household Budgets'};
+  static const _freeToTry = {'AI Copilot', 'Household Budgets', 'Invoices'};
 
   Widget _buildUpgradeBanner(BuildContext context, bool isDark) {
     return Material(
