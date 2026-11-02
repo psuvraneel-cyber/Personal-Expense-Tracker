@@ -602,12 +602,6 @@ abstract class AppLocalizations {
   /// **'Currency'**
   String get settingsCurrency;
 
-  /// No description provided for @settingsDefaultPayment.
-  ///
-  /// In en, this message translates to:
-  /// **'Default Payment Method'**
-  String get settingsDefaultPayment;
-
   /// No description provided for @settingsCategories.
   ///
   /// In en, this message translates to:

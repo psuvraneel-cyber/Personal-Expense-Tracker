@@ -290,9 +290,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsCurrency => 'Currency';
 
   @override
-  String get settingsDefaultPayment => 'Default Payment Method';
-
-  @override
   String get settingsCategories => 'Categories';
 
   @override

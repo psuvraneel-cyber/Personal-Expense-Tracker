@@ -289,9 +289,6 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsCurrency => 'मुद्रा';
 
   @override
-  String get settingsDefaultPayment => 'डिफ़ॉल्ट भुगतान तरीका';
-
-  @override
   String get settingsCategories => 'श्रेणियाँ';
 
   @override
