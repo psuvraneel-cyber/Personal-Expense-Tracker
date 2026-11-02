@@ -12,6 +12,8 @@ import 'package:pet/data/models/recurring_rule.dart';
 import 'package:pet/premium/models/app_alert.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
 import 'package:pet/premium/models/recurring_payment_history.dart';
+import 'package:pet/premium/models/invoice.dart';
+import 'package:pet/premium/models/invoice_client.dart';
 import 'package:pet/premium/models/saving_goal.dart';
 import 'package:pet/premium/models/weekly_limit.dart';
 import 'package:pet/premium/services/cashflow_forecast_service.dart';
@@ -48,6 +50,9 @@ class FirestoreSyncService {
     'tax_categories',
     'weekly_limits',
     'ai_reports',
+    'invoices',
+    'invoice_clients',
+    'invoice_profile',
   ];
 
   static final FirestoreSyncService _instance =
@@ -183,6 +188,18 @@ class FirestoreSyncService {
 
   CollectionReference<Map<String, dynamic>> get _weeklyLimitsCollection =>
       _db.collection('users').doc(_uid).collection('weekly_limits');
+
+  CollectionReference<Map<String, dynamic>> get _invoicesCollection =>
+      _db.collection('users').doc(_uid).collection('invoices');
+
+  CollectionReference<Map<String, dynamic>> get _invoiceClientsCollection =>
+      _db.collection('users').doc(_uid).collection('invoice_clients');
+
+  DocumentReference<Map<String, dynamic>> get _invoiceProfileDoc => _db
+      .collection('users')
+      .doc(_uid)
+      .collection('invoice_profile')
+      .doc('default');
 
   // ── Transaction Write Operations ─────────────────────────────────────
 
@@ -675,6 +692,84 @@ class FirestoreSyncService {
       AppLogger.debug('[Firestore] fetchAllSavingGoals error: $e');
       return [];
     }
+  }
+
+  // ── Invoices Sync ────────────────────────────────────────────────────
+
+  Future<void> upsertInvoice(Invoice invoice) => _guardedWrite(
+      'upsertInvoice',
+      () => _invoicesCollection
+          .doc(invoice.id)
+          .set(invoice.toMap(), SetOptions(merge: true)));
+
+  Future<void> deleteInvoice(String id) => _guardedWrite(
+      'deleteInvoice', () => _invoicesCollection.doc(id).delete());
+
+  Stream<List<Invoice>> invoicesStream() =>
+      _parsedStream(_invoicesCollection, Invoice.fromMap, 'invoices');
+
+  Future<void> upsertInvoiceClient(InvoiceClient client) => _guardedWrite(
+      'upsertInvoiceClient',
+      () => _invoiceClientsCollection
+          .doc(client.id)
+          .set(client.toMap(), SetOptions(merge: true)));
+
+  Future<void> deleteInvoiceClient(String id) => _guardedWrite(
+      'deleteInvoiceClient', () => _invoiceClientsCollection.doc(id).delete());
+
+  Stream<List<InvoiceClient>> invoiceClientsStream() => _parsedStream(
+      _invoiceClientsCollection, InvoiceClient.fromMap, 'invoice clients');
+
+  Future<void> upsertInvoiceProfile(InvoiceProfile profile) => _guardedWrite(
+      'upsertInvoiceProfile', () => _invoiceProfileDoc.set(profile.toMap()));
+
+  Stream<InvoiceProfile?> invoiceProfileStream() {
+    if (_auth.currentUserId == null) return Stream.value(null);
+    return _invoiceProfileDoc.snapshots().map((snap) {
+      final data = snap.data();
+      if (data == null) return null;
+      try {
+        return InvoiceProfile.fromMap(data);
+      } catch (e) {
+        AppLogger.debug('[Firestore] Failed to parse invoice profile: $e');
+        return null;
+      }
+    }).handleError((Object e) {
+      AppLogger.debug('[Firestore] invoiceProfileStream error: $e');
+    });
+  }
+
+  Future<void> _guardedWrite(String op, Future<void> Function() write) async {
+    try {
+      await write();
+    } on FirebaseException catch (e) {
+      AppLogger.debug('[Firestore] $op error: ${e.message}');
+    }
+  }
+
+  /// Snapshots of [collection], skipping documents that don't parse.
+  Stream<List<T>> _parsedStream<T>(
+    CollectionReference<Map<String, dynamic>> collection,
+    T Function(Map<String, dynamic>) parse,
+    String what,
+  ) {
+    if (_auth.currentUserId == null) return Stream.value(<T>[]);
+    return collection.snapshots().map((snap) {
+      return snap.docs
+          .map((doc) {
+            try {
+              return parse(doc.data());
+            } catch (e) {
+              AppLogger.debug(
+                  '[Firestore] Failed to parse $what ${doc.id}: $e');
+              return null;
+            }
+          })
+          .whereType<T>()
+          .toList();
+    }).handleError((Object e) {
+      AppLogger.debug('[Firestore] $what stream error: $e');
+    });
   }
 
   // ── Recurring Payments Sync ──────────────────────────────────────────

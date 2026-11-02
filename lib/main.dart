@@ -33,6 +33,7 @@ import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/services/bill_reminder_scheduler.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
+import 'package:pet/premium/providers/invoice_provider.dart';
 import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
@@ -356,8 +357,10 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       final weeklyProv = ctx.read<WeeklyPlannerProvider>();
       final dashProv = ctx.read<DashboardConfigProvider>();
       final spendPauseProv = ctx.read<SpendPauseProvider>();
+      final invoiceProv = ctx.read<InvoiceProvider>();
 
       await Future.wait([
+        invoiceProv.clearData(),
         txProv.clearData(),
         catProv.clearData(),
         budProv.clearData(),
@@ -393,6 +396,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
       ctx.read<WeeklyPlannerProvider>().load();
       ctx.read<SpendPauseProvider>().load();
       ctx.read<DashboardConfigProvider>().load();
+      ctx.read<InvoiceProvider>().load(force: true);
       ctx.read<PremiumProvider>().logInUser(currentUserId);
     } else {
       AppLogger.debug('[MAIN] No action taken (same user or null→null)');
@@ -526,6 +530,8 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
           create: (_) => AccountDeletionService(dbHelper: DatabaseHelper()),
         ),
         ChangeNotifierProvider(create: (_) => SpendPauseProvider()..load()),
+        // Loaded when the Invoices screen opens (and on sign-in).
+        ChangeNotifierProvider(create: (_) => InvoiceProvider()),
         ChangeNotifierProxyProvider<TransactionProvider, WeeklyPlannerProvider>(
           create: (_) => WeeklyPlannerProvider()..load(),
           update: (_, txnProvider, plannerProvider) {

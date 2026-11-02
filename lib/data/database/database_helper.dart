@@ -16,7 +16,7 @@ import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
 
 /// Current SQLite schema version.
-const int kDatabaseVersion = 24;
+const int kDatabaseVersion = 25;
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -400,6 +400,9 @@ class DatabaseHelper {
     // Message types the user chose to import automatically
     await _createTrustedTemplatesTable(db);
 
+    // Invoices the user sends to clients
+    await _createInvoiceTables(db);
+
     // Seed default categories
     await _seedDefaultCategories(db);
   }
@@ -584,6 +587,54 @@ class DatabaseHelper {
     if (oldVersion < 24 && newVersion >= 24) {
       await _insertDefaultCategories(db);
     }
+    if (oldVersion < 25 && newVersion >= 25) {
+      await _createInvoiceTables(db);
+    }
+  }
+
+  /// v25: invoices (line items and payments stored as JSON in the row, so
+  /// one invoice is one row here and one document in Firestore), clients,
+  /// and the single-row business profile.
+  Future<void> _createInvoiceTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS invoices (
+        id TEXT PRIMARY KEY,
+        number TEXT NOT NULL,
+        clientId TEXT,
+        billTo TEXT NOT NULL,
+        issueDate TEXT NOT NULL,
+        dueDate TEXT NOT NULL,
+        status TEXT NOT NULL,
+        gstEnabled INTEGER NOT NULL DEFAULT 0,
+        placeOfSupply TEXT NOT NULL DEFAULT '',
+        items TEXT NOT NULL,
+        discount REAL NOT NULL DEFAULT 0,
+        notes TEXT NOT NULL DEFAULT '',
+        payments TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS invoice_clients (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        address TEXT NOT NULL DEFAULT '',
+        phone TEXT NOT NULL DEFAULT '',
+        email TEXT NOT NULL DEFAULT '',
+        gstin TEXT NOT NULL DEFAULT '',
+        stateCode TEXT NOT NULL DEFAULT '',
+        upiId TEXT NOT NULL DEFAULT '',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS invoice_profile (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      )
+    ''');
   }
 
   /// Adds any default category the database doesn't have yet (v24: the
