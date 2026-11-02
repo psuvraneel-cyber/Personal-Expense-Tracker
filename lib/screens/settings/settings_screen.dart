@@ -69,7 +69,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  String _defaultPaymentMethod = 'UPI';
   String _userName = '';
   String _userEmail = '';
   String _appVersion = '';
@@ -110,7 +109,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _defaultPaymentMethod = prefs.getString('defaultPaymentMethod') ?? 'UPI';
       _crashReportsEnabled = prefs.getBool(kCrashReportsPrefKey) ?? true;
       _hideNotificationAmounts =
           prefs.getBool(NotificationPreferencesService.kHideAmountsKey) ??
@@ -119,12 +117,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _userName = AuthService.userName ?? prefs.getString('userName') ?? '';
       _userEmail = AuthService.userEmail ?? prefs.getString('userEmail') ?? '';
     });
-  }
-
-  Future<void> _savePaymentMethod(String method) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('defaultPaymentMethod', method);
-    setState(() => _defaultPaymentMethod = method);
   }
 
   @override
@@ -324,70 +316,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             iconColor: AppTheme.incomeGreen,
             title: 'Currency',
             subtitle: '₹ Indian Rupee (INR)',
-          ),
-          const SizedBox(height: 16),
-
-          // Default payment method
-          _buildSectionTitle(context, l10n.settingsDefaultPayment),
-          const SizedBox(height: 8),
-          RadioGroup<String>(
-            groupValue: _defaultPaymentMethod,
-            onChanged: (value) {
-              if (value != null) _savePaymentMethod(value);
-            },
-            child: Column(
-              children: [
-                'UPI',
-                'Credit Card',
-                'Debit Card',
-                'Cash',
-                'Bank Transfer',
-                'Net Banking',
-                'PayPal',
-              ].map((method) {
-                final isSelected = _defaultPaymentMethod == method;
-                IconData icon;
-                switch (method) {
-                  case 'UPI':
-                    icon = Icons.phone_android;
-                    break;
-                  case 'Credit Card':
-                    icon = Icons.credit_card;
-                    break;
-                  case 'Debit Card':
-                    icon = Icons.credit_card_outlined;
-                    break;
-                  case 'Bank Transfer':
-                    icon = Icons.account_balance;
-                    break;
-                  case 'Net Banking':
-                    icon = Icons.language;
-                    break;
-                  case 'PayPal':
-                    icon = Icons.paypal_outlined;
-                    break;
-                  case 'Wallet':
-                    icon = Icons.account_balance_wallet_outlined;
-                    break;
-                  default:
-                    icon = Icons.payments_outlined;
-                }
-                return _buildSettingTile(
-                  context,
-                  isDark: isDark,
-                  icon: icon,
-                  iconColor: isSelected
-                      ? AppTheme.accentPurple
-                      : AppTheme.textTertiary,
-                  title: method,
-                  trailing: Radio<String>(
-                    value: method,
-                    activeColor: AppTheme.accentPurple,
-                  ),
-                  onTap: () => _savePaymentMethod(method),
-                );
-              }).toList(),
-            ),
           ),
           const SizedBox(height: 16),
 
