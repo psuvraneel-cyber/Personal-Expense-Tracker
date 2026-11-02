@@ -192,7 +192,30 @@ void main() {
         ));
         expect(txn, isNotNull);
         expect(txn!.categoryId, isNot(kFromPeopleCategoryId));
+        expect(txn.categoryId, 'cat_salary');
         expect(txn.countsAsIncome, isTrue);
+      });
+
+      test('salary wording is recognised; a "Salary A/c" alone is not', () {
+        const salary = [
+          'Rs 50,000 credited by NEFT from ACME PVT LTD - SALARY.',
+          'Your a/c XX1234 is credited with INR 42,000 towards Payroll Oct-26.',
+          'INR 38,500 SAL CR to A/c XX1234 from EMPLOYER LTD.',
+          'Rs 30,000 credited. Sal for Oct from Acme.',
+        ];
+        const notSalary = [
+          'Rs 1,500 credited to your Salary A/c XX1234 from VPA x@ybl.',
+          'Rs 900 credited to Salary Account XX1234 by UPI from PRIYA S.',
+          'Rs 299 refund credited to A/c XX1234 from AMAZON.',
+        ];
+        for (final t in salary) {
+          expect(FinancialIngestionService.looksLikeSalary(t), isTrue,
+              reason: t);
+        }
+        for (final t in notSalary) {
+          expect(FinancialIngestionService.looksLikeSalary(t), isFalse,
+              reason: t);
+        }
       });
 
       test('a refund from a shop stays a refund', () async {

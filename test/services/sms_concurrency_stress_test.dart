@@ -1,5 +1,10 @@
 // ignore_for_file: avoid_print
 
+// Stress tests: 15,000-message and 10,000-input runs take 8-13 s alone and
+// can pass the default 30 s limit when the whole suite runs in parallel.
+@Timeout(Duration(minutes: 3))
+library;
+
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
