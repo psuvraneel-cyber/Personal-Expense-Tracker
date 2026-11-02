@@ -10,6 +10,7 @@ import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/spacing.dart';
 import 'package:pet/core/theme/theme_mode_notifier.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet/services/auth_service.dart';
@@ -126,541 +127,548 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final currentThemeMode = themeModeNotifier.themeMode;
     final l10n = AppLocalizations.of(context);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
+    return SafeArea(
+      bottom: false,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          Spacing.tabBottom(context, fab: false),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Profile section
+            if (_userName.isNotEmpty) ...[
+              _buildProfileCard(context, isDark),
+              const SizedBox(height: 16),
+            ],
 
-          // Profile section
-          if (_userName.isNotEmpty) ...[
-            _buildProfileCard(context, isDark),
-            const SizedBox(height: 16),
-          ],
-
-          // Appearance
-          _buildSectionTitle(context, l10n.settingsAppearance),
-          const SizedBox(height: 8),
-          _buildThemePicker(context, isDark, currentThemeMode),
-          const SizedBox(height: 4),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.translate_rounded,
-            iconColor: AppTheme.accentPurple,
-            title: l10n.settingsLanguage,
-            subtitle: AppLanguage.current.value.languageCode == 'hi'
-                ? '${l10n.languageHindi} · ${l10n.settingsLanguageHint}'
-                : l10n.languageEnglish,
-            onTap: () async {
-              final code = await showDialog<String>(
-                context: context,
-                builder: (ctx) => SimpleDialog(
-                  title: Text(l10n.settingsLanguage),
-                  children: [
-                    SimpleDialogOption(
-                      onPressed: () => Navigator.pop(ctx, 'en'),
-                      child: Text(l10n.languageEnglish),
-                    ),
-                    SimpleDialogOption(
-                      onPressed: () => Navigator.pop(ctx, 'hi'),
-                      child: Text(l10n.languageHindi),
-                    ),
-                  ],
-                ),
-              );
-              if (code != null) await AppLanguage.set(code);
-            },
-          ),
-          if (!kIsWeb) ...[
+            // Appearance
+            _buildSectionTitle(context, l10n.settingsAppearance),
+            const SizedBox(height: 8),
+            _buildThemePicker(context, isDark, currentThemeMode),
             const SizedBox(height: 4),
             _buildSettingTile(
               context,
               isDark: isDark,
-              icon: Icons.widgets_outlined,
-              iconColor: AppTheme.accentTeal,
-              title: l10n.settingsWidgetTitle,
-              subtitle: l10n.settingsWidgetSubtitle,
-              trailing: const Icon(Icons.add_rounded),
+              icon: Icons.translate_rounded,
+              iconColor: AppTheme.accentPurple,
+              title: l10n.settingsLanguage,
+              subtitle: AppLanguage.current.value.languageCode == 'hi'
+                  ? '${l10n.languageHindi} · ${l10n.settingsLanguageHint}'
+                  : l10n.languageEnglish,
               onTap: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                if (!await HomeWidgetService.requestPin()) {
-                  messenger.showSnackBar(SnackBar(
-                    content: Text(l10n.settingsWidgetManual),
-                  ));
-                }
+                final code = await showDialog<String>(
+                  context: context,
+                  builder: (ctx) => SimpleDialog(
+                    title: Text(l10n.settingsLanguage),
+                    children: [
+                      SimpleDialogOption(
+                        onPressed: () => Navigator.pop(ctx, 'en'),
+                        child: Text(l10n.languageEnglish),
+                      ),
+                      SimpleDialogOption(
+                        onPressed: () => Navigator.pop(ctx, 'hi'),
+                        child: Text(l10n.languageHindi),
+                      ),
+                    ],
+                  ),
+                );
+                if (code != null) await AppLanguage.set(code);
               },
             ),
-          ],
-          const SizedBox(height: 16),
+            if (!kIsWeb) ...[
+              const SizedBox(height: 4),
+              _buildSettingTile(
+                context,
+                isDark: isDark,
+                icon: Icons.widgets_outlined,
+                iconColor: AppTheme.accentTeal,
+                title: l10n.settingsWidgetTitle,
+                subtitle: l10n.settingsWidgetSubtitle,
+                trailing: const Icon(Icons.add_rounded),
+                onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  if (!await HomeWidgetService.requestPin()) {
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(l10n.settingsWidgetManual),
+                    ));
+                  }
+                },
+              ),
+            ],
+            const SizedBox(height: 16),
 
-          // Notifications
-          _buildSectionTitle(context, l10n.settingsNotifications),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.notifications_none_rounded,
-            iconColor: AppTheme.accentPurple,
-            title: l10n.settingsNotificationPrefs,
-            subtitle: l10n.settingsNotificationPrefsSubtitle,
-            onTap: () {
-              Navigator.push(
+            // Notifications
+            _buildSectionTitle(context, l10n.settingsNotifications),
+            const SizedBox(height: 8),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.notifications_none_rounded,
+              iconColor: AppTheme.accentPurple,
+              title: l10n.settingsNotificationPrefs,
+              subtitle: l10n.settingsNotificationPrefsSubtitle,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const NotificationSettingsScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.playlist_add_check_rounded,
+              iconColor: AppTheme.incomeGreen,
+              title: l10n.settingsTrustedMessages,
+              subtitle: l10n.settingsTrustedMessagesSubtitle,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const NotificationSettingsScreen(),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.playlist_add_check_rounded,
-            iconColor: AppTheme.incomeGreen,
-            title: l10n.settingsTrustedMessages,
-            subtitle: l10n.settingsTrustedMessagesSubtitle,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TrustedMessagesScreen()),
+                    builder: (_) => const TrustedMessagesScreen()),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.visibility_off_outlined,
-            iconColor: AppTheme.accentPurple,
-            title: l10n.settingsHideAmounts,
-            subtitle: l10n.settingsHideAmountsSubtitle,
-            trailing: Switch(
-              value: _hideNotificationAmounts,
-              onChanged: (value) {
-                setState(() => _hideNotificationAmounts = value);
-                NotificationPreferencesService.setHideAmounts(value);
-              },
-              activeThumbColor: AppTheme.accentTeal,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.battery_charging_full_rounded,
-            iconColor: AppTheme.incomeGreen,
-            title: l10n.settingsBattery,
-            subtitle:
-                'Prevent MIUI/ColorOS/FuntouchOS from stopping SMS alerts',
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (_) => const OemBatteryDialog(),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // Premium
-          _buildSectionTitle(context, l10n.settingsPremium),
-          const SizedBox(height: 8),
-          Consumer<PremiumProvider>(
-            builder: (context, premium, _) {
-              return Column(
-                children: [
-                  _buildSettingTile(
-                    context,
-                    isDark: isDark,
-                    icon: Icons.workspace_premium_rounded,
-                    iconColor: AppTheme.accentPurple,
-                    title: l10n.settingsPremiumHub,
-                    subtitle: premium.isPremium
-                        ? l10n.settingsPremiumActive
-                        : l10n.settingsPremiumPreview,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PremiumHubScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  _buildSettingTile(
-                    context,
-                    isDark: isDark,
-                    icon: Icons.card_giftcard_rounded,
-                    iconColor: AppTheme.accentTeal,
-                    title: l10n.settingsInvite,
-                    subtitle: l10n.settingsInviteSubtitle,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ReferralScreen()),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // Currency
-          _buildSectionTitle(context, l10n.settingsCurrency),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.currency_rupee,
-            iconColor: AppTheme.incomeGreen,
-            title: 'Currency',
-            subtitle: '₹ Indian Rupee (INR)',
-          ),
-          const SizedBox(height: 16),
-
-          // Custom Categories
-          _buildSectionTitle(context, l10n.settingsCategories),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.category,
-            iconColor: AppTheme.warningYellow,
-            title: 'Manage Custom Categories',
-            subtitle: 'Add or remove your categories',
-            onTap: () => _showCategoryManager(context),
-          ),
-          const SizedBox(height: 16),
-
-          // SMS Auto-Detection (Android only)
-          if (!kIsWeb && platform.isAndroid) ...[
-            _buildSectionTitle(context, l10n.settingsAutoDetect),
             const SizedBox(height: 8),
-            Consumer<SmsTransactionProvider>(
-              builder: (context, smsProvider, _) {
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.visibility_off_outlined,
+              iconColor: AppTheme.accentPurple,
+              title: l10n.settingsHideAmounts,
+              subtitle: l10n.settingsHideAmountsSubtitle,
+              trailing: Switch(
+                value: _hideNotificationAmounts,
+                onChanged: (value) {
+                  setState(() => _hideNotificationAmounts = value);
+                  NotificationPreferencesService.setHideAmounts(value);
+                },
+                activeThumbColor: AppTheme.accentTeal,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.battery_charging_full_rounded,
+              iconColor: AppTheme.incomeGreen,
+              title: l10n.settingsBattery,
+              subtitle:
+                  'Prevent MIUI/ColorOS/FuntouchOS from stopping SMS alerts',
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => const OemBatteryDialog(),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Premium
+            _buildSectionTitle(context, l10n.settingsPremium),
+            const SizedBox(height: 8),
+            Consumer<PremiumProvider>(
+              builder: (context, premium, _) {
                 return Column(
                   children: [
                     _buildSettingTile(
                       context,
                       isDark: isDark,
-                      icon: Icons.sms_rounded,
-                      iconColor: AppTheme.accentTeal,
-                      title: 'SMS Transaction Detection',
-                      subtitle: smsProvider.smsFeatureEnabled
-                          ? '${smsProvider.transactions.length} transactions detected'
-                          : 'Auto-detect UPI payments from bank SMS',
-                      trailing: Switch(
-                        value: smsProvider.smsFeatureEnabled,
-                        onChanged: (enabled) {
-                          if (enabled) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SmsPermissionScreen(),
-                              ),
-                            );
-                          } else {
-                            smsProvider.disableFeature();
-                          }
-                        },
-                        activeThumbColor: AppTheme.accentTeal,
-                      ),
+                      icon: Icons.workspace_premium_rounded,
+                      iconColor: AppTheme.accentPurple,
+                      title: l10n.settingsPremiumHub,
+                      subtitle: premium.isPremium
+                          ? l10n.settingsPremiumActive
+                          : l10n.settingsPremiumPreview,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PremiumHubScreen(),
+                          ),
+                        );
+                      },
                     ),
-                    if (smsProvider.smsFeatureEnabled)
-                      _buildSettingTile(
-                        context,
-                        isDark: isDark,
-                        icon: Icons.receipt_long_rounded,
-                        iconColor: AppTheme.accentPurple,
-                        title: 'View Detected Transactions',
-                        subtitle: 'See auto-parsed UPI transactions',
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SmsTransactionsScreen(),
-                            ),
-                          );
-                        },
-                      ),
+                    const SizedBox(height: 8),
                     _buildSettingTile(
                       context,
                       isDark: isDark,
-                      icon: Icons.notifications_active_rounded,
+                      icon: Icons.card_giftcard_rounded,
                       iconColor: AppTheme.accentTeal,
-                      title: 'Notification Detection',
-                      subtitle: smsProvider.notificationAccessGranted
-                          ? 'Enabled for UPI app alerts'
-                          : 'Tap to enable notification access',
-                      onTap: () async {
-                        if (smsProvider.notificationAccessGranted) {
-                          // Already granted: let the user manage/revoke it.
-                          await smsProvider.requestNotificationAccess();
-                          return;
-                        }
-                        final agreed =
-                            await showNotificationAccessDisclosure(context);
-                        if (agreed) {
-                          await smsProvider.requestNotificationAccess();
-                        }
-                      },
+                      title: l10n.settingsInvite,
+                      subtitle: l10n.settingsInviteSubtitle,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ReferralScreen()),
+                      ),
                     ),
                   ],
                 );
               },
             ),
             const SizedBox(height: 16),
-          ],
 
-          // Export
-          if (!kIsWeb) ...[
-            _buildSectionTitle(context, l10n.settingsExport),
+            // Currency
+            _buildSectionTitle(context, l10n.settingsCurrency),
             const SizedBox(height: 8),
             _buildSettingTile(
               context,
               isDark: isDark,
-              icon: Icons.table_chart_rounded,
+              icon: Icons.currency_rupee,
               iconColor: AppTheme.incomeGreen,
-              title: 'Export as CSV',
-              subtitle: 'Spreadsheet format for Excel',
-              onTap: () => _exportTransactions(context, 'csv'),
-            ),
-            _buildSettingTile(
-              context,
-              isDark: isDark,
-              icon: Icons.picture_as_pdf_rounded,
-              iconColor: AppTheme.expenseRed,
-              title: 'Export as PDF',
-              subtitle: 'Formatted report with summary',
-              onTap: () => _exportTransactions(context, 'pdf'),
+              title: 'Currency',
+              subtitle: '₹ Indian Rupee (INR)',
             ),
             const SizedBox(height: 16),
-          ],
 
-          // Haptic Feedback
-          _buildSectionTitle(context, l10n.settingsAccessibility),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.vibration,
-            iconColor: AppTheme.accentTeal,
-            title: l10n.settingsHaptics,
-            subtitle: l10n.settingsHapticsSubtitle,
-            trailing: Switch(
-              value: HapticService.instance.isEnabled,
-              onChanged: (value) {
-                HapticService.instance.setEnabled(value);
-                setState(() {});
-                if (value) HapticService.instance.lightTap();
-              },
-              activeThumbColor: AppTheme.accentTeal,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Privacy
-          _buildSectionTitle(context, l10n.settingsPrivacy),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.bug_report_outlined,
-            iconColor: AppTheme.accentPurple,
-            title: l10n.settingsCrashReports,
-            subtitle: l10n.settingsCrashReportsSubtitle,
-            trailing: Switch(
-              value: _crashReportsEnabled,
-              onChanged: _setCrashReports,
-              activeThumbColor: AppTheme.accentTeal,
-            ),
-          ),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.insights_rounded,
-            iconColor: AppTheme.accentPurple,
-            title: l10n.settingsAnalytics,
-            subtitle: l10n.settingsAnalyticsSubtitle,
-            trailing: Switch(
-              value: AnalyticsService.instance.isEnabled,
-              onChanged: _setAnalytics,
-              activeThumbColor: AppTheme.accentTeal,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Security
-          _buildSectionTitle(context, l10n.settingsSecurity),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.fingerprint,
-            iconColor: AppTheme.accentPurple,
-            title: l10n.settingsBiometric,
-            subtitle: BiometricService.instance.isEnabled
-                ? 'Locks after ${BiometricService.instance.timeoutMinutes} min idle'
-                : 'Protect your financial data',
-            trailing: Switch(
-              value: BiometricService.instance.isEnabled,
-              onChanged: (value) async {
-                HapticService.instance.lightTap();
-                // Capture before any async gap
-                final messenger = ScaffoldMessenger.of(context);
-                if (value) {
-                  // Check device support first
-                  final canAuth =
-                      await BiometricService.instance.canAuthenticate();
-                  if (!canAuth) {
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Biometric authentication is not available on this device. '
-                          'Please set up fingerprint or face unlock in your device settings.',
-                        ),
-                        duration: Duration(seconds: 4),
-                      ),
-                    );
-                    return;
-                  }
-                  // Verify identity before enabling biometric lock
-                  final authenticated =
-                      await BiometricService.instance.authenticate(
-                    reason: 'Verify your identity to enable biometric lock',
-                  );
-                  if (!authenticated) return;
-                }
-                await BiometricService.instance.setEnabled(value);
-                if (mounted) setState(() {});
-              },
-              activeThumbColor: AppTheme.accentPurple,
-            ),
-          ),
-          if (BiometricService.instance.isEnabled)
-            _buildSettingTile(
-              context,
-              isDark: isDark,
-              icon: Icons.timer_outlined,
-              iconColor: AppTheme.textTertiary,
-              title: 'Lock After',
-              subtitle:
-                  '${BiometricService.instance.timeoutMinutes} minutes of inactivity',
-              onTap: () => _showTimeoutPicker(context),
-            ),
-          const SizedBox(height: 16),
-
-          // Developer Options — DEBUG builds only.
-          // Compile-time constant: entire block tree-shaken in release.
-          if (kDebugMode) ...[
-            _buildSectionTitle(context, l10n.settingsDeveloper),
+            // Custom Categories
+            _buildSectionTitle(context, l10n.settingsCategories),
             const SizedBox(height: 8),
-            Consumer<PremiumProvider>(
-              builder: (context, premium, _) {
-                return _buildSettingTile(
-                  context,
-                  isDark: isDark,
-                  icon: Icons.developer_mode_rounded,
-                  iconColor: Colors.orange,
-                  title: 'Developer Premium Access',
-                  subtitle: premium.isDeveloperPremiumAccessEnabled
-                      ? 'ON \u2014 All premium features unlocked'
-                      : 'OFF \u2014 Using real RevenueCat entitlements',
-                  trailing: Switch(
-                    value: premium.isDeveloperPremiumAccessEnabled,
-                    activeThumbColor: Colors.orange,
-                    onChanged: (v) => premium.setDeveloperPremiumAccess(v),
-                  ),
-                );
-              },
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.category,
+              iconColor: AppTheme.warningYellow,
+              title: 'Manage Custom Categories',
+              subtitle: 'Add or remove your categories',
+              onTap: () => _showCategoryManager(context),
             ),
             const SizedBox(height: 16),
-          ],
 
-          // About
-          _buildSectionTitle(context, l10n.settingsAbout),
-          const SizedBox(height: 8),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.pets,
-            iconColor: AppTheme.accentTeal,
-            title: 'P.E.T',
-            subtitle: 'Personal Expense Tracker $_appVersion'.trim(),
-          ),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.privacy_tip_outlined,
-            iconColor: AppTheme.accentPurple,
-            title: l10n.settingsPrivacyPolicy,
-            subtitle: l10n.settingsPrivacyPolicySubtitle,
-            onTap: () => AppLinks.open(context, AppLinks.privacyPolicy),
-          ),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.gavel_rounded,
-            iconColor: AppTheme.accentPurple,
-            title: l10n.settingsTerms,
-            subtitle: l10n.settingsTermsSubtitle,
-            onTap: () => AppLinks.open(context, AppLinks.terms),
-          ),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.mail_outline_rounded,
-            iconColor: AppTheme.accentTeal,
-            title: l10n.settingsSupport,
-            subtitle: AppLinks.supportEmail,
-            onTap: () => AppLinks.emailSupport(context),
-          ),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.workspace_premium_outlined,
-            iconColor: AppTheme.accentTeal,
-            title: l10n.settingsManageSubscription,
-            subtitle: l10n.settingsManageSubscriptionSubtitle,
-            onTap: () => AppLinks.open(context, AppLinks.manageSubscriptions),
-          ),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.description_outlined,
-            iconColor: AppTheme.textTertiary,
-            title: 'Open-source Licences',
-            subtitle: 'Third-party software used in this app',
-            onTap: () => showLicensePage(
-              context: context,
-              applicationName: 'P.E.T',
-              applicationVersion: _appVersion,
+            // SMS Auto-Detection (Android only)
+            if (!kIsWeb && platform.isAndroid) ...[
+              _buildSectionTitle(context, l10n.settingsAutoDetect),
+              const SizedBox(height: 8),
+              Consumer<SmsTransactionProvider>(
+                builder: (context, smsProvider, _) {
+                  return Column(
+                    children: [
+                      _buildSettingTile(
+                        context,
+                        isDark: isDark,
+                        icon: Icons.sms_rounded,
+                        iconColor: AppTheme.accentTeal,
+                        title: 'SMS Transaction Detection',
+                        subtitle: smsProvider.smsFeatureEnabled
+                            ? '${smsProvider.transactions.length} transactions detected'
+                            : 'Auto-detect UPI payments from bank SMS',
+                        trailing: Switch(
+                          value: smsProvider.smsFeatureEnabled,
+                          onChanged: (enabled) {
+                            if (enabled) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SmsPermissionScreen(),
+                                ),
+                              );
+                            } else {
+                              smsProvider.disableFeature();
+                            }
+                          },
+                          activeThumbColor: AppTheme.accentTeal,
+                        ),
+                      ),
+                      if (smsProvider.smsFeatureEnabled)
+                        _buildSettingTile(
+                          context,
+                          isDark: isDark,
+                          icon: Icons.receipt_long_rounded,
+                          iconColor: AppTheme.accentPurple,
+                          title: 'View Detected Transactions',
+                          subtitle: 'See auto-parsed UPI transactions',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SmsTransactionsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      _buildSettingTile(
+                        context,
+                        isDark: isDark,
+                        icon: Icons.notifications_active_rounded,
+                        iconColor: AppTheme.accentTeal,
+                        title: 'Notification Detection',
+                        subtitle: smsProvider.notificationAccessGranted
+                            ? 'Enabled for UPI app alerts'
+                            : 'Tap to enable notification access',
+                        onTap: () async {
+                          if (smsProvider.notificationAccessGranted) {
+                            // Already granted: let the user manage/revoke it.
+                            await smsProvider.requestNotificationAccess();
+                            return;
+                          }
+                          final agreed =
+                              await showNotificationAccessDisclosure(context);
+                          if (agreed) {
+                            await smsProvider.requestNotificationAccess();
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Export
+            if (!kIsWeb) ...[
+              _buildSectionTitle(context, l10n.settingsExport),
+              const SizedBox(height: 8),
+              _buildSettingTile(
+                context,
+                isDark: isDark,
+                icon: Icons.table_chart_rounded,
+                iconColor: AppTheme.incomeGreen,
+                title: 'Export as CSV',
+                subtitle: 'Spreadsheet format for Excel',
+                onTap: () => _exportTransactions(context, 'csv'),
+              ),
+              _buildSettingTile(
+                context,
+                isDark: isDark,
+                icon: Icons.picture_as_pdf_rounded,
+                iconColor: AppTheme.expenseRed,
+                title: 'Export as PDF',
+                subtitle: 'Formatted report with summary',
+                onTap: () => _exportTransactions(context, 'pdf'),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Haptic Feedback
+            _buildSectionTitle(context, l10n.settingsAccessibility),
+            const SizedBox(height: 8),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.vibration,
+              iconColor: AppTheme.accentTeal,
+              title: l10n.settingsHaptics,
+              subtitle: l10n.settingsHapticsSubtitle,
+              trailing: Switch(
+                value: HapticService.instance.isEnabled,
+                onChanged: (value) {
+                  HapticService.instance.setEnabled(value);
+                  setState(() {});
+                  if (value) HapticService.instance.lightTap();
+                },
+                activeThumbColor: AppTheme.accentTeal,
+              ),
             ),
-          ),
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.info_outline,
-            iconColor: AppTheme.textTertiary,
-            title: 'Made with ❤️ for India',
-            subtitle: 'Track expenses in ₹ with UPI & Cards',
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Sign out
-          _buildSettingTile(
-            context,
-            isDark: isDark,
-            icon: Icons.logout_rounded,
-            iconColor: AppTheme.expenseRed,
-            title: 'Sign Out',
-            subtitle: 'Clear profile and sign out',
-            onTap: () => _signOut(context),
-          ),
-          _buildDangerZoneSection(context),
-          const SizedBox(height: 80),
-        ],
+            // Privacy
+            _buildSectionTitle(context, l10n.settingsPrivacy),
+            const SizedBox(height: 8),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.bug_report_outlined,
+              iconColor: AppTheme.accentPurple,
+              title: l10n.settingsCrashReports,
+              subtitle: l10n.settingsCrashReportsSubtitle,
+              trailing: Switch(
+                value: _crashReportsEnabled,
+                onChanged: _setCrashReports,
+                activeThumbColor: AppTheme.accentTeal,
+              ),
+            ),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.insights_rounded,
+              iconColor: AppTheme.accentPurple,
+              title: l10n.settingsAnalytics,
+              subtitle: l10n.settingsAnalyticsSubtitle,
+              trailing: Switch(
+                value: AnalyticsService.instance.isEnabled,
+                onChanged: _setAnalytics,
+                activeThumbColor: AppTheme.accentTeal,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Security
+            _buildSectionTitle(context, l10n.settingsSecurity),
+            const SizedBox(height: 8),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.fingerprint,
+              iconColor: AppTheme.accentPurple,
+              title: l10n.settingsBiometric,
+              subtitle: BiometricService.instance.isEnabled
+                  ? 'Locks after ${BiometricService.instance.timeoutMinutes} min idle'
+                  : 'Protect your financial data',
+              trailing: Switch(
+                value: BiometricService.instance.isEnabled,
+                onChanged: (value) async {
+                  HapticService.instance.lightTap();
+                  // Capture before any async gap
+                  final messenger = ScaffoldMessenger.of(context);
+                  if (value) {
+                    // Check device support first
+                    final canAuth =
+                        await BiometricService.instance.canAuthenticate();
+                    if (!canAuth) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Biometric authentication is not available on this device. '
+                            'Please set up fingerprint or face unlock in your device settings.',
+                          ),
+                          duration: Duration(seconds: 4),
+                        ),
+                      );
+                      return;
+                    }
+                    // Verify identity before enabling biometric lock
+                    final authenticated =
+                        await BiometricService.instance.authenticate(
+                      reason: 'Verify your identity to enable biometric lock',
+                    );
+                    if (!authenticated) return;
+                  }
+                  await BiometricService.instance.setEnabled(value);
+                  if (mounted) setState(() {});
+                },
+                activeThumbColor: AppTheme.accentPurple,
+              ),
+            ),
+            if (BiometricService.instance.isEnabled)
+              _buildSettingTile(
+                context,
+                isDark: isDark,
+                icon: Icons.timer_outlined,
+                iconColor: AppTheme.textTertiary,
+                title: 'Lock After',
+                subtitle:
+                    '${BiometricService.instance.timeoutMinutes} minutes of inactivity',
+                onTap: () => _showTimeoutPicker(context),
+              ),
+            const SizedBox(height: 16),
+
+            // Developer Options — DEBUG builds only.
+            // Compile-time constant: entire block tree-shaken in release.
+            if (kDebugMode) ...[
+              _buildSectionTitle(context, l10n.settingsDeveloper),
+              const SizedBox(height: 8),
+              Consumer<PremiumProvider>(
+                builder: (context, premium, _) {
+                  return _buildSettingTile(
+                    context,
+                    isDark: isDark,
+                    icon: Icons.developer_mode_rounded,
+                    iconColor: Colors.orange,
+                    title: 'Developer Premium Access',
+                    subtitle: premium.isDeveloperPremiumAccessEnabled
+                        ? 'ON \u2014 All premium features unlocked'
+                        : 'OFF \u2014 Using real RevenueCat entitlements',
+                    trailing: Switch(
+                      value: premium.isDeveloperPremiumAccessEnabled,
+                      activeThumbColor: Colors.orange,
+                      onChanged: (v) => premium.setDeveloperPremiumAccess(v),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // About
+            _buildSectionTitle(context, l10n.settingsAbout),
+            const SizedBox(height: 8),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.pets,
+              iconColor: AppTheme.accentTeal,
+              title: 'P.E.T',
+              subtitle: 'Personal Expense Tracker $_appVersion'.trim(),
+            ),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.privacy_tip_outlined,
+              iconColor: AppTheme.accentPurple,
+              title: l10n.settingsPrivacyPolicy,
+              subtitle: l10n.settingsPrivacyPolicySubtitle,
+              onTap: () => AppLinks.open(context, AppLinks.privacyPolicy),
+            ),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.gavel_rounded,
+              iconColor: AppTheme.accentPurple,
+              title: l10n.settingsTerms,
+              subtitle: l10n.settingsTermsSubtitle,
+              onTap: () => AppLinks.open(context, AppLinks.terms),
+            ),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.mail_outline_rounded,
+              iconColor: AppTheme.accentTeal,
+              title: l10n.settingsSupport,
+              subtitle: AppLinks.supportEmail,
+              onTap: () => AppLinks.emailSupport(context),
+            ),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.workspace_premium_outlined,
+              iconColor: AppTheme.accentTeal,
+              title: l10n.settingsManageSubscription,
+              subtitle: l10n.settingsManageSubscriptionSubtitle,
+              onTap: () => AppLinks.open(context, AppLinks.manageSubscriptions),
+            ),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.description_outlined,
+              iconColor: AppTheme.textTertiary,
+              title: 'Open-source Licences',
+              subtitle: 'Third-party software used in this app',
+              onTap: () => showLicensePage(
+                context: context,
+                applicationName: 'P.E.T',
+                applicationVersion: _appVersion,
+              ),
+            ),
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.info_outline,
+              iconColor: AppTheme.textTertiary,
+              title: 'Made with ❤️ for India',
+              subtitle: 'Track expenses in ₹ with UPI & Cards',
+            ),
+            const SizedBox(height: 16),
+
+            // Sign out
+            _buildSettingTile(
+              context,
+              isDark: isDark,
+              icon: Icons.logout_rounded,
+              iconColor: AppTheme.expenseRed,
+              title: 'Sign Out',
+              subtitle: 'Clear profile and sign out',
+              onTap: () => _signOut(context),
+            ),
+            _buildDangerZoneSection(context),
+          ],
+        ),
       ),
     );
   }

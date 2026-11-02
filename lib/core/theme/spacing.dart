@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+
 /// Consistent spacing constants for the P.E.T design system.
 ///
 /// Based on a 4-px base grid, matching the gradient UI/UX asset guidelines
@@ -49,4 +51,25 @@ abstract final class Spacing {
 
   /// Bottom padding to clear the floating nav-bar.
   static const double navBarClearance = 80;
+
+  // ─────────────────── Corner radii (the only three) ──────────────────────
+  /// Chips, small badges, icon tiles.
+  static const double radiusSm = 8;
+
+  /// Buttons and inputs.
+  static const double radiusMd = 14;
+
+  /// Grouped sections, cards and sheets.
+  static const double radiusLg = 20;
+
+  /// Space a scrolling tab leaves below its last item for the floating
+  /// "Add" button, on top of the nav-bar inset the shell already reports
+  /// through `MediaQuery.padding.bottom`.
+  static const double fabClearance = 88;
+
+  /// Bottom padding for a scrolling tab inside the home shell: clears the
+  /// floating nav-bar (and system bar), plus the floating "Add" button on
+  /// tabs that show it.
+  static double tabBottom(BuildContext context, {bool fab = true}) =>
+      MediaQuery.paddingOf(context).bottom + (fab ? fabClearance : xl);
 }
