@@ -28,13 +28,13 @@ const _sectionDescriptions = {
   '80E': 'Education loan interest',
 };
 
-const _sectionEmojis = {
-  '80C': '💼',
-  '80D': '🏥',
-  '80DP': '👪',
-  'HRA': '🏠',
-  'LTA': '✈️',
-  '80E': '🎓',
+const Map<String, IconData> _sectionIcons = {
+  '80C': Icons.work_outline_rounded,
+  '80D': Icons.local_hospital_outlined,
+  '80DP': Icons.family_restroom_rounded,
+  'HRA': Icons.home_outlined,
+  'LTA': Icons.flight_takeoff_rounded,
+  '80E': Icons.school_outlined,
 };
 
 class TaxBucketsScreen extends StatefulWidget {
@@ -309,7 +309,8 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                       limit: limit,
                       progress: progress,
                       color: color,
-                      emoji: _sectionEmojis[sectionId] ?? '📋',
+                      icon: _sectionIcons[sectionId] ??
+                          Icons.receipt_long_rounded,
                       formatter: formatter,
                       isDark: isDark,
                     ),
@@ -328,7 +329,14 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('⚠️ ', style: TextStyle(fontSize: 14)),
+                      const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: Icon(
+                          Icons.warning_amber_rounded,
+                          size: 16,
+                          color: AppTheme.warningYellow,
+                        ),
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -482,7 +490,10 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('💰 ', style: TextStyle(fontSize: 12)),
+                          const Padding(
+                            padding: EdgeInsets.only(right: 4),
+                            child: Icon(Icons.savings_outlined, size: 14),
+                          ),
                           Text(
                             tax.regime == TaxRegime.oldRegime
                                 ? 'Est. tax saved: ${formatter.format(saved)}'
@@ -577,7 +588,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
     required double limit,
     required double progress,
     required Color color,
-    required String emoji,
+    required IconData icon,
     required NumberFormat formatter,
     required bool isDark,
   }) {
@@ -619,7 +630,7 @@ class _TaxBucketsScreenState extends State<TaxBucketsScreen>
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
-                  child: Text(emoji, style: const TextStyle(fontSize: 20)),
+                  child: Icon(icon, size: 22, color: color),
                 ),
               ),
               const SizedBox(width: 12),

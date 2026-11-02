@@ -314,7 +314,14 @@ class _CashflowScreenState extends State<CashflowScreen> {
         ),
         child: Row(
           children: [
-            const Text('⚠️ ', style: TextStyle(fontSize: 14)),
+            const Padding(
+              padding: EdgeInsets.only(right: 6),
+              child: Icon(
+                Icons.warning_amber_rounded,
+                size: 16,
+                color: AppTheme.warningYellow,
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -1252,7 +1259,7 @@ class _CashflowScreenState extends State<CashflowScreen> {
         alignment: Alignment.center,
         child: Text(
           _timelineFilter == 'deficits'
-              ? 'No projected deficit days! 🎉'
+              ? 'No projected deficit days'
               : 'No matching events found.',
           style: const TextStyle(fontSize: 12, color: AppTheme.textTertiary),
         ),

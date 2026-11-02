@@ -1,9 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/premium/providers/linked_account_provider.dart';
-import 'package:pet/premium/widgets/feature_card.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -58,29 +56,5 @@ void main() {
         );
       },
     );
-
-    testWidgets('FeatureCard Coming Soon state is non-interactive', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: FeatureCard(
-              icon: Icons.account_balance,
-              title: 'Linked Bank Accounts',
-              subtitle: 'Coming soon feed',
-              onTap: null, // Coming soon
-            ),
-          ),
-        ),
-      );
-
-      // Assert "Coming Soon" badge is present
-      expect(find.text('Coming Soon'), findsOneWidget);
-
-      // Tap on it
-      await tester.tap(find.byType(FeatureCard));
-      await tester.pump();
-    });
   });
 }

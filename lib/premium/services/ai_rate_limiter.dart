@@ -79,14 +79,14 @@ class AiRateLimiter {
     // 1. Global ceiling
     if (_globalDayCount >= _globalMaxPerDay) {
       return const RateLimitResult.denied(
-        'Daily AI limit reached. Insights resume tomorrow. 🌙',
+        'Daily AI limit reached. Insights resume tomorrow.',
       );
     }
 
     // 2. Per-user daily
     if (_dayBucket.length >= _maxPerDay) {
       return const RateLimitResult.denied(
-        "You've used all $_maxPerDay daily AI messages. Come back tomorrow! 🔄",
+        "You've used all $_maxPerDay daily AI messages. Come back tomorrow.",
       );
     }
 
@@ -100,7 +100,7 @@ class AiRateLimiter {
     // 4. Per-user per-minute
     if (_minuteBucket.length >= _maxPerMinute) {
       return const RateLimitResult.denied(
-        "Slow down a bit! Max $_maxPerMinute messages per minute. ⚡",
+        "Slow down a bit! Max $_maxPerMinute messages per minute.",
       );
     }
 

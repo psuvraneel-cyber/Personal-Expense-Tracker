@@ -850,8 +850,8 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
             CopilotMessage(
               role: 'assistant',
               content: e.signInRequired
-                  ? '🔑 Sign in with Google to try AI Copilot free.'
-                  : "🔒 That's all the free questions for this month. "
+                  ? 'Sign in with Google to try AI Copilot free.'
+                  : "That's all the free questions for this month. "
                       'Premium gives you unlimited questions.',
               createdAt: DateTime.now(),
             ),
@@ -864,7 +864,7 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
           _messages.add(
             CopilotMessage(
               role: 'assistant',
-              content: '🚦 $e',
+              content: '$e',
               createdAt: DateTime.now(),
             ),
           );
@@ -876,8 +876,9 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
           _messages.add(
             CopilotMessage(
               role: 'assistant',
-              content:
-                  '🔑 ${e.isRetryable ? "Your session has expired. Please sign out and sign in again." : e.message}',
+              content: e.isRetryable
+                  ? 'Your session has expired. Please sign out and sign in again.'
+                  : e.message,
               createdAt: DateTime.now(),
             ),
           );
@@ -889,7 +890,7 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
           _messages.add(
             CopilotMessage(
               role: 'assistant',
-              content: '⚠️ ${e.message}',
+              content: e.message,
               createdAt: DateTime.now(),
             ),
           );
@@ -900,18 +901,18 @@ class _AiCopilotScreenState extends State<AiCopilotScreen> {
       String friendlyMsg;
       if (errorMsg.contains('401') || errorMsg.contains('Unauthorized')) {
         friendlyMsg =
-            '🔑 Authentication failed. Please sign out and sign in again.';
+            'Authentication failed. Please sign out and sign in again.';
       } else if (errorMsg.contains('SocketException') ||
           errorMsg.contains('network') ||
           errorMsg.contains('timeout')) {
         friendlyMsg =
-            '📡 No internet connection. Please check your network and try again.';
+            'No internet connection. Please check your network and try again.';
       } else if (errorMsg.contains('429') || errorMsg.contains('rate')) {
         friendlyMsg =
             '⏱️ Groq API rate limit reached. Please wait a moment and try again.';
       } else {
         friendlyMsg =
-            '⚠️ Couldn\'t reach the AI. Please try again.\n\nError: $errorMsg';
+            'Couldn\'t reach the AI. Please try again.\n\nError: $errorMsg';
       }
       if (mounted) {
         setState(() {
