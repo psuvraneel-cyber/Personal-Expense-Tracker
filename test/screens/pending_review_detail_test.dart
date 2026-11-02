@@ -134,4 +134,19 @@ void main() {
     expect(provider.accepted, {'obs_1': 'credit'});
     expect(find.text('Review Transaction'), findsNothing);
   });
+
+  testWidgets('the "Don\'t auto-add" message goes away on its own',
+      (tester) async {
+    await pumpScreen(tester);
+
+    await tester.tap(find.text('Credit'));
+    await tester.pumpAndSettle();
+    expect(find.text("Don't auto-add"), findsOneWidget);
+
+    // A SnackBar with an action persists by default; this one must not,
+    // or it blocks every later message.
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+    expect(find.text("Don't auto-add"), findsNothing);
+  });
 }

@@ -23,7 +23,10 @@ class _TrustedMessagesScreenState extends State<TrustedMessagesScreen> {
   Future<void> _remove(TrustedTemplate t) async {
     await _service.remove(t.templateHash);
     if (!mounted) return;
-    setState(() => _templates = _service.all());
+    // Block body: an arrow would return the Future, which setState rejects.
+    setState(() {
+      _templates = _service.all();
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Removed. Messages like this will go to Pending Review.'),

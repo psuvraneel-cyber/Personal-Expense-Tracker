@@ -220,6 +220,9 @@ void _showAcceptedSnack(
       behavior: SnackBarBehavior.floating,
       backgroundColor: AppTheme.incomeGreen,
       duration: const Duration(seconds: 6),
+      // An action makes a SnackBar persist by default; this one should go
+      // away on its own (the choice can also be undone in Settings).
+      persist: false,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       action: SnackBarAction(
         label: "Don't auto-add",
