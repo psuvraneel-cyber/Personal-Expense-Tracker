@@ -15,7 +15,10 @@ import 'package:pet/premium/repositories/linked_account_repository.dart';
 import 'package:pet/premium/repositories/recurring_payment_repository.dart';
 import 'package:pet/premium/services/merchant_normalizer.dart';
 import 'package:pet/premium/services/notification_service.dart';
+import 'package:pet/core/constants/categories.dart'
+    show defaultCategories, kFromPeopleCategoryId;
 import 'package:pet/services/canonical_identity_resolver.dart';
+import 'package:pet/services/counterparty_classifier.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/category_mapper.dart';
 import 'package:pet/services/classification_rule_engine.dart';
@@ -23,7 +26,9 @@ import 'package:pet/services/ingestion_diagnostics.dart';
 import 'package:pet/services/merchant_rule_service.dart';
 import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/services/sms_parser/sender_identity.dart';
+import 'package:pet/services/sms_parser/transaction_evidence.dart';
 import 'package:pet/services/sms_service.dart';
+import 'package:pet/services/trusted_template_service.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
@@ -49,6 +54,8 @@ class FinancialIngestionService {
   final LinkedAccountRepository _accountRepository = LinkedAccountRepository();
   final IngestionDiagnostics _diagnostics = IngestionDiagnostics.instance;
   final MerchantRuleService _merchantRuleService = MerchantRuleService();
+  TrustedTemplateService get _trustedTemplates =>
+      TrustedTemplateService(dbHelper: _dbHelper);
   final RecurringPaymentRepository _recurringRepository =
       RecurringPaymentRepository();
   static const Uuid _uuid = Uuid();
@@ -454,11 +461,13 @@ class FinancialIngestionService {
 
     // 5. Ingestion Decision
     final isIncome = classified.transactionType == 'credit';
-    final mappedCategoryId = learnedRule?.learnedCategoryId ??
-        CategoryMapper.mapToCategoryId(
-          parserCategory: classified.category,
-          merchantName: merchant,
+    final mappedCategoryId = learnedCategoryFits(learnedRule?.learnedCategoryId,
+            isIncome: isIncome) ??
+        importCategoryId(
+          classified: classified,
+          merchant: merchant,
           isIncome: isIncome,
+          text: normalizedText,
         );
 
     // Evidence-based high-confidence determination (P2.2)
@@ -483,18 +492,53 @@ class FinancialIngestionService {
     // purchases twice, or a self-transfer as both income and expense. The
     // ledger has no "transfer" type, so let the user decide in Review.
     final possibleTransfer = isPossibleTransfer(normalizedText);
+    // Offer wording ("get ₹500 cashback…") without the hard evidence a real
+    // bank alert carries (account ending, reference, balance): an ad.
+    final offerVerdict = TransactionEvidence.assess(
+      normalizedText,
+      accountTail: classified.accountTail,
+      referenceId: refId,
+      balanceAfter: classified.balanceAfter,
+    );
+    final looksLikeOffer = offerVerdict == OfferVerdict.review;
+    // The user accepted a message of this exact shape from this sender
+    // before and asked to always add them. Never overrides the transfer or
+    // offer checks, and a credit template never accepts a debit.
+    final trustedTemplate = (possibleTransfer ||
+            offerVerdict != OfferVerdict.clean ||
+            !(isIncome || classified.transactionType == 'debit'))
+        ? null
+        : await _trustedTemplates.match(
+            sender: sender,
+            isIncome: isIncome,
+            text: normalizedText,
+            payee: classified.merchantName,
+          );
     final isAutoAccept = !possibleTransfer &&
+        !looksLikeOffer &&
         ((confidence >= autoAcceptConfidenceThreshold) ||
             hasHighEvidence ||
-            isVerifiedBankAlert);
+            isVerifiedBankAlert ||
+            trustedTemplate != null);
+    final reviewReason = possibleTransfer
+        ? 'possible_transfer'
+        : looksLikeOffer
+            ? 'looks_like_offer'
+            : 'review_required';
 
     // Shown instead of "Unknown" when the bank does not name the payee.
     final displayMerchant = merchant == 'Unknown' && isVerifiedBankAlert
         ? unnamedPayeeLabel(classified)
         : merchant;
 
-    if (confidence < reviewConfidenceThreshold) {
-      // Low confidence -> Reject
+    final rejectReason = offerVerdict == OfferVerdict.reject
+        ? 'looks_like_offer'
+        : confidence < reviewConfidenceThreshold
+            ? 'confidence_below_threshold ($confidence)'
+            : null;
+
+    if (rejectReason != null) {
+      // Low confidence, or an offer rather than a transaction -> Reject
       _diagnostics.recordRejection();
       _diagnostics.recordEvent(
         source: source.name,
@@ -503,7 +547,7 @@ class FinancialIngestionService {
         bank: bank,
         merchant: merchant,
         decision: 'reject',
-        reason: 'confidence_below_threshold ($confidence)',
+        reason: rejectReason,
       );
 
       await _recordObservation(
@@ -523,7 +567,7 @@ class FinancialIngestionService {
           observationHash: observationHash,
           sourceFingerprint: fingerprint,
           state: FinancialObservationState.rejected,
-          stateReason: 'confidence_below_threshold ($confidence)',
+          stateReason: rejectReason,
           confidence: confidence,
         ),
       );
@@ -538,7 +582,9 @@ class FinancialIngestionService {
         bank: bank,
         merchant: merchant,
         decision: 'review_required',
-        reason: possibleTransfer ? 'possible_transfer' : 'moderate_confidence',
+        reason: reviewReason == 'review_required'
+            ? 'moderate_confidence'
+            : reviewReason,
       );
 
       AppLogger.debug(
@@ -560,8 +606,7 @@ class FinancialIngestionService {
           observationHash: observationHash,
           sourceFingerprint: fingerprint,
           state: FinancialObservationState.uncertain,
-          stateReason:
-              possibleTransfer ? 'possible_transfer' : 'review_required',
+          stateReason: reviewReason,
           confidence: confidence,
         ),
       );
@@ -617,7 +662,9 @@ class FinancialIngestionService {
       observationHash: observationHash,
       sourceFingerprint: fingerprint,
       state: FinancialObservationState.promoted,
-      stateReason: 'high_confidence_auto_promotion',
+      stateReason: trustedTemplate != null
+          ? 'trusted_template_auto_promotion'
+          : 'high_confidence_auto_promotion',
       confidence: confidence,
       canonicalTransactionId: txnId,
     );
@@ -888,6 +935,43 @@ class FinancialIngestionService {
         ),
       );
 
+  /// "Always add messages like this": trusts the shape of an observation
+  /// the user just accepted, so the next one from the same sender is added
+  /// without review. Returns the template hash (for undo), or null when the
+  /// message can't be read any more.
+  Future<String?> trustObservation(String observationId,
+      {TransactionType? type}) async {
+    final db = await _dbHelper.database;
+    final rows = await db.query(
+      'financial_observations',
+      where: 'observationId = ?',
+      whereArgs: [observationId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final observation = FinancialObservation.fromMap(rows.first);
+    if (observation.normalizedText.isEmpty) return null;
+    final sender = observation.sender ?? observation.sourceIdentifier;
+    final classified = await ClassificationRuleEngine.classify(
+      observation.normalizedText,
+      sender,
+      observation.sourceTimestamp,
+    );
+    final isIncome = type != null
+        ? type == TransactionType.income
+        : classified?.transactionType == 'credit';
+    return _trustedTemplates.trust(
+      sender: sender,
+      isIncome: isIncome,
+      text: observation.normalizedText,
+      payee: classified?.merchantName,
+    );
+  }
+
+  /// Stops trusting a message shape (undo, or removed in Settings).
+  Future<void> untrustTemplate(String templateHash) =>
+      _trustedTemplates.remove(templateHash);
+
   Future<TransactionRecord?> _confirmObservationUnlocked({
     required String observationId,
     double? overrideAmount,
@@ -919,10 +1003,11 @@ class FinancialIngestionService {
             ? TransactionType.income
             : TransactionType.expense);
     final finalCategoryId = overrideCategoryId ??
-        CategoryMapper.mapToCategoryId(
-          parserCategory: classified?.category,
-          merchantName: finalMerchant,
+        importCategoryId(
+          classified: classified,
+          merchant: finalMerchant,
           isIncome: finalType == TransactionType.income,
+          text: observation.normalizedText,
         );
 
     final txnId = 'txn_$observationId';
@@ -1071,6 +1156,33 @@ class FinancialIngestionService {
     await BillPaymentMatcher.recordIfBillPayment(txn);
     // Focus Mode: tell the user a paused category was spent in.
     await FocusModeNotifier.notifyIfPaused(txn, userId: _syncUserId());
+  }
+
+  /// Remembers the user's "Count as income" choice for the payee of [txn],
+  /// so future credits from them land in the same category. Keyed on the
+  /// payee name the import matched against (the stored observation text has
+  /// phone numbers masked, so re-reading it would give a different UPI ID).
+  Future<void> rememberIncomeChoice(TransactionRecord txn) async {
+    if (txn.type != TransactionType.income) return;
+    final merchant = txn.merchantName;
+    if (merchant == null || merchant.isEmpty || merchant == 'Unknown') return;
+    await _merchantRuleService.learnRule(
+      identifier: merchant,
+      learnedMerchantName: merchant,
+      categoryId: txn.categoryId,
+    );
+  }
+
+  /// A learned category is only reused for money moving the same way: a
+  /// "From people" rule for a friend must not label what you pay them.
+  /// Custom categories (not in the defaults) are trusted as learned.
+  @visibleForTesting
+  static String? learnedCategoryFits(String? categoryId,
+      {required bool isIncome}) {
+    if (categoryId == null) return null;
+    final known = defaultCategories.where((c) => c.id == categoryId);
+    if (known.isEmpty) return categoryId;
+    return (known.first.type == 'income') == isIncome ? categoryId : null;
   }
 
   /// Re-categorises the ledger transaction created from an SMS/notification
@@ -1253,6 +1365,45 @@ class FinancialIngestionService {
     return classified.transactionType == 'credit'
         ? '$channel credit'
         : '$channel payment';
+  }
+
+  /// Sub-types that are plain money movements (not refunds, cashback or
+  /// reversals, which keep their own categories).
+  static const Set<String> _plainTransferSubTypes = {
+    'payment',
+    'transfer',
+    'collect',
+    'unknown',
+    '',
+  };
+
+  /// Category for an imported transaction (when the user hasn't taught one
+  /// for this payee): money a *person* sent you is "From people" — tracked,
+  /// but not counted as income; everything else uses the usual mapping.
+  @visibleForTesting
+  static String importCategoryId({
+    required ClassifiedTransaction? classified,
+    required String merchant,
+    required bool isIncome,
+    required String text,
+  }) {
+    if (isIncome &&
+        classified != null &&
+        _plainTransferSubTypes.contains(classified.transactionSubType) &&
+        CounterpartyClassifier.classify(
+              payeeName: classified.merchantName,
+              upiId: classified.upiId,
+              channel: classified.channel,
+              text: text,
+            ) ==
+            CounterpartyType.person) {
+      return kFromPeopleCategoryId;
+    }
+    return CategoryMapper.mapToCategoryId(
+      parserCategory: classified?.category,
+      merchantName: merchant,
+      isIncome: isIncome,
+    );
   }
 
   /// Messages about paying a credit-card bill or moving money between the

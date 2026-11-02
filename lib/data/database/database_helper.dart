@@ -16,7 +16,7 @@ import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
 
 /// Current SQLite schema version.
-const int kDatabaseVersion = 22;
+const int kDatabaseVersion = 23;
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -346,6 +346,9 @@ class DatabaseHelper {
     // Create system watermarks table
     await _createSystemWatermarksTable(db);
 
+    // Message types the user chose to import automatically
+    await _createTrustedTemplatesTable(db);
+
     // Seed default categories
     await _seedDefaultCategories(db);
   }
@@ -524,6 +527,40 @@ class DatabaseHelper {
     if (oldVersion < 22 && newVersion >= 22) {
       await _migrateToV22(db);
     }
+    if (oldVersion < 23 && newVersion >= 23) {
+      await _migrateToV23(db);
+    }
+  }
+
+  /// v23: the "From people" category (money received from a person, not
+  /// counted as income) and the table of message types the user trusts for
+  /// automatic import.
+  Future<void> _migrateToV23(Database db) async {
+    for (final category in defaultCategories) {
+      await db.insert(
+        'categories',
+        category.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+    await _createTrustedTemplatesTable(db);
+  }
+
+  /// Message "shapes" (amounts, names, numbers replaced by placeholders)
+  /// from a sender that the user accepted with "Always add messages like
+  /// this". Matching messages skip Pending Review.
+  Future<void> _createTrustedTemplatesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS trusted_templates (
+        templateHash TEXT PRIMARY KEY,
+        sender TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        example TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        lastUsedAt TEXT,
+        useCount INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
   }
 
   /// Create recurring_rules and recurring_occurrences tables for recurring transaction scheduling.

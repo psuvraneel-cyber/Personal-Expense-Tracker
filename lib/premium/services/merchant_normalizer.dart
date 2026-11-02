@@ -136,6 +136,14 @@ class MerchantNormalizer {
   //  PUBLIC NORMALIZATION API
   // ═══════════════════════════════════════════════════════════════════
 
+  /// Whether [merchant] names a brand in the canonical brand list (Swiggy,
+  /// Apollo, Amazon…).
+  static bool isKnownBrand(String merchant) {
+    final cleaned = merchant.trim();
+    if (cleaned.isEmpty) return false;
+    return _brandRules.keys.any((rule) => rule.hasMatch(cleaned));
+  }
+
   /// Normalizes a raw extracted merchant string into a clean, human-readable name.
   static String normalize(String merchant) {
     var cleaned = merchant.trim();

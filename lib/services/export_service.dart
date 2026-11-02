@@ -7,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
-import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 
 /// Service for exporting transactions to CSV or PDF files.
@@ -85,9 +84,12 @@ class ExportService {
     // Summary stats
     double totalIncome = 0;
     double totalExpense = 0;
+    double totalFromPeople = 0; // money in, but not income
     for (final t in filtered) {
-      if (t.type == TransactionType.income) {
+      if (t.countsAsIncome) {
         totalIncome += t.amount;
+      } else if (t.isFromPeople) {
+        totalFromPeople += t.amount;
       } else {
         totalExpense += t.amount;
       }
@@ -124,6 +126,14 @@ class ExportService {
                 ),
               ],
             ),
+            if (totalFromPeople > 0) ...[
+              pw.SizedBox(height: 6),
+              pw.Text(
+                'From people (not counted as income): '
+                '${_amountFormat.format(totalFromPeople)}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+            ],
             pw.Divider(),
           ],
         ),

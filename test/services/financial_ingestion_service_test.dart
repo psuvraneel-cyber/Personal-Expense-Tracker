@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:pet/core/constants/categories.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/financial_observation.dart';
@@ -162,6 +163,96 @@ void main() {
 
       // Diagnostics check
       expect(IngestionDiagnostics().crossSourceMerged, equals(1));
+    });
+
+    group('Money received from people', () {
+      test('a UPI credit from a person is "From people", not income', () async {
+        final txn = await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'JM-HDFCBK-S',
+          body: 'Rs 1,500.00 credited to HDFC Bank A/c XX1234 on 24-Aug-26 '
+              'from VPA 9876543210@ybl (RAHUL SHARMA). UPI Ref 412345678901.',
+          dateMillis: DateTime(2026, 8, 24, 20).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(txn, isNotNull);
+        expect(txn!.type, TransactionType.income);
+        expect(txn.categoryId, kFromPeopleCategoryId);
+        expect(txn.isFromPeople, isTrue);
+        expect(txn.countsAsIncome, isFalse);
+      });
+
+      test('a salary credit stays income', () async {
+        final txn = await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'JM-HDFCBK-S',
+          body: 'Rs 50,000.00 credited to HDFC Bank A/c XX1234 on 01-Sep-26 '
+              'by NEFT from ACME TECHNOLOGIES PVT LTD - SALARY. '
+              'Ref N244260012345.',
+          dateMillis: DateTime(2026, 9, 1, 10).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(txn, isNotNull);
+        expect(txn!.categoryId, isNot(kFromPeopleCategoryId));
+        expect(txn.countsAsIncome, isTrue);
+      });
+
+      test('a refund from a shop stays a refund', () async {
+        final txn = await ingestionService.ingestMessage(NativeSmsMessage(
+          address: 'JM-HDFCBK-S',
+          body: 'Refund of Rs 299.00 credited to HDFC Bank A/c XX1234 from '
+              'AMAZON on 02-Sep-26. Ref 512345678901.',
+          dateMillis: DateTime(2026, 9, 2, 12).millisecondsSinceEpoch,
+          source: 'sms',
+        ));
+        expect(txn, isNotNull);
+        expect(txn!.categoryId, isNot(kFromPeopleCategoryId));
+      });
+
+      test('"Count as income" sticks for future credits from that payee',
+          () async {
+        NativeSmsMessage credit(int day, String ref) => NativeSmsMessage(
+              address: 'JM-HDFCBK-S',
+              body: 'Rs 2,000.00 credited to HDFC Bank A/c XX1234 on '
+                  '$day-Sep-26 from VPA 9876500001@ybl (NEHA VERMA). '
+                  'UPI Ref $ref.',
+              dateMillis: DateTime(2026, 9, day, 18).millisecondsSinceEpoch,
+              source: 'sms',
+            );
+        final first =
+            await ingestionService.ingestMessage(credit(3, '412300000001'));
+        expect(first!.categoryId, kFromPeopleCategoryId);
+
+        // The user flips "Count as income" on (e.g. rent from a tenant).
+        await ingestionService.rememberIncomeChoice(
+            first.copyWith(categoryId: 'cat_other_income'));
+
+        final next =
+            await ingestionService.ingestMessage(credit(10, '412300000002'));
+        expect(next!.categoryId, 'cat_other_income');
+        expect(next.countsAsIncome, isTrue);
+      });
+
+      test('a "From people" rule never labels money paid to that person', () {
+        expect(
+          FinancialIngestionService.learnedCategoryFits(kFromPeopleCategoryId,
+              isIncome: false),
+          isNull,
+        );
+        expect(
+          FinancialIngestionService.learnedCategoryFits(kFromPeopleCategoryId,
+              isIncome: true),
+          kFromPeopleCategoryId,
+        );
+        expect(
+          FinancialIngestionService.learnedCategoryFits('cat_food',
+              isIncome: true),
+          isNull,
+        );
+        expect(
+          FinancialIngestionService.learnedCategoryFits('my_custom_cat',
+              isIncome: false),
+          'my_custom_cat',
+        );
+      });
     });
 
     group('Transfers and card-bill payments (audit P2-10)', () {
@@ -346,6 +437,65 @@ void main() {
       final ledgerAfter = await db.query('transactions');
       expect(ledgerAfter.length, equals(1));
       expect(ledgerAfter.first['merchantName'], equals('Local Shop'));
+    });
+
+    group('Always add messages like this', () {
+      NativeSmsMessage shopDebit(String amount, int hour) => NativeSmsMessage(
+            address: 'HDFCBK',
+            body: 'Rs $amount debited at Unknown Shop. Info txn.',
+            dateMillis: DateTime(2026, 8, 25, hour).millisecondsSinceEpoch,
+            source: 'sms',
+          );
+
+      test('after accepting with trust, the next one is added directly',
+          () async {
+        expect(await ingestionService.ingestMessage(shopDebit('150.00', 9)),
+            isNull);
+        final pending = await ingestionService.getPendingReviewObservations();
+        final id = pending.single.observationId;
+        await ingestionService.confirmObservation(observationId: id);
+        expect(
+          await ingestionService.trustObservation(id,
+              type: TransactionType.expense),
+          isNotNull,
+        );
+
+        final next =
+            await ingestionService.ingestMessage(shopDebit('275.50', 13));
+        expect(next, isNotNull);
+        expect(next!.amount, 275.50);
+        final obs = await db.query('financial_observations',
+            where: 'canonicalTransactionId = ?', whereArgs: [next.id]);
+        expect(obs.single['stateReason'], 'trusted_template_auto_promotion');
+      });
+
+      test('without trust, or after undo, it still goes to review', () async {
+        await ingestionService.ingestMessage(shopDebit('150.00', 9));
+        final id = (await ingestionService.getPendingReviewObservations())
+            .single
+            .observationId;
+        await ingestionService.confirmObservation(observationId: id);
+        final hash = await ingestionService.trustObservation(id,
+            type: TransactionType.expense);
+        await ingestionService.untrustTemplate(hash!);
+
+        expect(await ingestionService.ingestMessage(shopDebit('80.00', 15)),
+            isNull);
+      });
+
+      test('a trusted debit shape does not accept money in', () async {
+        await ingestionService.ingestMessage(shopDebit('150.00', 9));
+        final id = (await ingestionService.getPendingReviewObservations())
+            .single
+            .observationId;
+        await ingestionService.confirmObservation(observationId: id);
+        // The user (wrongly) accepted it as money in: debits of this shape
+        // must still be reviewed.
+        await ingestionService.trustObservation(id,
+            type: TransactionType.income);
+        expect(await ingestionService.ingestMessage(shopDebit('60.00', 16)),
+            isNull);
+      });
     });
 
     test(

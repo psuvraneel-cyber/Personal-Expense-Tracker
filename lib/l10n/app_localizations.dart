@@ -710,6 +710,18 @@ abstract class AppLocalizations {
   /// **'Manage budget, anomaly, bill and report notifications'**
   String get settingsNotificationPrefsSubtitle;
 
+  /// No description provided for @settingsTrustedMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-added messages'**
+  String get settingsTrustedMessages;
+
+  /// No description provided for @settingsTrustedMessagesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Message types you chose to always add from Pending Review'**
+  String get settingsTrustedMessagesSubtitle;
+
   /// No description provided for @settingsBattery.
   ///
   /// In en, this message translates to:

@@ -89,7 +89,7 @@ class MoneyWrap {
           spent += t.amount;
           final name = categoryName(t.categoryId);
           byCategory[name] = (byCategory[name] ?? 0) + t.amount;
-        } else if (t.type == TransactionType.income) {
+        } else if (t.countsAsIncome) {
           income += t.amount;
         }
       } else if (inRange(t.date, prevStart, start) &&

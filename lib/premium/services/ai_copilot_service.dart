@@ -187,7 +187,7 @@ class AiCopilotService {
     for (final t in transactions) {
       if (t.date.year != now.year || t.date.month != now.month) continue;
       if (t.date.isAfter(now)) continue;
-      if (t.type == TransactionType.income) {
+      if (t.countsAsIncome) {
         income += t.amount;
       } else if (t.type == TransactionType.expense) {
         expense += t.amount;

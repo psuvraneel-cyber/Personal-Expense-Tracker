@@ -205,6 +205,31 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
   }
 }
 
+/// Shown after every accept: accepting also trusts messages of the same
+/// shape from the same sender ("Always add messages like this"), with an
+/// undo right here and a list in Settings.
+void _showAcceptedSnack(
+  ScaffoldMessengerState messenger,
+  SmsTransactionProvider provider,
+  String id,
+  String message,
+) {
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text('$message. Similar messages will be added automatically.'),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: AppTheme.incomeGreen,
+      duration: const Duration(seconds: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      action: SnackBarAction(
+        label: "Don't auto-add",
+        textColor: Colors.white,
+        onPressed: () => provider.stopTrustingSimilar(id),
+      ),
+    ),
+  );
+}
+
 Future<void> _showEditDialog(
   BuildContext context,
   SmsTransaction txn,
@@ -336,13 +361,8 @@ Future<void> _showEditDialog(
     );
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Saved and accepted as $selectedType'),
-          backgroundColor: AppTheme.incomeGreen,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showAcceptedSnack(ScaffoldMessenger.of(context), provider, txn.id,
+          'Saved and accepted as $selectedType');
     }
   }
 }
@@ -365,13 +385,7 @@ Future<void> _showReviewDetail(
   Future<void> accept(BuildContext sheetCtx, String type) async {
     Navigator.pop(sheetCtx);
     await provider.acceptUncertainTransaction(txn.id, overrideType: type);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Accepted as $type'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppTheme.incomeGreen,
-      ),
-    );
+    _showAcceptedSnack(messenger, provider, txn.id, 'Accepted as $type');
   }
 
   return showModalBottomSheet<void>(
@@ -570,6 +584,16 @@ class _UncertainTransactionCard extends StatelessWidget {
     required this.onTap,
   });
 
+  Future<void> _acceptFromCard(BuildContext context, String type) async {
+    final provider = Provider.of<SmsTransactionProvider>(
+      context,
+      listen: false,
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    await provider.acceptUncertainTransaction(txn.id, overrideType: type);
+    _showAcceptedSnack(messenger, provider, txn.id, 'Accepted as $type');
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDebit = txn.transactionType == 'debit';
@@ -639,16 +663,8 @@ class _UncertainTransactionCard extends StatelessWidget {
           if (type == null) return false;
           await provider.acceptUncertainTransaction(txn.id, overrideType: type);
           if (!context.mounted) return false;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Accepted as $type'),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: AppTheme.incomeGreen,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
+          _showAcceptedSnack(ScaffoldMessenger.of(context), provider, txn.id,
+              'Accepted as $type');
           return false; // Already handled
         } else {
           // Reject
@@ -788,15 +804,7 @@ class _UncertainTransactionCard extends StatelessWidget {
                   icon: Icons.arrow_upward_rounded,
                   color: AppTheme.expenseRed,
                   isDark: isDark,
-                  onTap: () {
-                    Provider.of<SmsTransactionProvider>(
-                      context,
-                      listen: false,
-                    ).acceptUncertainTransaction(
-                      txn.id,
-                      overrideType: 'debit',
-                    );
-                  },
+                  onTap: () => _acceptFromCard(context, 'debit'),
                 ),
               ),
               const SizedBox(width: 4),
@@ -806,15 +814,7 @@ class _UncertainTransactionCard extends StatelessWidget {
                   icon: Icons.arrow_downward_rounded,
                   color: AppTheme.incomeGreen,
                   isDark: isDark,
-                  onTap: () {
-                    Provider.of<SmsTransactionProvider>(
-                      context,
-                      listen: false,
-                    ).acceptUncertainTransaction(
-                      txn.id,
-                      overrideType: 'credit',
-                    );
-                  },
+                  onTap: () => _acceptFromCard(context, 'credit'),
                 ),
               ),
               const SizedBox(width: 4),

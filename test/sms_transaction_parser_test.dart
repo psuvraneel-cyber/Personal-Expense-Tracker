@@ -571,18 +571,43 @@ void main() {
       );
     });
 
-    test('VK- prefix = promotional', () {
+    // The two-letter prefix is the operator/circle, not the message type:
+    // a bank alert delivered on Vi Karnataka arrives as VK-HDFCBK.
+    test('VK-/HP- bank headers = transactional (prefix is operator/circle)',
+        () {
       expect(
-        NegativeFilter.classifySender('VK-PAYTM'),
+        NegativeFilter.classifySender('VK-HDFCBK'),
+        SenderTrust.transactional,
+      );
+      expect(
+        NegativeFilter.classifySender('HP-SBIUPI-S'),
+        SenderTrust.transactional,
+      );
+    });
+
+    test('-P suffix = promotional', () {
+      expect(
+        NegativeFilter.classifySender('VK-PAYTM-P'),
+        SenderTrust.promotional,
+      );
+      expect(
+        NegativeFilter.classifySender('HP-OFFERS-P'),
         SenderTrust.promotional,
       );
     });
 
-    test('HP- prefix = promotional', () {
+    test('numeric header = promotional', () {
       expect(
-        NegativeFilter.classifySender('HP-OFFERS'),
+        NegativeFilter.classifySender('VM-612345'),
         SenderTrust.promotional,
       );
+    });
+
+    test('-S / -T / -G suffix = transactional', () {
+      for (final s in ['JM-HDFCBK-S', 'AD-ICICIT-T', 'AX-UIDAI-G']) {
+        expect(NegativeFilter.classifySender(s), SenderTrust.transactional,
+            reason: s);
+      }
     });
 
     test('Phone number = unknown', () {

@@ -217,7 +217,7 @@ class SpendHealthService {
     double income = 0;
     double expense = 0;
     for (final t in txns) {
-      if (t.type == TransactionType.income) {
+      if (t.countsAsIncome) {
         income += t.amount;
       } else if (t.type == TransactionType.expense) {
         expense += t.amount;

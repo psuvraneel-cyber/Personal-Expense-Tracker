@@ -10,9 +10,9 @@
 /// - **Explainable**: Every rejection produces a human-readable reason.
 ///
 /// ## Sender Prefix Conventions (TRAI India)
-/// - `AD-` / `TA-` → Transactional (banks, UPI apps)
-/// - `VM-` / `VD-` → Transactional after DND (banks to DND users)
-/// - `VK-` / `VN-` / `HP-` / `TD-` / `BZ-` → Promotional
+/// - `XX-HEADER-S` / `-T` / `-G` → service, transactional, government
+/// - `XX-HEADER-P` or a numeric header → promotional
+/// - `XX` (VK, AD, JM…) is the operator and circle, not the message type
 /// - Numeric senders (e.g., `+919876543210`) → Unknown, need body analysis
 ///
 /// ## Performance
@@ -49,17 +49,18 @@ class NegativeFilterResult {
 
 /// Trust level inferred from the SMS sender ID.
 ///
-/// TRAI (Telecom Regulatory Authority of India) mandates sender ID
-/// prefixes for commercial SMS:
-/// - Transactional headers start with AD-, TA-, VM-, VD- (bank alerts)
-/// - Promotional headers start with VK-, VN-, HP-, TD-, BZ- (marketing)
+/// TRAI (Telecom Regulatory Authority of India) commercial headers look like
+/// `JK-HDFCBK-S`: operator/circle code, registered header, category suffix.
+/// - `-S` / `-T` / `-G`, or an alphabetic header without a suffix → service
+///   or transactional (bank alerts)
+/// - `-P`, or a numeric header → promotional (marketing)
 /// - Personal numbers (+91...) have no TRAI header
 enum SenderTrust {
-  /// Known transactional prefix (AD-, TA-, VM-, VD-).
+  /// Service, transactional or government header.
   /// High trust — likely a bank or UPI app.
   transactional,
 
-  /// Known promotional prefix (VK-, VN-, HP-, TD-, BZ-).
+  /// Promotional header (`-P` suffix or numeric).
   /// Low trust — likely marketing. Must pass strict body filters.
   promotional,
 
@@ -84,13 +85,20 @@ class NegativeFilter {
   //  SENDER TRUST CLASSIFICATION
   // ═══════════════════════════════════════════════════════════════════
 
-  /// TRAI transactional prefixes. These senders are trusted by default.
-  /// AD = After DND (transactional), TA = Transactional,
-  /// VM/VD = Voice/Data DND exemption (banks).
-  static final RegExp _transactionalPrefixes = RegExp(
-    r'^(?:AD|TA|VM|VD)-',
-    caseSensitive: false,
+  /// TRAI commercial header: `XX-HEADER` with an optional category suffix
+  /// (`-S` service, `-T` transactional, `-G` government, `-P` promotional).
+  ///
+  /// The two-letter `XX` is the telecom operator and circle the message was
+  /// delivered through (e.g. `VK`, `AD`, `JM`) — it says nothing about the
+  /// message type. Treating `VK-`/`HP-`/… as "promotional" used to put real
+  /// bank alerts on those networks through the strict promo filter.
+  static final RegExp _commercialHeader = RegExp(
+    r'^[A-Z]{2}-([A-Z0-9]{3,9})(?:-([STGP]))?$',
   );
+
+  /// Promotional headers are numeric (TRAI TCCCPR); registered service and
+  /// transactional headers are alphabetic.
+  static final RegExp _numericHeader = RegExp(r'^\d+$');
 
   /// Known transactional app sender IDs (not TRAI-prefixed but trusted).
   /// Truecaller relays bank transaction SMS with its own sender ID.
@@ -99,24 +107,20 @@ class NegativeFilter {
     caseSensitive: false,
   );
 
-  /// TRAI promotional prefixes. Messages from these senders are likely
-  /// marketing/offers and need strong positive signals to be accepted.
-  ///
-  /// VK = Voice Key promotional, VN = Voice Non-DND promo,
-  /// HP = Header Promotional, TD = Telemarketer Direct,
-  /// BZ = Business promotional.
-  static final RegExp _promotionalPrefixes = RegExp(
-    r'^(?:VK|VN|HP|TD|BZ)-',
-    caseSensitive: false,
-  );
-
   /// Classify sender trust level from the sender ID.
   static SenderTrust classifySender(String sender) {
     final s = sender.trim().toUpperCase();
-    if (_transactionalPrefixes.hasMatch(s)) return SenderTrust.transactional;
     if (_trustedAppSenders.hasMatch(s)) return SenderTrust.transactional;
-    if (_promotionalPrefixes.hasMatch(s)) return SenderTrust.promotional;
-    return SenderTrust.unknown;
+    final header = _commercialHeader.firstMatch(s);
+    if (header == null) return SenderTrust.unknown;
+    final category = header.group(2);
+    if (category == 'P') return SenderTrust.promotional;
+    if (category != null) return SenderTrust.transactional; // S, T, G
+    if (_numericHeader.hasMatch(header.group(1)!)) {
+      return SenderTrust.promotional;
+    }
+    // Alphabetic header without a suffix (older phones / legacy format).
+    return SenderTrust.transactional;
   }
 
   // ═══════════════════════════════════════════════════════════════════

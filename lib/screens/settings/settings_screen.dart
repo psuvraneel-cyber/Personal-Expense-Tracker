@@ -26,6 +26,7 @@ import 'package:pet/services/platform_stub.dart'
     as platform;
 import 'package:pet/screens/settings/account_deletion_sheet.dart';
 import 'package:pet/screens/settings/notification_settings_screen.dart';
+import 'package:pet/screens/settings/trusted_messages_screen.dart';
 import 'package:pet/screens/settings/referral_screen.dart';
 import 'package:pet/core/widgets/oem_battery_dialog.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';
@@ -220,6 +221,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               );
             },
+          ),
+          const SizedBox(height: 8),
+          _buildSettingTile(
+            context,
+            isDark: isDark,
+            icon: Icons.playlist_add_check_rounded,
+            iconColor: AppTheme.incomeGreen,
+            title: l10n.settingsTrustedMessages,
+            subtitle: l10n.settingsTrustedMessagesSubtitle,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TrustedMessagesScreen()),
+            ),
           ),
           const SizedBox(height: 8),
           _buildSettingTile(

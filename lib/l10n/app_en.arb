@@ -112,6 +112,8 @@
   "settingsWidgetManual": "Long-press your home screen, tap Widgets, then choose P.E.T.",
   "settingsNotificationPrefs": "Notification Preferences",
   "settingsNotificationPrefsSubtitle": "Manage budget, anomaly, bill and report notifications",
+  "settingsTrustedMessages": "Auto-added messages",
+  "settingsTrustedMessagesSubtitle": "Message types you chose to always add from Pending Review",
   "settingsBattery": "Battery & Autostart Settings",
   "settingsPremiumHub": "Premium Hub",
   "settingsPremiumActive": "Active",
