@@ -215,63 +215,10 @@ class _CashflowScreenState extends State<CashflowScreen> {
       NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
   Future<void> _editBalance(BalanceAnchor? current) async {
-    final controller = TextEditingController(
-      text: current == null ? '' : current.amount.toStringAsFixed(0),
-    );
-    String? error;
     final amount = await showDialog<double>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Your bank balance'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter the total in your bank accounts right now. P.E.T adds '
-                'the income and spending it tracks from here on.',
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: AmountInput.formatters,
-                decoration: InputDecoration(
-                  prefixText: '₹ ',
-                  hintText: '0',
-                  errorText: error,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final text = controller.text.trim();
-                // AmountInput rejects 0, but a zero balance is valid.
-                final value = RegExp(r'^0+(\.0{1,2})?$').hasMatch(text)
-                    ? 0.0
-                    : AmountInput.parse(text);
-                if (value == null) {
-                  setDialogState(() => error = 'Enter an amount in rupees');
-                  return;
-                }
-                Navigator.pop(ctx, value);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => BalanceDialog(initial: current?.amount),
     );
-    controller.dispose();
     if (amount != null) await BalanceAnchorService.save(amount);
   }
 
@@ -1822,5 +1769,81 @@ class _SplineChartPainter extends CustomPainter {
         old.scenarioPoints != scenarioPoints ||
         old.safetyBuffer != safetyBuffer ||
         old.isDark != isDark;
+  }
+}
+
+/// Asks for the current bank balance; pops with the amount, or null.
+///
+/// Owns its text controller, so the controller is disposed only after the
+/// dialog's closing animation has finished (disposing it as soon as
+/// `showDialog` returned tripped a framework assertion).
+class BalanceDialog extends StatefulWidget {
+  const BalanceDialog({super.key, this.initial});
+
+  final double? initial;
+
+  @override
+  State<BalanceDialog> createState() => _BalanceDialogState();
+}
+
+class _BalanceDialogState extends State<BalanceDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial == null ? '' : widget.initial!.toStringAsFixed(0),
+  );
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final text = _controller.text.trim();
+    // AmountInput rejects 0, but a zero balance is valid.
+    final value = RegExp(r'^0+(\.0{1,2})?$').hasMatch(text)
+        ? 0.0
+        : AmountInput.parse(text);
+    if (value == null) {
+      setState(() => _error = 'Enter an amount in rupees');
+      return;
+    }
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Your bank balance'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Enter the total in your bank accounts right now. P.E.T adds '
+            'the income and spending it tracks from here on.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: AmountInput.formatters,
+            decoration: InputDecoration(
+              prefixText: '₹ ',
+              hintText: '0',
+              errorText: _error,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
   }
 }

@@ -24,6 +24,9 @@ class DatabaseHelper {
 
   static Completer<Database>? _dbCompleter;
 
+  /// Longest the first open may take (including retries while locked).
+  static const Duration openTimeout = Duration(seconds: 45);
+
   factory DatabaseHelper() => _instance;
 
   DatabaseHelper._internal();
@@ -47,7 +50,9 @@ class DatabaseHelper {
     final completer = Completer<Database>();
     _dbCompleter = completer;
     try {
-      _database = await _initDatabase();
+      // Never leave the app on the splash screen: a stuck open fails into
+      // the recovery screen, which offers "Try again".
+      _database = await _initDatabase().timeout(openTimeout);
       completer.complete(_database);
       return _database!;
     } catch (e) {
@@ -68,20 +73,66 @@ class DatabaseHelper {
     }
   }
 
-  Future<bool> _isDatabasePlaintext(String path) async {
+  /// An unencrypted SQLite file always starts with this header; an
+  /// SQLCipher file starts with random bytes.
+  static const List<int> _sqliteHeader = [
+    0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66, // "SQLite f"
+    0x6f, 0x72, 0x6d, 0x61, 0x74, 0x20, 0x33, 0x00, // "ormat 3\0"
+  ];
+
+  /// Whether [path] is a legacy unencrypted database, judged from its first
+  /// 16 bytes. Reading the header opens no database connection: probing by
+  /// opening the file used to share (and then close) the connection that
+  /// background isolates in the same process were using, and could
+  /// misjudge the encrypted file as plaintext.
+  @visibleForTesting
+  static Future<bool> isPlaintextDatabaseFile(String path) async {
+    final file = File(path);
+    if (!await file.exists()) return false;
+    final raf = await file.open();
     try {
-      final db = await openDatabase(path);
-      await db.rawQuery('PRAGMA user_version');
-      await db.close();
+      final head = await raf.read(_sqliteHeader.length);
+      if (head.length < _sqliteHeader.length) return false;
+      for (var i = 0; i < _sqliteHeader.length; i++) {
+        if (head[i] != _sqliteHeader[i]) return false;
+      }
       return true;
-    } catch (_) {
-      return false;
+    } finally {
+      await raf.close();
+    }
+  }
+
+  /// Runs [open], retrying while the database is locked by another
+  /// isolate's open or upgrade (WorkManager tasks start alongside the UI
+  /// after an app update). Other errors are rethrown at once.
+  @visibleForTesting
+  static Future<T> retryWhileLocked<T>(
+    Future<T> Function() open, {
+    List<Duration> delays = const [
+      Duration(milliseconds: 500),
+      Duration(seconds: 1),
+      Duration(seconds: 2),
+      Duration(seconds: 4),
+    ],
+  }) async {
+    for (var attempt = 0;; attempt++) {
+      try {
+        return await open();
+      } catch (e) {
+        final locked =
+            e.toString().toLowerCase().contains('database is locked');
+        if (!locked || attempt >= delays.length) rethrow;
+        AppLogger.warn('Database busy, retrying open (${attempt + 1})',
+            label: 'DB');
+        await Future<void>.delayed(delays[attempt]);
+      }
     }
   }
 
   Future<void> _encryptDatabaseInPlace(String path, String password) async {
     final tempPath = '$path.tmp';
-    final db = await openDatabase(path);
+    // Own connection: never share (and later close) another isolate's.
+    final db = await openDatabase(path, singleInstance: false);
     // Note: SQLite ATTACH DATABASE statement does not support parameterized query syntax (?)
     // for path and key arguments. Manual single-quote escaping (replaceAll("'", "''")) is the
     // deliberate, correct mitigation to safely construct this ATTACH command.
@@ -129,7 +180,7 @@ class DatabaseHelper {
     if (cipherSupported) {
       final File dbFile = File(path);
       final existedBefore = await dbFile.exists();
-      if (existedBefore && await _isDatabasePlaintext(path)) {
+      if (existedBefore && await isPlaintextDatabaseFile(path)) {
         try {
           final password =
               await SecureStorageService.instance.getDatabaseEncryptionKey();
@@ -143,7 +194,7 @@ class DatabaseHelper {
 
       final password = await SecureStorageService.instance
           .getDatabaseEncryptionKey(databaseExists: await dbFile.exists());
-      return await _openEncrypted(path, password);
+      return await retryWhileLocked(() => _openEncrypted(path, password));
     } else {
       return await openDatabase(
         path,
