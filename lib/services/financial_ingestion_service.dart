@@ -23,6 +23,7 @@ import 'package:pet/services/ingestion_diagnostics.dart';
 import 'package:pet/services/merchant_rule_service.dart';
 import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/services/sms_parser/sender_identity.dart';
+import 'package:pet/services/sms_parser/transaction_evidence.dart';
 import 'package:pet/services/sms_service.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -483,18 +484,39 @@ class FinancialIngestionService {
     // purchases twice, or a self-transfer as both income and expense. The
     // ledger has no "transfer" type, so let the user decide in Review.
     final possibleTransfer = isPossibleTransfer(normalizedText);
+    // Offer wording ("get ₹500 cashback…") without the hard evidence a real
+    // bank alert carries (account ending, reference, balance): an ad.
+    final offerVerdict = TransactionEvidence.assess(
+      normalizedText,
+      accountTail: classified.accountTail,
+      referenceId: refId,
+      balanceAfter: classified.balanceAfter,
+    );
+    final looksLikeOffer = offerVerdict == OfferVerdict.review;
     final isAutoAccept = !possibleTransfer &&
+        !looksLikeOffer &&
         ((confidence >= autoAcceptConfidenceThreshold) ||
             hasHighEvidence ||
             isVerifiedBankAlert);
+    final reviewReason = possibleTransfer
+        ? 'possible_transfer'
+        : looksLikeOffer
+            ? 'looks_like_offer'
+            : 'review_required';
 
     // Shown instead of "Unknown" when the bank does not name the payee.
     final displayMerchant = merchant == 'Unknown' && isVerifiedBankAlert
         ? unnamedPayeeLabel(classified)
         : merchant;
 
-    if (confidence < reviewConfidenceThreshold) {
-      // Low confidence -> Reject
+    final rejectReason = offerVerdict == OfferVerdict.reject
+        ? 'looks_like_offer'
+        : confidence < reviewConfidenceThreshold
+            ? 'confidence_below_threshold ($confidence)'
+            : null;
+
+    if (rejectReason != null) {
+      // Low confidence, or an offer rather than a transaction -> Reject
       _diagnostics.recordRejection();
       _diagnostics.recordEvent(
         source: source.name,
@@ -503,7 +525,7 @@ class FinancialIngestionService {
         bank: bank,
         merchant: merchant,
         decision: 'reject',
-        reason: 'confidence_below_threshold ($confidence)',
+        reason: rejectReason,
       );
 
       await _recordObservation(
@@ -523,7 +545,7 @@ class FinancialIngestionService {
           observationHash: observationHash,
           sourceFingerprint: fingerprint,
           state: FinancialObservationState.rejected,
-          stateReason: 'confidence_below_threshold ($confidence)',
+          stateReason: rejectReason,
           confidence: confidence,
         ),
       );
@@ -538,7 +560,9 @@ class FinancialIngestionService {
         bank: bank,
         merchant: merchant,
         decision: 'review_required',
-        reason: possibleTransfer ? 'possible_transfer' : 'moderate_confidence',
+        reason: reviewReason == 'review_required'
+            ? 'moderate_confidence'
+            : reviewReason,
       );
 
       AppLogger.debug(
@@ -560,8 +584,7 @@ class FinancialIngestionService {
           observationHash: observationHash,
           sourceFingerprint: fingerprint,
           state: FinancialObservationState.uncertain,
-          stateReason:
-              possibleTransfer ? 'possible_transfer' : 'review_required',
+          stateReason: reviewReason,
           confidence: confidence,
         ),
       );

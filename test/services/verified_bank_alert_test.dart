@@ -64,8 +64,10 @@ void main() {
       expect(c, isNotNull);
       expect(c!.transactionType, 'credit');
       expect(c.merchantName, 'Unknown');
-      // Below the 0.80 bar on confidence alone: this is the rule doing it.
-      expect(c.confidence, lessThan(0.80));
+      // A `-S` service header now earns the trusted-sender bonus (the `JK`
+      // prefix is only the operator/circle), so confidence reaches the bar
+      // too; the verified-alert rule accepts it independently of that.
+      expect(c.confidence, greaterThanOrEqualTo(0.80));
       expect(await verified(bobCredit, 'JK-BOBSMS-S'), isTrue);
       expect(FinancialIngestionService.unnamedPayeeLabel(c), 'UPI credit');
     });
