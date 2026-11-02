@@ -4,9 +4,14 @@ import 'package:provider/provider.dart';
 import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/color_tokens.dart';
+import 'package:pet/core/theme/motion.dart';
 import 'package:pet/core/theme/spacing.dart';
+import 'package:pet/core/theme/typography.dart';
+import 'package:pet/core/widgets/amount_text.dart';
+import 'package:pet/core/widgets/category_avatar.dart';
+import 'package:pet/core/widgets/pet_section.dart';
 import 'package:pet/core/widgets/budget_progress_bar.dart';
-import 'package:intl/intl.dart';
 
 class BudgetScreen extends StatefulWidget {
   const BudgetScreen({super.key});
@@ -31,12 +36,6 @@ class _BudgetScreenState extends State<BudgetScreen> {
     'December',
   ];
 
-  static final NumberFormat _formatter = NumberFormat.currency(
-    locale: 'en_IN',
-    symbol: '\u20B9',
-    decimalDigits: 0,
-  );
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -49,7 +48,6 @@ class _BudgetScreenState extends State<BudgetScreen> {
           0.0,
           (sum, s) => sum + s,
         );
-        final formatter = _formatter;
 
         return SafeArea(
           bottom: false,
@@ -63,205 +61,53 @@ class _BudgetScreenState extends State<BudgetScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Month selector
-                _buildMonthSelector(context, budgetProvider),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SharedBudgetsScreen(),
-                      ),
-                    ),
-                    icon: const Icon(Icons.home_rounded, size: 18),
-                    label: const Text('Household budgets'),
-                  ),
-                ),
-                const SizedBox(height: 8),
+                _buildHeader(context, budgetProvider),
+                const SizedBox(height: Spacing.base),
 
                 // Overall budget summary
                 if (budgets.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppTheme.accentPurple.withAlpha(40),
-                          AppTheme.accentTeal.withAlpha(20),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppTheme.accentPurple.withAlpha(60),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Total Budget',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                                Text(
-                                  formatter.format(totalBudget),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'Spent',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                                Text(
-                                  formatter.format(totalSpent),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: totalSpent > totalBudget
-                                            ? AppTheme.expenseRed
-                                            : AppTheme.incomeGreen,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(
-                            begin: 0,
-                            end: totalBudget > 0
-                                ? (totalSpent / totalBudget).clamp(0.0, 1.0)
-                                : 0.0,
-                          ),
-                          duration: const Duration(milliseconds: 1000),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, value, child) {
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: LinearProgressIndicator(
-                                value: value,
-                                minHeight: 10,
-                                backgroundColor: isDark
-                                    ? AppTheme.surfaceDark
-                                    : const Color(0xFFE2E8F0),
-                                valueColor: AlwaysStoppedAnimation(
-                                  value < 0.7
-                                      ? AppTheme.incomeGreen
-                                      : value < 0.9
-                                          ? AppTheme.warningYellow
-                                          : AppTheme.expenseRed,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          totalBudget > totalSpent
-                              ? '${formatter.format(totalBudget - totalSpent)} remaining'
-                              : 'Over budget by ${formatter.format(totalSpent - totalBudget)}',
-                          style: TextStyle(
-                            color: totalBudget > totalSpent
-                                ? AppTheme.incomeGreen
-                                : AppTheme.expenseRed,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+                  _buildSummary(context, totalBudget, totalSpent),
+                  const SizedBox(height: Spacing.base),
                 ],
 
-                // Over-budget alerts
+                // Over-budget alert
                 if (budgetProvider.getOverBudgetCategories().isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppTheme.expenseRed.withAlpha(20),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppTheme.expenseRed.withAlpha(60),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          color: AppTheme.expenseRed,
-                          size: 22,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '${budgetProvider.getOverBudgetCategories().length} categor${budgetProvider.getOverBudgetCategories().length == 1 ? 'y' : 'ies'} over budget!',
-                            style: const TextStyle(
-                              color: AppTheme.expenseRed,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  _buildOverBudgetNote(
+                    budgetProvider.getOverBudgetCategories().length,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: Spacing.base),
                 ],
 
                 // Category budgets
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Category Budgets',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    IconButton(
-                      tooltip: 'Add',
-                      onPressed: () => _showAddBudgetDialog(
-                        context,
-                        catProvider,
-                        budgetProvider,
-                      ),
-                      icon: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentPurple,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.add,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
                 if (budgets.isEmpty)
-                  _buildEmptyState(context, isDark)
-                else
+                  _buildEmptyState(context, isDark, catProvider, budgetProvider)
+                else ...[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'CATEGORIES',
+                            style: AppTypography.overline(
+                              color: isDark
+                                  ? AppTheme.textTertiary
+                                  : AppTheme.textSecondaryLight,
+                            ),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _showAddBudgetDialog(
+                            context,
+                            catProvider,
+                            budgetProvider,
+                          ),
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('Add'),
+                        ),
+                      ],
+                    ),
+                  ),
                   ...budgets.map((budget) {
                     final cat = catProvider.getCategoryById(budget.categoryId);
                     final spent = budgetProvider.getSpentForCategory(
@@ -281,6 +127,27 @@ class _BudgetScreenState extends State<BudgetScreen> {
                       ),
                     );
                   }),
+                ],
+                const SizedBox(height: Spacing.base),
+                PetSection(
+                  children: [
+                    PetRow(
+                      title: 'Household budgets',
+                      subtitle: 'Share a monthly budget with family',
+                      leading: const CategoryAvatar(
+                        icon: Icons.home_rounded,
+                        color: AppTheme.accentPurple,
+                      ),
+                      showChevron: true,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SharedBudgetsScreen(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -289,51 +156,155 @@ class _BudgetScreenState extends State<BudgetScreen> {
     );
   }
 
-  Widget _buildMonthSelector(
-    BuildContext context,
-    BudgetProvider budgetProvider,
-  ) {
+  Widget _buildHeader(BuildContext context, BudgetProvider budgetProvider) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final text = isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight;
+    void shift(int delta) {
+      var m = budgetProvider.currentMonth + delta;
+      var y = budgetProvider.currentYear;
+      if (m < 1) {
+        m = 12;
+        y--;
+      } else if (m > 12) {
+        m = 1;
+        y++;
+      }
+      budgetProvider.setMonth(m, y);
+    }
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        Expanded(
+          child: Text('Budget', style: AppTypography.displaySmall(color: text)),
+        ),
         IconButton(
-          tooltip: 'Previous',
-          onPressed: () {
-            int m = budgetProvider.currentMonth - 1;
-            int y = budgetProvider.currentYear;
-            if (m < 1) {
-              m = 12;
-              y--;
-            }
-            budgetProvider.setMonth(m, y);
-          },
-          icon: Icon(
-            Icons.chevron_left,
-            color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
-          ),
+          tooltip: 'Previous month',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => shift(-1),
+          icon: const Icon(Icons.chevron_left_rounded),
         ),
         Text(
-          '${_months[budgetProvider.currentMonth - 1]} ${budgetProvider.currentYear}',
-          style: Theme.of(context).textTheme.headlineMedium,
+          '${_months[budgetProvider.currentMonth - 1].substring(0, 3)} '
+          '${budgetProvider.currentYear}',
+          style: AppTypography.labelLarge(color: text)
+              .copyWith(fontFeatures: AppTypography.tabularFigures),
         ),
         IconButton(
-          tooltip: 'Next',
-          onPressed: () {
-            int m = budgetProvider.currentMonth + 1;
-            int y = budgetProvider.currentYear;
-            if (m > 12) {
-              m = 1;
-              y++;
-            }
-            budgetProvider.setMonth(m, y);
-          },
-          icon: Icon(
-            Icons.chevron_right,
-            color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
-          ),
+          tooltip: 'Next month',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => shift(1),
+          icon: const Icon(Icons.chevron_right_rounded),
         ),
       ],
+    );
+  }
+
+  Widget _buildSummary(
+    BuildContext context,
+    double totalBudget,
+    double totalSpent,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final used = totalBudget > 0 ? totalSpent / totalBudget : 0.0;
+    final left = totalBudget - totalSpent;
+    final muted = isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
+    return Container(
+      padding: const EdgeInsets.all(Spacing.lg),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.accentPurple.withAlpha(40),
+            AppTheme.accentTeal.withAlpha(20),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
+        border: Border.all(color: AppTheme.accentPurple.withAlpha(50)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('SPENT THIS MONTH', style: AppTypography.overline(color: muted)),
+          const SizedBox(height: Spacing.xs),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              AmountText(totalSpent, size: 32),
+              const SizedBox(width: Spacing.sm),
+              Text(
+                'of \u20B9${AmountText.digits(totalBudget)}',
+                style: AppTypography.bodyMedium(color: muted)
+                    .copyWith(fontFeatures: AppTypography.tabularFigures),
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.base),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: used.clamp(0.0, 1.0)),
+              duration: Motion.of(context, Motion.emphasized * 2),
+              curve: Motion.easeOut,
+              builder: (context, value, child) => LinearProgressIndicator(
+                value: value,
+                minHeight: 8,
+                backgroundColor: isDark
+                    ? Colors.white.withAlpha(16)
+                    : Colors.black.withAlpha(12),
+                valueColor: AlwaysStoppedAnimation(ColorTokens.budgetUse(used)),
+              ),
+            ),
+          ),
+          const SizedBox(height: Spacing.sm),
+          Text(
+            left >= 0
+                ? '\u20B9${AmountText.digits(left)} left \u00B7 '
+                    '${(used * 100).round()}% used'
+                : '\u20B9${AmountText.digits(-left)} over budget',
+            style: AppTypography.bodySmall(
+              color: left >= 0 ? muted : AppTheme.expenseRed,
+            ).copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              fontFeatures: AppTypography.tabularFigures,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverBudgetNote(int count) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.expenseRed.withAlpha(20),
+        borderRadius: BorderRadius.circular(Spacing.radiusMd),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppTheme.expenseRed,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              count == 1
+                  ? '1 category is over budget'
+                  : '$count categories are over budget',
+              style: const TextStyle(
+                color: AppTheme.expenseRed,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -487,33 +458,52 @@ class _BudgetScreenState extends State<BudgetScreen> {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, bool isDark) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Column(
-          children: [
-            Icon(
-              Icons.pie_chart_outline,
-              size: 80,
-              color: isDark ? AppTheme.textTertiary : AppTheme.textTertiary,
+  Widget _buildEmptyState(
+    BuildContext context,
+    bool isDark,
+    CategoryProvider catProvider,
+    BudgetProvider budgetProvider,
+  ) {
+    final muted = isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.cardDark : AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
+        border: isDark
+            ? null
+            : Border.all(color: Colors.black.withAlpha(8), width: 1),
+      ),
+      child: Column(
+        children: [
+          const CategoryAvatar(
+            icon: Icons.donut_large_rounded,
+            color: AppTheme.accentPurple,
+            size: 56,
+          ),
+          const SizedBox(height: Spacing.base),
+          Text(
+            'No budgets yet',
+            style: AppTypography.titleLarge(
+              color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'No budgets set',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: isDark
-                        ? AppTheme.textSecondary
-                        : AppTheme.textSecondaryLight,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tap + to set your first category budget',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: Spacing.xs + 2),
+          Text(
+            'Give a category a monthly limit and P.E.T will show how much is '
+            'left and warn you before you go over.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyMedium(color: muted),
+          ),
+          const SizedBox(height: Spacing.lg),
+          FilledButton.icon(
+            onPressed: () =>
+                _showAddBudgetDialog(context, catProvider, budgetProvider),
+            icon: const Icon(Icons.add_rounded, size: 20),
+            label: const Text('Set a budget'),
+          ),
+        ],
       ),
     );
   }

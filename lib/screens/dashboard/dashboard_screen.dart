@@ -11,24 +11,27 @@ import 'package:pet/premium/providers/recurring_provider.dart';
 import 'package:pet/premium/providers/alert_provider.dart';
 import 'package:pet/premium/screens/alerts_screen.dart';
 import 'package:pet/core/theme/app_theme.dart';
-import 'package:pet/core/theme/pet_colors.dart';
+import 'package:pet/core/theme/color_tokens.dart';
+import 'package:pet/core/theme/motion.dart';
 import 'package:pet/core/theme/spacing.dart';
+import 'package:pet/core/widgets/amount_text.dart';
+import 'package:pet/core/widgets/category_avatar.dart';
+import 'package:pet/core/widgets/home_summary.dart';
+import 'package:pet/core/widgets/pet_section.dart';
+import 'package:pet/core/widgets/sync_status_chip.dart';
+import 'package:pet/core/widgets/transaction_row.dart';
+import 'package:pet/screens/home/home_tabs.dart';
 import 'package:pet/core/theme/typography.dart';
 import 'package:pet/core/widgets/gradient_background.dart';
-import 'package:pet/core/widgets/hero_greeting_card.dart';
 import 'package:pet/core/widgets/notification_permission_banner.dart';
 import 'package:pet/core/widgets/oem_battery_dialog.dart';
 import 'package:pet/premium/services/oem_optimization_service.dart';
-import 'package:pet/core/widgets/metric_pill_row.dart';
-import 'package:pet/core/widgets/category_progress_bar_new.dart';
 import 'package:pet/core/widgets/spend_health_card.dart';
 import 'package:pet/core/widgets/ai_copilot_teaser_card.dart';
 import 'package:pet/core/widgets/subscriptions_found_card.dart';
 import 'package:pet/core/widgets/money_wrap_entry_card.dart';
-import 'package:pet/core/widgets/expense_card.dart';
 import 'package:pet/services/auth_service.dart';
 import 'package:pet/services/spend_health_service.dart';
-import 'package:pet/screens/sms_transactions/sms_transactions_screen.dart';
 import 'package:pet/screens/sms_transactions/sms_permission_screen.dart';
 import 'package:pet/screens/calculator/calculator_screen.dart';
 import 'package:pet/data/models/transaction.dart';
@@ -60,6 +63,21 @@ class _DashboardScreenState extends State<DashboardScreen>
     'Oct',
     'Nov',
     'Dec',
+  ];
+
+  static const List<String> _monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   late AnimationController _fadeController;
@@ -131,9 +149,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 
   void _updateHealthCache(
@@ -189,15 +207,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         for (final b in budgetProvider.budgets) {
           totalBudget += b.amount;
         }
-        final budgetRemaining = totalBudget - expenses;
-
-        // Compute daily budget (simple: total / days in month)
-        final daysInMonth = DateTime(
-          txnProvider.currentYear,
-          txnProvider.currentMonth + 1,
-          0,
-        ).day;
-        final dailyBudget = totalBudget > 0 ? totalBudget / daysInMonth : 0.0;
 
         // Compute spend health score — pass goals/bills for parity with premium hub
         final goalProvider = Provider.of<GoalProvider>(context, listen: false);
@@ -370,35 +379,32 @@ class _DashboardScreenState extends State<DashboardScreen>
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         const NotificationPermissionBanner(),
-                        // ── Hero Greeting Card
-                        HeroGreetingCard(
-                          greeting: _getGreeting(),
-                          todaySpent: todaySpent,
-                          dailyBudget: dailyBudget,
-                          userName: _userName,
+                        // ── Hero: this month's spend against the budget
+                        HomeHero(
+                          greeting: _userName.isNotEmpty
+                              ? '${_getGreeting()}, ${_userName.split(' ').first}'
+                              : _getGreeting(),
+                          monthLabel: _monthNames[txnProvider.currentMonth - 1],
+                          spent: expenses,
+                          budget: totalBudget,
+                          income: txnProvider.totalIncome,
+                          status: const SyncStatusChip(),
                         ),
-                        const SizedBox(height: Spacing.lg),
+                        const SizedBox(height: Spacing.md),
 
-                        // ── Metric Pills
-                        MetricPillRow(
+                        // ── Three numbers at a glance
+                        HomeStatStrip(
                           spentToday: todaySpent,
-                          budgetRemaining: budgetRemaining,
-                          spendScore: healthResult.totalScore,
+                          budget: totalBudget,
+                          spentThisMonth: expenses,
+                          score: healthResult.totalScore,
                         ),
                         const SizedBox(height: Spacing.sectionGap),
 
-                        // ── Budget Donut Chart
-                        if (totalBudget > 0) ...[
-                          _buildSectionHeader('This Month', isDark),
-                          const SizedBox(height: Spacing.md),
-                          _buildDonutChart(expenses, totalBudget, isDark),
-                          const SizedBox(height: Spacing.sectionGap),
-                        ],
-
                         // ── Top Categories
                         if (categorySpending.isNotEmpty) ...[
-                          _buildSectionHeader('Top Categories', isDark),
-                          const SizedBox(height: Spacing.sm),
+                          _buildSectionHeader('Where it went', isDark),
+                          const SizedBox(height: Spacing.md),
                           _buildCategoryBars(
                             txnProvider,
                             catProvider,
@@ -554,155 +560,39 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildDonutChart(double spent, double budget, bool isDark) {
-    final percent = budget > 0 ? (spent / budget) : 0.0;
-    final ringColor = PETColors.budgetRingColor(percent);
-    final remaining = budget - spent;
-
-    final chart = Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.white.withAlpha(8) : Colors.black.withAlpha(6),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : Colors.grey).withAlpha(
-              isDark ? 15 : 10,
-            ),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          SizedBox(
-            height: 180,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                PieChart(
-                  PieChartData(
-                    sections: [
-                      PieChartSectionData(
-                        value: spent.clamp(0.01, double.infinity),
-                        color: ringColor,
-                        radius: 20,
-                        showTitle: false,
-                      ),
-                      if (remaining > 0)
-                        PieChartSectionData(
-                          value: remaining,
-                          color: isDark
-                              ? Colors.white.withAlpha(10)
-                              : Colors.grey.shade200,
-                          radius: 20,
-                          showTitle: false,
-                        ),
-                    ],
-                    centerSpaceRadius: 55,
-                    sectionsSpace: 2,
-                    startDegreeOffset: -90,
-                  ),
-                ),
-                // Center text
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0, end: percent * 100),
-                      duration: const Duration(milliseconds: 1000),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, value, child) => Text(
-                        '${value.toInt()}%',
-                        style: AppTypography.displaySmall(color: ringColor),
-                      ),
-                    ),
-                    Text(
-                      'used',
-                      style: AppTypography.caption(
-                        color: isDark
-                            ? AppTheme.textTertiary
-                            : AppTheme.textSecondaryLight,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${_formatter.format(spent)} of ${_formatter.format(budget)}',
-            style: AppTypography.financialMedium(
-              color: isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight,
-            ),
-          ),
-        ],
-      ),
-    );
-    // One clear announcement instead of the ring's unlabelled segments.
-    return Semantics(
-      label: budget > 0
-          ? 'Budget: ${_formatter.format(spent)} spent of '
-              '${_formatter.format(budget)}, ${(percent * 100).round()} percent. '
-              '${remaining >= 0 ? '${_formatter.format(remaining)} left' : '${_formatter.format(-remaining)} over budget'}.'
-          : 'No budget set. ${_formatter.format(spent)} spent.',
-      excludeSemantics: true,
-      child: chart,
-    );
-  }
-
   Widget _buildCategoryBars(
     TransactionProvider txnProvider,
     CategoryProvider catProvider,
     BudgetProvider budgetProvider,
     bool isDark,
   ) {
-    final categorySpending = txnProvider.categoryWiseSpending;
-
-    // Sort by spending amount (highest first)
-    final sorted = categorySpending.entries.toList()
+    final sorted = txnProvider.categoryWiseSpending.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
+    final top = sorted.take(5).toList();
+    final total = sorted.fold<double>(0, (sum, e) => sum + e.value);
+    final largest = top.isEmpty ? 0.0 : top.first.value;
 
-    // Show top 5 categories
-    final top = sorted.take(5);
-
-    return Column(
-      children: top.map((entry) {
-        final cat = catProvider.getCategoryById(entry.key);
-        final budget = budgetProvider.budgets
-            .where((b) => b.categoryId == entry.key)
-            .firstOrNull;
-
-        return CategoryProgressBarNew(
-          categoryName: cat?.name ?? 'Unknown',
-          emoji: _categoryEmoji(cat?.name),
-          spent: entry.value,
-          budget: budget?.amount ?? 0,
-        );
-      }).toList(),
+    return PetSection(
+      children: [
+        for (final entry in top)
+          _CategoryShareRow(
+            name: catProvider.getCategoryById(entry.key)?.name ?? 'Other',
+            icon: catProvider.getCategoryById(entry.key)?.icon ??
+                Icons.category_rounded,
+            color: catProvider.getCategoryById(entry.key)?.color ??
+                AppTheme.textTertiary,
+            spent: entry.value,
+            share: total > 0 ? entry.value / total : 0,
+            budget: budgetProvider.budgets
+                    .where((b) => b.categoryId == entry.key)
+                    .firstOrNull
+                    ?.amount ??
+                0,
+            // Without a budget, bars compare categories with each other.
+            relative: largest > 0 ? entry.value / largest : 0,
+          ),
+      ],
     );
-  }
-
-  String? _categoryEmoji(String? name) {
-    if (name == null) return null;
-    final lower = name.toLowerCase();
-    if (lower.contains('food') || lower.contains('dining')) return '🍔';
-    if (lower.contains('hous') || lower.contains('rent')) return '🏠';
-    if (lower.contains('transport') || lower.contains('travel')) return '🚗';
-    if (lower.contains('bill') || lower.contains('util')) return '📱';
-    if (lower.contains('health') || lower.contains('medical')) return '💊';
-    if (lower.contains('entertain') || lower.contains('game')) return '🎮';
-    if (lower.contains('shop')) return '🛍️';
-    if (lower.contains('education')) return '📚';
-    if (lower.contains('personal')) return '💅';
-    if (lower.contains('invest')) return '📈';
-    if (lower.contains('salary') || lower.contains('income')) return '💰';
-    return '📦';
   }
 
   // ─────────────────────── KEPT FROM ORIGINAL ─────────────────────────────
@@ -1214,27 +1104,33 @@ class _DashboardScreenState extends State<DashboardScreen>
     final transactions = txnProvider.transactions;
     if (transactions.isEmpty) return const SizedBox.shrink();
 
-    final recent = transactions.take(5).toList();
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildSectionHeader('Recent', isDark),
-        const SizedBox(height: 16),
-        ...recent.map((txn) {
-          final cat = catProvider.getCategoryById(txn.categoryId);
-          return ExpenseCard(
-            transaction: txn,
-            category: cat,
-            compact: true,
-            onTap: () {},
-          );
-        }),
-        const SizedBox(height: 12),
+        _buildSectionHeader(
+          'Recent',
+          isDark,
+          onSeeAll: () => HomeTabs.show(HomeTabs.history),
+        ),
+        const SizedBox(height: Spacing.md),
+        PetSection(
+          children: [
+            for (final txn in transactions.take(5))
+              TransactionRow(
+                transaction: txn,
+                category: catProvider.getCategoryById(txn.categoryId),
+                showDate: true,
+                onTap: () => HomeTabs.show(HomeTabs.history),
+              ),
+          ],
+        ),
+        const SizedBox(height: Spacing.sectionGap),
       ],
     );
   }
 
+  /// Bank-SMS transactions land in the ledger, so they already show under
+  /// "Recent". This only invites people who haven't turned tracking on.
   Widget _buildRecentUpiSection(
     BuildContext context,
     bool isDark,
@@ -1242,194 +1138,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   ) {
     return Consumer<SmsTransactionProvider>(
       builder: (context, smsProvider, _) {
-        // Not supported on this platform (iOS / web)
-        if (!smsProvider.isSupported) return const SizedBox.shrink();
-
-        // Feature not yet enabled — show the enable/promo card
-        if (!smsProvider.smsFeatureEnabled) {
-          return _buildUpiEnableCard(context, isDark);
+        if (!smsProvider.isSupported || smsProvider.smsFeatureEnabled) {
+          return const SizedBox.shrink();
         }
-
-        // Feature enabled, still loading
-        if (smsProvider.isLoading) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionHeader('Recent UPI Activity', isDark),
-              const SizedBox(height: 16),
-              const Center(child: CircularProgressIndicator()),
-              const SizedBox(height: 28),
-            ],
-          );
-        }
-
-        // Feature enabled — no transactions yet
-        final txns = smsProvider.transactions;
-        if (txns.isEmpty) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionHeader(
-                'Recent UPI Activity',
-                isDark,
-                onSeeAll: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SmsTransactionsScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withAlpha(6)
-                      : Colors.black.withAlpha(5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withAlpha(10)
-                        : Colors.black.withAlpha(8),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.inbox_rounded,
-                      color: isDark
-                          ? AppTheme.textTertiary
-                          : AppTheme.textSecondaryLight,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'No UPI transactions detected yet.\nNew bank SMS messages will appear here automatically.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark
-                              ? AppTheme.textSecondary
-                              : AppTheme.textSecondaryLight,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-          );
-        }
-
-        // Feature enabled with transactions
-        final recent = List.of(txns)
-          ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-        final display = recent.take(5).toList();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionHeader(
-              'Recent UPI Activity',
-              isDark,
-              onSeeAll: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SmsTransactionsScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            ...display.map((txn) {
-              final isDebit = txn.transactionType == 'debit';
-              final amountColor =
-                  isDebit ? AppTheme.expenseRed : AppTheme.incomeGreen;
-              final prefix = isDebit ? '- ' : '+ ';
-              final now = DateTime.now();
-              final today = DateTime(now.year, now.month, now.day);
-              final txnDate = DateTime(
-                txn.timestamp.year,
-                txn.timestamp.month,
-                txn.timestamp.day,
-              );
-
-              String timeLabel;
-              if (txnDate == today) {
-                timeLabel = DateFormat('hh:mm a').format(txn.timestamp);
-              } else if (txnDate == today.subtract(const Duration(days: 1))) {
-                timeLabel = 'Yesterday';
-              } else {
-                timeLabel = DateFormat('dd MMM').format(txn.timestamp);
-              }
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: amountColor.withAlpha(isDark ? 25 : 18),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        isDebit
-                            ? Icons.arrow_upward_rounded
-                            : Icons.arrow_downward_rounded,
-                        color: amountColor,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            txn.merchantName,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? AppTheme.textPrimary
-                                  : AppTheme.textPrimaryLight,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${txn.bankName}  •  $timeLabel',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark
-                                  ? AppTheme.textTertiary
-                                  : AppTheme.textSecondaryLight,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      '$prefix${formatter.format(txn.amount)}',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: amountColor,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-            const SizedBox(height: 28),
-          ],
-        );
+        return _buildUpiEnableCard(context, isDark);
       },
     );
   }
@@ -1518,10 +1230,22 @@ class _DashboardScreenState extends State<DashboardScreen>
                   spacing: 8,
                   runSpacing: 6,
                   children: [
-                    _upiFeaturePill('🔒 On-device', isDark),
-                    _upiFeaturePill('⚡ Real-time', isDark),
-                    _upiFeaturePill('🏦 15+ Banks', isDark),
-                    _upiFeaturePill('🚫 No duplicates', isDark),
+                    _upiFeaturePill(
+                      Icons.lock_outline_rounded,
+                      'On-device',
+                      isDark,
+                    ),
+                    _upiFeaturePill(Icons.bolt_rounded, 'Real-time', isDark),
+                    _upiFeaturePill(
+                      Icons.account_balance_outlined,
+                      '15+ banks',
+                      isDark,
+                    ),
+                    _upiFeaturePill(
+                      Icons.layers_clear_outlined,
+                      'No duplicates',
+                      isDark,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -1562,20 +1286,28 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _upiFeaturePill(String label, bool isDark) {
+  Widget _upiFeaturePill(IconData icon, String label, bool isDark) {
+    final color = isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withAlpha(12) : Colors.black.withAlpha(8),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(Spacing.radiusSm),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1676,4 +1408,109 @@ class _StatsSeries {
   });
 
   bool get hasData => values.any((value) => value > 0);
+}
+
+/// A category's share of the month: icon, name, amount and a filled bar.
+/// With a budget the bar shows how much of it is used; without one it
+/// compares the category with the largest spend.
+class _CategoryShareRow extends StatelessWidget {
+  const _CategoryShareRow({
+    required this.name,
+    required this.icon,
+    required this.color,
+    required this.spent,
+    required this.share,
+    required this.budget,
+    required this.relative,
+  });
+
+  final String name;
+  final IconData icon;
+  final Color color;
+  final double spent;
+  final double share;
+  final double budget;
+  final double relative;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasBudget = budget > 0;
+    final fill = hasBudget ? (spent / budget) : relative;
+    final barColor = hasBudget ? ColorTokens.budgetUse(fill) : color;
+    final secondary =
+        isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
+    final caption = hasBudget
+        ? '${(fill * 100).round()}% of ₹${AmountText.digits(budget)}'
+        : '${(share * 100).round()}% of spending';
+
+    return Semantics(
+      label: '$name, ₹${AmountText.digits(spent)}, $caption',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Row(
+          children: [
+            CategoryAvatar(icon: icon, color: color),
+            const SizedBox(width: Spacing.md + 2),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.titleSmall(
+                            color: isDark
+                                ? AppTheme.textPrimary
+                                : AppTheme.textPrimaryLight,
+                          ).copyWith(fontSize: 15),
+                        ),
+                      ),
+                      AmountText(spent),
+                    ],
+                  ),
+                  const SizedBox(height: Spacing.sm),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: SizedBox(
+                      height: 5,
+                      child: Stack(
+                        children: [
+                          Container(
+                            color: isDark
+                                ? Colors.white.withAlpha(14)
+                                : Colors.black.withAlpha(10),
+                          ),
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: fill.clamp(0.0, 1.0)),
+                            duration: Motion.of(context, Motion.emphasized * 2),
+                            curve: Motion.easeOut,
+                            builder: (_, v, __) => FractionallySizedBox(
+                              widthFactor: v,
+                              child: Container(color: barColor),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: Spacing.xs + 2),
+                  Text(
+                    caption,
+                    style: AppTypography.bodySmall(color: secondary)
+                        .copyWith(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

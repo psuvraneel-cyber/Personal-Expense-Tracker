@@ -154,6 +154,59 @@ abstract final class ColorTokens {
     colors: [Color(0xFF14B8A6), Color(0xFF0D9488)],
   );
 
+  // ─────────────────────────── Status (scores, budget use) ──────────────────
+  /// For scores and how much of a budget is used.
+  static const Color good = Color(0xFF00C853);
+  static const Color caution = Color(0xFFFFB300);
+  static const Color nearLimit = Color(0xFFFF9800);
+  static const Color alert = Color(0xFFFF6B6B);
+
+  /// Colour for how much of a budget is used (0.6 = 60 %).
+  static Color budgetUse(double fraction) {
+    if (fraction < 0.60) return good;
+    if (fraction < 0.85) return caution;
+    if (fraction < 1.0) return nearLimit;
+    return alert;
+  }
+
+  /// Colour for a 0–100 score.
+  static Color score(int score) {
+    if (score >= 70) return good;
+    if (score >= 40) return caution;
+    return alert;
+  }
+
+  /// Home hero surface: deep violet in dark mode; in light mode it follows
+  /// the time of day (blue morning, teal afternoon, violet evening).
+  static LinearGradient homeHero({required bool isDark, DateTime? now}) {
+    if (isDark) return _heroDark;
+    final hour = (now ?? DateTime.now()).hour;
+    if (hour < 12) return _heroMorning;
+    if (hour < 17) return _heroAfternoon;
+    return _heroEvening;
+  }
+
+  static const LinearGradient _heroDark = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF1A1C3E), Color(0xFF2D1B69)],
+  );
+  static const LinearGradient _heroMorning = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF3D5AFE), Color(0xFF5C6BC0)],
+  );
+  static const LinearGradient _heroAfternoon = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF00897B), Color(0xFF3D5AFE)],
+  );
+  static const LinearGradient _heroEvening = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF7C4DFF), Color(0xFF1A237E)],
+  );
+
   // ─────────────────────────── Helpers ─────────────────────────────────────
 
   /// Returns the appropriate screen gradient for the current brightness.

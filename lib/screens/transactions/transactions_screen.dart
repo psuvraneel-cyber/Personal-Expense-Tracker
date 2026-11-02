@@ -4,7 +4,12 @@ import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/spacing.dart';
-import 'package:pet/core/widgets/expense_card.dart';
+import 'package:pet/core/theme/typography.dart';
+import 'package:pet/core/widgets/amount_text.dart';
+import 'package:pet/core/widgets/pet_section.dart';
+import 'package:pet/core/widgets/transaction_row.dart';
+import 'package:pet/data/models/enums.dart';
+import 'package:pet/data/models/transaction.dart';
 import 'package:pet/core/widgets/gradient_background.dart';
 import 'package:pet/screens/transactions/add_edit_transaction_screen.dart';
 import 'package:pet/screens/transactions/recurring_transactions_screen.dart';
@@ -30,22 +35,21 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dateGroupFmt = DateFormat('dd MMM yyyy');
 
     return Consumer2<TransactionProvider, CategoryProvider>(
       builder: (context, txnProvider, catProvider, child) {
         final transactions = txnProvider.transactions;
 
-        // Group by date — build keys and lists in one pass
-        final Map<String, List<dynamic>> grouped = {};
-        final List<String> dateKeys = [];
+        // Group by calendar day, keeping the provider's sort order.
+        final Map<DateTime, List<TransactionRecord>> grouped = {};
+        final List<DateTime> days = [];
         for (final txn in transactions) {
-          final key = dateGroupFmt.format(txn.date);
-          if (!grouped.containsKey(key)) {
-            grouped[key] = [];
-            dateKeys.add(key);
-          }
-          grouped[key]!.add(txn);
+          final day = DateTime(txn.date.year, txn.date.month, txn.date.day);
+          (grouped[day] ??= () {
+            days.add(day);
+            return <TransactionRecord>[];
+          }())
+              .add(txn);
         }
 
         return GradientBackground(
@@ -54,206 +58,61 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             bottom: false,
             child: Column(
               children: [
-                // Search bar
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    Spacing.base,
-                    Spacing.sm,
-                    Spacing.base,
-                    0,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (value) {
-                            txnProvider.setSearchQuery(value);
-                          },
-                          decoration: InputDecoration(
-                            hintText: 'Search transactions...',
-                            prefixIcon: const Icon(Icons.search, size: 20),
-                            suffixIcon: _searchController.text.isNotEmpty
-                                ? IconButton(
-                                    tooltip: 'Close',
-                                    icon: const Icon(Icons.close, size: 18),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      txnProvider.setSearchQuery('');
-                                    },
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildRecurringButton(context, isDark),
-                      const SizedBox(width: 8),
-                      _buildFilterButton(context, txnProvider, isDark),
-                      const SizedBox(width: 8),
-                      _buildSortButton(context, txnProvider, isDark),
-                    ],
-                  ),
-                ),
-                // Active filters indicator
-                if (_hasActiveFilters(txnProvider))
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.accentPurple.withAlpha(30),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.filter_alt,
-                                size: 14,
-                                color: AppTheme.accentPurple,
-                              ),
-                              const SizedBox(width: 4),
-                              const Text(
-                                'Filters active',
-                                style: TextStyle(
-                                  color: AppTheme.accentPurple,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () => txnProvider.clearFilters(),
-                          child: const Text(
-                            'Clear all',
-                            style: TextStyle(
-                              color: AppTheme.expenseRed,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                // Transaction list
+                _buildHeader(context, txnProvider, isDark),
                 Expanded(
                   child: transactions.isEmpty
                       ? _buildEmptyState(context, isDark)
-                      : ListView.builder(
-                          padding: EdgeInsets.only(
-                            left: 16,
-                            right: 16,
-                            bottom: Spacing.tabBottom(context),
-                          ),
-                          itemCount: dateKeys.length,
-                          itemBuilder: (context, index) {
-                            final dateKey = dateKeys[index];
-                            final dayTransactions = grouped[dateKey]!;
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 8,
-                                  ),
-                                  child: Text(
-                                    dateKey,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                                ...dayTransactions.map((txn) {
-                                  final cat = catProvider.getCategoryById(
-                                    txn.categoryId,
-                                  );
-                                  return Dismissible(
-                                    key: Key(txn.id),
-                                    direction: DismissDirection.endToStart,
-                                    background: Container(
-                                      alignment: Alignment.centerRight,
-                                      padding: const EdgeInsets.only(right: 20),
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.expenseRed,
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: const Icon(
-                                        Icons.delete_outline,
-                                        color: Colors.white,
-                                      ),
+                      : CustomScrollView(
+                          slivers: [
+                            for (final day in days)
+                              SliverMainAxisGroup(
+                                slivers: [
+                                  SliverPersistentHeader(
+                                    pinned: true,
+                                    delegate: _DayHeader(
+                                      label: _dayLabel(day),
+                                      net: _net(grouped[day]!),
+                                      background: Theme.of(context)
+                                          .scaffoldBackgroundColor,
                                     ),
-                                    confirmDismiss: (direction) async {
-                                      return await showDialog(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                          title:
-                                              const Text('Delete Transaction'),
-                                          content: const Text(
-                                            'Are you sure you want to delete this transaction?',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.of(ctx).pop(false),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.of(ctx).pop(true),
-                                              child: const Text(
-                                                'Delete',
-                                                style: TextStyle(
-                                                  color: AppTheme.expenseRed,
+                                  ),
+                                  SliverPadding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      Spacing.base,
+                                      0,
+                                      Spacing.base,
+                                      Spacing.base,
+                                    ),
+                                    sliver: SliverToBoxAdapter(
+                                      child: PetSection(
+                                        children: [
+                                          for (final txn in grouped[day]!)
+                                            _dismissible(
+                                              context,
+                                              txnProvider,
+                                              txn,
+                                              TransactionRow(
+                                                transaction: txn,
+                                                category:
+                                                    catProvider.getCategoryById(
+                                                  txn.categoryId,
                                                 ),
+                                                onTap: () => _editTransaction(
+                                                    context, txn),
                                               ),
                                             ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                    onDismissed: (direction) {
-                                      txnProvider.deleteTransaction(txn.id);
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: const Text(
-                                            'Transaction deleted',
-                                          ),
-                                          backgroundColor: AppTheme.expenseRed,
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    child: ExpenseCard(
-                                      transaction: txn,
-                                      category: cat,
-                                      onTap: () =>
-                                          _editTransaction(context, txn),
+                                        ],
+                                      ),
                                     ),
-                                  );
-                                }),
-                              ],
-                            );
-                          },
+                                  ),
+                                ],
+                              ),
+                            SliverToBoxAdapter(
+                              child: SizedBox(
+                                height: Spacing.tabBottom(context),
+                              ),
+                            ),
+                          ],
                         ),
                 ),
               ],
@@ -261,6 +120,166 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
         );
       },
+    );
+  }
+
+  static final DateFormat _weekdayDate = DateFormat('EEE, d MMM');
+  static final DateFormat _fullDate = DateFormat('EEE, d MMM yyyy');
+
+  String _dayLabel(DateTime day) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (day == today) return 'Today';
+    if (day == today.subtract(const Duration(days: 1))) return 'Yesterday';
+    return (day.year == now.year ? _weekdayDate : _fullDate).format(day);
+  }
+
+  /// Money in minus money out for the day; transfers don't count.
+  double _net(List<TransactionRecord> txns) {
+    var net = 0.0;
+    for (final t in txns) {
+      if (t.type == TransactionType.income) net += t.amount;
+      if (t.type == TransactionType.expense) net -= t.amount;
+    }
+    return net;
+  }
+
+  Widget _buildHeader(
+    BuildContext context,
+    TransactionProvider txnProvider,
+    bool isDark,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        Spacing.screenH,
+        Spacing.sm,
+        Spacing.md,
+        Spacing.sm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'History',
+                  style: AppTypography.displaySmall(
+                    color: isDark
+                        ? AppTheme.textPrimary
+                        : AppTheme.textPrimaryLight,
+                  ),
+                ),
+              ),
+              _buildRecurringButton(context, isDark),
+              _buildFilterButton(context, txnProvider, isDark),
+              _buildSortButton(context, txnProvider, isDark),
+            ],
+          ),
+          const SizedBox(height: Spacing.sm),
+          Padding(
+            padding: const EdgeInsets.only(right: Spacing.xs),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                txnProvider.setSearchQuery(value);
+                setState(() {});
+              },
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search merchant, note or amount',
+                isDense: true,
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          txnProvider.setSearchQuery('');
+                          setState(() {});
+                        },
+                      )
+                    : null,
+              ),
+            ),
+          ),
+          if (_hasActiveFilters(txnProvider))
+            Padding(
+              padding: const EdgeInsets.only(top: Spacing.sm),
+              child: Row(
+                children: [
+                  Text(
+                    '${txnProvider.transactions.length} matching',
+                    style: AppTypography.bodySmall(
+                      color: isDark
+                          ? AppTheme.textSecondary
+                          : AppTheme.textSecondaryLight,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      txnProvider.clearFilters();
+                      setState(() {});
+                    },
+                    child: const Text('Clear'),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dismissible(
+    BuildContext context,
+    TransactionProvider txnProvider,
+    TransactionRecord txn,
+    Widget child,
+  ) {
+    return Dismissible(
+      key: Key(txn.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: AppTheme.expenseRed,
+        child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Delete transaction?'),
+            content: const Text(
+              'It will be removed from your history and totals.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.expenseRed,
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+      },
+      onDismissed: (direction) {
+        txnProvider.deleteTransaction(txn.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transaction deleted')),
+        );
+      },
+      child: child,
     );
   }
 
@@ -273,20 +292,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     TransactionProvider txnProvider,
     bool isDark,
   ) {
-    return GestureDetector(
-      onTap: () => _showFilterSheet(context, txnProvider),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.cardDark : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: const Icon(Icons.filter_list, size: 20),
-      ),
+    return IconButton(
+      tooltip: 'Filter',
+      onPressed: () => _showFilterSheet(context, txnProvider),
+      icon: const Icon(Icons.tune_rounded, size: 22),
     );
   }
 
@@ -369,47 +378,21 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
         ),
       ],
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.cardDark : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: const Icon(Icons.sort, size: 20),
-      ),
+      tooltip: 'Sort',
+      icon: const Icon(Icons.swap_vert_rounded, size: 22),
     );
   }
 
   Widget _buildRecurringButton(BuildContext context, bool isDark) {
-    return Tooltip(
-      message: 'Recurring Rules',
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const RecurringTransactionsScreen(),
-            ),
-          );
-        },
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.cardDark : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color:
-                  isDark ? Colors.white.withAlpha(15) : const Color(0xFFE2E8F0),
-            ),
-          ),
-          child: const Icon(Icons.repeat, size: 20, color: AppTheme.accentTeal),
+    return IconButton(
+      tooltip: 'Recurring rules',
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const RecurringTransactionsScreen(),
         ),
       ),
+      icon: const Icon(Icons.event_repeat_rounded, size: 22),
     );
   }
 
@@ -625,4 +608,68 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       ctaLabel: 'Add Transaction',
     );
   }
+}
+
+/// A day's label and net amount, pinned while its transactions scroll.
+class _DayHeader extends SliverPersistentHeaderDelegate {
+  _DayHeader(
+      {required this.label, required this.net, required this.background});
+
+  final String label;
+  final double net;
+  final Color background;
+
+  static const double _height = 40;
+
+  @override
+  double get minExtent => _height;
+
+  @override
+  double get maxExtent => _height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
+    return Container(
+      color: background,
+      padding: const EdgeInsets.fromLTRB(
+        Spacing.screenH,
+        0,
+        Spacing.screenH,
+        0,
+      ),
+      alignment: Alignment.centerLeft,
+      child: Semantics(
+        header: true,
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.labelLarge(color: muted),
+              ),
+            ),
+            if (net != 0)
+              AmountText(
+                net,
+                size: 13,
+                weight: FontWeight.w500,
+                color: muted,
+                tone: net > 0 ? AmountTone.income : AmountTone.expense,
+                showSign: true,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_DayHeader old) =>
+      old.label != label || old.net != net || old.background != background;
 }

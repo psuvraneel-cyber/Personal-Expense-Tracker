@@ -19,6 +19,7 @@ import 'package:pet/screens/transactions/add_edit_transaction_screen.dart';
 import 'package:pet/screens/budget/budget_screen.dart';
 import 'package:pet/screens/settings/settings_screen.dart';
 import 'package:pet/screens/settings/account_deletion_sheet.dart';
+import 'package:pet/screens/home/home_tabs.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -58,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    HomeTabs.request.addListener(_onTabRequest);
     if (!widget.showDeletionImmediately) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _startEngagement());
     }
@@ -76,8 +78,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _onTabRequest() {
+    final tab = HomeTabs.request.value;
+    if (tab == null || !mounted) return;
+    setState(() {
+      _currentIndex = tab;
+      _fabVisible = true;
+    });
+  }
+
   @override
   void dispose() {
+    HomeTabs.request.removeListener(_onTabRequest);
     _engagementTimer?.cancel();
     _lifecycle?.dispose();
     FinancialIngestionService.ledgerRevision

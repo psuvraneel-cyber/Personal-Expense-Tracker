@@ -35,8 +35,8 @@ void main() {
             key: Key('c'), tone: AmountTone.income, showSign: true),
       ])));
       expect(_plain(t, find.byKey(const Key('a'))), '₹1,03,500');
-      expect(_plain(t, find.byKey(const Key('b'))), '− ₹240');
-      expect(_plain(t, find.byKey(const Key('c'))), '+ ₹50,000');
+      expect(_plain(t, find.byKey(const Key('b'))), '−₹240');
+      expect(_plain(t, find.byKey(const Key('c'))), '+₹50,000');
     });
 
     testWidgets('digits are tabular and screen readers hear one label',
