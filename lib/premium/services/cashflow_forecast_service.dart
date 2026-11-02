@@ -1,4 +1,6 @@
 import 'dart:math';
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/premium/models/cashflow_forecast.dart';
@@ -35,6 +37,49 @@ class CashflowForecastService {
     _cachedForecast = null;
   }
 
+  static const String _salaryCategoryId = 'cat_salary';
+
+  /// Finds a monthly payday: Salary credits in at least two of the last four
+  /// months, all within a few days of the same day of the month. Returns
+  /// null when there's no clear pattern (then income stays averaged).
+  @visibleForTesting
+  static SalarySchedule? detectPayday(
+    List<TransactionRecord> transactions,
+    DateTime now,
+  ) {
+    final since = DateTime(now.year, now.month - 4, now.day);
+    // The largest salary credit of each month (ignores small extras).
+    final byMonth = <int, TransactionRecord>{};
+    for (final t in transactions) {
+      if (t.type != TransactionType.income ||
+          t.categoryId != _salaryCategoryId ||
+          t.date.isAfter(now) ||
+          t.date.isBefore(since)) {
+        continue;
+      }
+      final key = t.date.year * 12 + t.date.month;
+      final current = byMonth[key];
+      if (current == null || t.amount > current.amount) byMonth[key] = t;
+    }
+    if (byMonth.length < 2) return null;
+
+    // A month-end payday can land on the 1st–5th of the next month; when
+    // most credits are late in the month, count those days as 32–36.
+    var days = byMonth.values.map((t) => t.date.day).toList();
+    if (days.where((d) => d >= 25).length * 2 >= days.length) {
+      days = days.map((d) => d <= 5 ? d + 31 : d).toList();
+    }
+    days.sort();
+    final median = days[days.length ~/ 2];
+    if (days.any((d) => (d - median).abs() > 4)) return null;
+
+    final amounts = byMonth.values.map((t) => t.amount).toList()..sort();
+    return SalarySchedule(
+      dayOfMonth: median > 31 ? median - 31 : median,
+      amount: amounts[amounts.length ~/ 2],
+    );
+  }
+
   /// Calculates the canonical cashflow forecast for the given dataset.
   static CashflowForecast forecast(
     List<TransactionRecord> transactions, {
@@ -61,6 +106,9 @@ class CashflowForecastService {
         t.isRecurring,
         t.merchantName,
         t.recurringRuleId,
+        // Recategorising (e.g. into Salary) changes the projection.
+        t.categoryId,
+        t.type,
       );
     }
     int billsHash = 0;
@@ -130,6 +178,33 @@ class CashflowForecastService {
         .fold(0.0, (sum, t) => sum + t.amount);
 
     final avgDailyIncome = baselineIncome / effectiveDays;
+
+    // A regular payday is credited on that day instead of being spread
+    // evenly, so the dip before payday shows. Other income stays averaged.
+    final salary = detectPayday(pastTransactions, now);
+    final double salaryInBaseline = salary == null
+        ? 0.0
+        : baselineTransactions
+            .where((t) => t.countsAsIncome && t.categoryId == _salaryCategoryId)
+            .fold(0.0, (sum, t) => sum + t.amount);
+    final double otherDailyIncome = salary == null
+        ? avgDailyIncome
+        : max(0.0, baselineIncome - salaryInBaseline) / effectiveDays;
+    // Daily income rate for burn and runway: other income plus salary
+    // spread over the year.
+    final double dailyIncomeRate = salary == null
+        ? avgDailyIncome
+        : otherDailyIncome + salary.amount * 12 / 365;
+    DateTime? lastSalaryDate;
+    if (salary != null) {
+      for (final t in pastTransactions) {
+        if (t.type == TransactionType.income &&
+            t.categoryId == _salaryCategoryId &&
+            (lastSalaryDate == null || t.date.isAfter(lastSalaryDate))) {
+          lastSalaryDate = t.date;
+        }
+      }
+    }
 
     final hasInsufficientData = pastTransactions.isEmpty || effectiveDays < 7;
 
@@ -250,9 +325,6 @@ class CashflowForecastService {
       }
     }
 
-    // Sort major events chronologically
-    majorEvents.sort((a, b) => a.date.compareTo(b.date));
-
     // ── 5. Project Daily Trajectory & Troughs ─────────────────────────────────
     final dailyPoints = <CashflowPoint>[];
     double rollingBalance = balance;
@@ -262,6 +334,8 @@ class CashflowForecastService {
     String? troughDriver;
 
     double totalBillsInHorizon = 0.0;
+    double totalIncomeInHorizon = 0.0;
+    double totalSalaryInHorizon = 0.0;
 
     for (var i = 0; i < days; i++) {
       final date = DateTime(now.year, now.month, now.day + i);
@@ -271,8 +345,29 @@ class CashflowForecastService {
       final billNamesToday = billNamesByDate[dateKey] ?? const <String>[];
       totalBillsInHorizon += billsDueToday;
 
+      // Payday, unless this month's salary already arrived (early, or on a
+      // payday that slips across a month end).
+      double salaryToday = 0.0;
+      if (salary != null &&
+          date.day == salary.dayIn(date.year, date.month) &&
+          (lastSalaryDate == null ||
+              date.difference(lastSalaryDate).inDays >= 20)) {
+        salaryToday = salary.amount;
+        lastSalaryDate = date;
+        majorEvents.add(CashflowEvent(
+          date: date,
+          title: 'Salary',
+          amount: salary.amount,
+          isIncome: true,
+          categoryId: _salaryCategoryId,
+        ));
+      }
+      final incomeToday = otherDailyIncome + salaryToday;
+      totalIncomeInHorizon += incomeToday;
+      totalSalaryInHorizon += salaryToday;
+
       final netDailyChange =
-          (avgDailyIncome - variableDailyExpense) - billsDueToday;
+          (incomeToday - variableDailyExpense) - billsDueToday;
       rollingBalance += netDailyChange;
 
       if (rollingBalance < lowestBalance) {
@@ -292,7 +387,8 @@ class CashflowForecastService {
         date: date,
         balance: rollingBalance,
         netChange: netDailyChange,
-        incomeAmount: avgDailyIncome,
+        incomeAmount: incomeToday,
+        salaryAmount: salaryToday,
         variableExpenseAmount: variableDailyExpense,
         billsAmount: billsDueToday,
         billNames: billNamesToday,
@@ -304,6 +400,9 @@ class CashflowForecastService {
       ));
     }
 
+    // Sort major events (bills, then any paydays added above) chronologically
+    majorEvents.sort((a, b) => a.date.compareTo(b.date));
+
     // Flag the lowest point in dailyPoints
     for (var i = 0; i < dailyPoints.length; i++) {
       if (dailyPoints[i].date.year == lowestDate.year &&
@@ -314,6 +413,7 @@ class CashflowForecastService {
           balance: dailyPoints[i].balance,
           netChange: dailyPoints[i].netChange,
           incomeAmount: dailyPoints[i].incomeAmount,
+          salaryAmount: dailyPoints[i].salaryAmount,
           variableExpenseAmount: dailyPoints[i].variableExpenseAmount,
           billsAmount: dailyPoints[i].billsAmount,
           billNames: dailyPoints[i].billNames,
@@ -334,9 +434,9 @@ class CashflowForecastService {
 
     // ── 7. Runway & Daily Burn Calculation (CF-12 Fix) ───────────────────────
     final double totalDailyExpense = variableDailyExpense + recurringDailyBurn;
-    final double netDailyBurn = totalDailyExpense - avgDailyIncome;
+    final double netDailyBurn = totalDailyExpense - dailyIncomeRate;
     final double monthlyNetCashflow =
-        (avgDailyIncome - totalDailyExpense) * 30.0;
+        (dailyIncomeRate - totalDailyExpense) * 30.0;
     final bool isCashflowPositive = netDailyBurn <= 0;
 
     int? runwayDays;
@@ -392,6 +492,10 @@ class CashflowForecastService {
       confidenceReasons
           .add('Protected ₹${goalReserves.toStringAsFixed(0)} goal reserves.');
     }
+    if (salary != null) {
+      confidenceReasons.add(
+          'Salary expected around day ${salary.dayOfMonth} of each month.');
+    }
 
     final endingBalance =
         dailyPoints.isNotEmpty ? dailyPoints.last.balance : balance;
@@ -403,7 +507,7 @@ class CashflowForecastService {
       projectedEndingBalance: endingBalance,
       safeToSpend: safeToSpend,
       totalSafeToSpend: spendableHeadroom,
-      expectedIncome: avgDailyIncome * days,
+      expectedIncome: totalIncomeInHorizon,
       expectedVariableExpenses: variableDailyExpense * days,
       expectedBills: totalBillsInHorizon,
       expectedGoalReserves: goalReserves,
@@ -423,6 +527,8 @@ class CashflowForecastService {
       dailyPoints: dailyPoints,
       hasInsufficientData: hasInsufficientData,
       hasNegativeStartingBalance: hasNegativeStartingBalance,
+      paydayDayOfMonth: salary?.dayOfMonth,
+      expectedSalary: totalSalaryInHorizon,
     );
 
     _lastCacheKey = cacheKey;
@@ -476,6 +582,7 @@ class CashflowForecastService {
         balance: p.balance,
         netChange: p.netChange,
         incomeAmount: p.incomeAmount,
+        salaryAmount: p.salaryAmount,
         variableExpenseAmount: p.variableExpenseAmount,
         billsAmount: p.billsAmount,
         billNames: p.billNames,
@@ -538,6 +645,8 @@ class CashflowForecastService {
       dailyPoints: scenarioPoints,
       hasInsufficientData: base.hasInsufficientData,
       hasNegativeStartingBalance: base.hasNegativeStartingBalance,
+      paydayDayOfMonth: base.paydayDayOfMonth,
+      expectedSalary: base.expectedSalary,
     );
 
     return scenarioOverlay;

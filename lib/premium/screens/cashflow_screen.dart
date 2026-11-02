@@ -393,15 +393,30 @@ class _CashflowScreenState extends State<CashflowScreen> {
       children: [
         _buildBaselineRow(forecast, isDark),
         const SizedBox(height: 4),
-        // The model spreads income evenly over the days; say so, so a
-        // smooth line isn't read as a promise about the days before payday.
+        // Say how income is modelled, so the line isn't read as a promise.
         Text(
-          'Income is averaged per day, so dips just before payday and '
-          'transfers between your own accounts aren\'t shown separately.',
+          forecast.paydayDayOfMonth != null
+              ? 'Salary is expected around the '
+                  '${_ordinal(forecast.paydayDayOfMonth!)} of each month; '
+                  'other income is averaged per day.'
+              : 'Income is averaged per day, so dips just before payday '
+                  'aren\'t shown. Once two salary credits arrive around the '
+                  'same date, the forecast uses your payday.',
           style: TextStyle(fontSize: 10.5, color: mutedColor, height: 1.3),
         ),
       ],
     );
+  }
+
+  /// 1st, 2nd, 3rd, 4th … 11th, 12th, 13th … 21st, 22nd …
+  static String _ordinal(int n) {
+    if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
+    return switch (n % 10) {
+      1 => '${n}st',
+      2 => '${n}nd',
+      3 => '${n}rd',
+      _ => '${n}th',
+    };
   }
 
   Widget _buildBaselineRow(CashflowForecast forecast, bool isDark) {
