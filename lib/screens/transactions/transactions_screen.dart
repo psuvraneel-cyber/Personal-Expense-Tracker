@@ -50,208 +50,214 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
         return GradientBackground(
           animate: false,
-          child: Column(
-            children: [
-              // Search bar
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  Spacing.base,
-                  Spacing.sm,
-                  Spacing.base,
-                  0,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) {
-                          txnProvider.setSearchQuery(value);
-                        },
-                        decoration: InputDecoration(
-                          hintText: 'Search transactions...',
-                          prefixIcon: const Icon(Icons.search, size: 20),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  tooltip: 'Close',
-                                  icon: const Icon(Icons.close, size: 18),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    txnProvider.setSearchQuery('');
-                                  },
-                                )
-                              : null,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildRecurringButton(context, isDark),
-                    const SizedBox(width: 8),
-                    _buildFilterButton(context, txnProvider, isDark),
-                    const SizedBox(width: 8),
-                    _buildSortButton(context, txnProvider, isDark),
-                  ],
-                ),
-              ),
-              // Active filters indicator
-              if (_hasActiveFilters(txnProvider))
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                // Search bar
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(
+                    Spacing.base,
+                    Spacing.sm,
+                    Spacing.base,
+                    0,
+                  ),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentPurple.withAlpha(30),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.filter_alt,
-                              size: 14,
-                              color: AppTheme.accentPurple,
-                            ),
-                            const SizedBox(width: 4),
-                            const Text(
-                              'Filters active',
-                              style: TextStyle(
-                                color: AppTheme.accentPurple,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => txnProvider.clearFilters(),
-                        child: const Text(
-                          'Clear all',
-                          style: TextStyle(
-                            color: AppTheme.expenseRed,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) {
+                            txnProvider.setSearchQuery(value);
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search transactions...',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    tooltip: 'Close',
+                                    icon: const Icon(Icons.close, size: 18),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      txnProvider.setSearchQuery('');
+                                    },
+                                  )
+                                : null,
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      _buildRecurringButton(context, isDark),
+                      const SizedBox(width: 8),
+                      _buildFilterButton(context, txnProvider, isDark),
+                      const SizedBox(width: 8),
+                      _buildSortButton(context, txnProvider, isDark),
                     ],
                   ),
                 ),
-              const SizedBox(height: 12),
-              // Transaction list
-              Expanded(
-                child: transactions.isEmpty
-                    ? _buildEmptyState(context, isDark)
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(
-                          left: 16,
-                          right: 16,
-                          bottom: 100,
-                        ),
-                        itemCount: dateKeys.length,
-                        itemBuilder: (context, index) {
-                          final dateKey = dateKeys[index];
-                          final dayTransactions = grouped[dateKey]!;
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                // Active filters indicator
+                if (_hasActiveFilters(txnProvider))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentPurple.withAlpha(30),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                ),
-                                child: Text(
-                                  dateKey,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
+                              const Icon(
+                                Icons.filter_alt,
+                                size: 14,
+                                color: AppTheme.accentPurple,
+                              ),
+                              const SizedBox(width: 4),
+                              const Text(
+                                'Filters active',
+                                style: TextStyle(
+                                  color: AppTheme.accentPurple,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              ...dayTransactions.map((txn) {
-                                final cat = catProvider.getCategoryById(
-                                  txn.categoryId,
-                                );
-                                return Dismissible(
-                                  key: Key(txn.id),
-                                  direction: DismissDirection.endToStart,
-                                  background: Container(
-                                    alignment: Alignment.centerRight,
-                                    padding: const EdgeInsets.only(right: 20),
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.expenseRed,
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: const Icon(
-                                      Icons.delete_outline,
-                                      color: Colors.white,
-                                    ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => txnProvider.clearFilters(),
+                          child: const Text(
+                            'Clear all',
+                            style: TextStyle(
+                              color: AppTheme.expenseRed,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                // Transaction list
+                Expanded(
+                  child: transactions.isEmpty
+                      ? _buildEmptyState(context, isDark)
+                      : ListView.builder(
+                          padding: EdgeInsets.only(
+                            left: 16,
+                            right: 16,
+                            bottom: Spacing.tabBottom(context),
+                          ),
+                          itemCount: dateKeys.length,
+                          itemBuilder: (context, index) {
+                            final dateKey = dateKeys[index];
+                            final dayTransactions = grouped[dateKey]!;
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
                                   ),
-                                  confirmDismiss: (direction) async {
-                                    return await showDialog(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text('Delete Transaction'),
-                                        content: const Text(
-                                          'Are you sure you want to delete this transaction?',
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.of(ctx).pop(false),
-                                            child: const Text('Cancel'),
+                                  child: Text(
+                                    dateKey,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                ...dayTransactions.map((txn) {
+                                  final cat = catProvider.getCategoryById(
+                                    txn.categoryId,
+                                  );
+                                  return Dismissible(
+                                    key: Key(txn.id),
+                                    direction: DismissDirection.endToStart,
+                                    background: Container(
+                                      alignment: Alignment.centerRight,
+                                      padding: const EdgeInsets.only(right: 20),
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.expenseRed,
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: const Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    confirmDismiss: (direction) async {
+                                      return await showDialog(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title:
+                                              const Text('Delete Transaction'),
+                                          content: const Text(
+                                            'Are you sure you want to delete this transaction?',
                                           ),
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.of(ctx).pop(true),
-                                            child: const Text(
-                                              'Delete',
-                                              style: TextStyle(
-                                                color: AppTheme.expenseRed,
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.of(ctx).pop(false),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.of(ctx).pop(true),
+                                              child: const Text(
+                                                'Delete',
+                                                style: TextStyle(
+                                                  color: AppTheme.expenseRed,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                  onDismissed: (direction) {
-                                    txnProvider.deleteTransaction(txn.id);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Transaction deleted',
+                                          ],
                                         ),
-                                        backgroundColor: AppTheme.expenseRed,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
+                                      );
+                                    },
+                                    onDismissed: (direction) {
+                                      txnProvider.deleteTransaction(txn.id);
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: const Text(
+                                            'Transaction deleted',
+                                          ),
+                                          backgroundColor: AppTheme.expenseRed,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    );
-                                  },
-                                  child: ExpenseCard(
-                                    transaction: txn,
-                                    category: cat,
-                                    onTap: () => _editTransaction(context, txn),
-                                  ),
-                                );
-                              }),
-                            ],
-                          );
-                        },
-                      ),
-              ),
-            ],
+                                      );
+                                    },
+                                    child: ExpenseCard(
+                                      transaction: txn,
+                                      category: cat,
+                                      onTap: () =>
+                                          _editTransaction(context, txn),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
         );
       },

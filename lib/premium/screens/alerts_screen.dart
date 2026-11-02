@@ -11,6 +11,7 @@ import 'package:pet/premium/screens/recurring_bills_screen.dart';
 import 'package:pet/premium/widgets/premium_gate.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/screens/budget/budget_screen.dart';
+import 'package:pet/screens/home/standalone_tab.dart';
 import 'package:pet/screens/transactions/transactions_screen.dart';
 
 class AlertsScreen extends StatefulWidget {
@@ -692,7 +693,12 @@ class _AlertsScreenState extends State<AlertsScreen> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const BudgetScreen()),
+              MaterialPageRoute(
+                builder: (_) => StandaloneTab(
+                  title: (l10n) => l10n.navBudget,
+                  child: const BudgetScreen(),
+                ),
+              ),
             );
           },
           icon: const Icon(Icons.tune_rounded, size: 14),
@@ -710,7 +716,12 @@ class _AlertsScreenState extends State<AlertsScreen> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const TransactionsScreen()),
+              MaterialPageRoute(
+                builder: (_) => StandaloneTab(
+                  title: (l10n) => l10n.navHistory,
+                  child: const TransactionsScreen(),
+                ),
+              ),
             );
           },
           icon: const Icon(Icons.receipt_long_rounded, size: 14),

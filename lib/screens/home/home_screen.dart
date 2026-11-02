@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/motion.dart';
+import 'package:pet/core/widgets/pressable.dart';
 import 'package:pet/l10n/app_localizations.dart';
 import 'package:pet/core/widgets/analytics_consent_sheet.dart';
 import 'package:pet/services/analytics_service.dart';
@@ -39,6 +42,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+
+  /// The "Add" button slides away while scrolling down a list so it never
+  /// sits on top of what the user is reading, and returns on scroll up.
+  bool _fabVisible = true;
 
   // Cache screen instances so they aren't recreated on tab switch
   static const _dashboard = DashboardScreen();
@@ -111,6 +118,17 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  bool _onScroll(UserScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    final visible = switch (n.direction) {
+      ScrollDirection.reverse => false,
+      ScrollDirection.forward => true,
+      ScrollDirection.idle => _fabVisible,
+    };
+    if (visible != _fabVisible) setState(() => _fabVisible = visible);
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -130,9 +148,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       extendBody: true,
-      body: IndexedStack(index: _currentIndex, children: screens),
+      body: NotificationListener<UserScrollNotification>(
+        onNotification: _onScroll,
+        child: IndexedStack(index: _currentIndex, children: screens),
+      ),
       floatingActionButton: _currentIndex < 2
-          ? Semantics(
+          ? _hideOnScroll(Semantics(
               label: AppLocalizations.of(context).addTransactionSemantics,
               button: true,
               child: Container(
@@ -186,13 +207,31 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            )
+            ))
           : null,
       // SafeArea keeps the floating bar above the system navigation bar
       // (Android 15+/targetSdk 35+ draws edge-to-edge).
       bottomNavigationBar: SafeArea(
         top: false,
         child: _buildBottomNav(context, isDark),
+      ),
+    );
+  }
+
+  Widget _hideOnScroll(Widget fab) {
+    final duration = Motion.of(context, Motion.standard);
+    return IgnorePointer(
+      ignoring: !_fabVisible,
+      child: AnimatedSlide(
+        offset: _fabVisible ? Offset.zero : const Offset(0, 0.35),
+        duration: duration,
+        curve: Motion.easeOut,
+        child: AnimatedOpacity(
+          opacity: _fabVisible ? 1 : 0,
+          duration: duration,
+          curve: Motion.easeOut,
+          child: fab,
+        ),
       ),
     );
   }
@@ -279,12 +318,15 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Semantics(
         label: AppLocalizations.of(context).navTabSemantics(label),
         selected: isActive,
-        child: GestureDetector(
-          onTap: () => setState(() => _currentIndex = index),
-          behavior: HitTestBehavior.opaque,
+        child: Pressable(
+          scale: 0.94,
+          onTap: () => setState(() {
+            _currentIndex = index;
+            _fabVisible = true;
+          }),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
+            duration: Motion.of(context, Motion.standard),
+            curve: Motion.easeOut,
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             decoration: BoxDecoration(
               color: isActive

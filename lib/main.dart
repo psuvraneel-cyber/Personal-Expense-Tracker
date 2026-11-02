@@ -43,6 +43,7 @@ import 'package:pet/services/haptic_service.dart';
 import 'package:pet/services/biometric_service.dart';
 import 'package:pet/screens/biometric/biometric_lock_screen.dart';
 import 'package:pet/screens/budget/budget_screen.dart';
+import 'package:pet/screens/home/standalone_tab.dart';
 import 'package:pet/screens/sms_transactions/pending_review_screen.dart';
 import 'package:pet/screens/transactions/transaction_edit_loader.dart';
 import 'package:pet/premium/screens/alerts_screen.dart';
@@ -223,7 +224,10 @@ class PETApp extends StatefulWidget {
         return const RecurringBillsScreen();
       case 'budget':
       case 'weekly':
-        return const BudgetScreen();
+        return StandaloneTab(
+          title: (l10n) => l10n.navBudget,
+          child: const BudgetScreen(),
+        );
       case 'wrap':
         final month = DateTime.tryParse('${observationId ?? ''}-01');
         return MoneyWrapScreen(month: month ?? DateTime.now());

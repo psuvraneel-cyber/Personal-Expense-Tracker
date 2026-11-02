@@ -361,11 +361,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                   // ─── Content ─────────────────────────────────
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(
+                    padding: EdgeInsets.fromLTRB(
                       Spacing.screenH,
                       Spacing.sm,
                       Spacing.screenH,
-                      Spacing.navBarClearance,
+                      Spacing.tabBottom(context),
                     ),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([

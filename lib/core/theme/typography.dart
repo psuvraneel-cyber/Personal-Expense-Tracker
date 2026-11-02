@@ -204,4 +204,36 @@ abstract final class AppTypography {
         height: 1.3,
         color: color,
       );
+
+  // ─────────────────────── Amounts ─────────────────────────────────────────
+
+  /// Same-width digits, so amounts line up in columns and don't jitter
+  /// while counting.
+  static const List<FontFeature> tabularFigures = [
+    FontFeature.tabularFigures(),
+  ];
+
+  /// Any money amount. Larger sizes get tighter tracking and heavier weight.
+  static TextStyle amount({
+    double size = 15,
+    FontWeight? weight,
+    Color? color,
+  }) =>
+      GoogleFonts.poppins(
+        fontSize: size,
+        fontWeight: weight ?? (size >= 28 ? FontWeight.w700 : FontWeight.w600),
+        letterSpacing: size >= 28 ? -1.0 : (size >= 20 ? -0.4 : 0),
+        height: 1.15,
+        color: color,
+        fontFeatures: tabularFigures,
+      );
+
+  /// Small uppercase label above a group of rows.
+  static TextStyle overline({Color? color}) => GoogleFonts.poppins(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.8,
+        height: 1.3,
+        color: color,
+      );
 }

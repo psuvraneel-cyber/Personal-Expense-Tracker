@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/spacing.dart';
 import 'package:pet/core/widgets/budget_progress_bar.dart';
 import 'package:intl/intl.dart';
 
@@ -50,232 +51,238 @@ class _BudgetScreenState extends State<BudgetScreen> {
         );
         final formatter = _formatter;
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Month selector
-              _buildMonthSelector(context, budgetProvider),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SharedBudgetsScreen(),
+        return SafeArea(
+          bottom: false,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              Spacing.tabBottom(context, fab: false),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Month selector
+                _buildMonthSelector(context, budgetProvider),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SharedBudgetsScreen(),
+                      ),
                     ),
+                    icon: const Icon(Icons.home_rounded, size: 18),
+                    label: const Text('Household budgets'),
                   ),
-                  icon: const Icon(Icons.home_rounded, size: 18),
-                  label: const Text('Household budgets'),
                 ),
-              ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
 
-              // Overall budget summary
-              if (budgets.isNotEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.accentPurple.withAlpha(40),
-                        AppTheme.accentTeal.withAlpha(20),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: AppTheme.accentPurple.withAlpha(60),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Total Budget',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                              Text(
-                                formatter.format(totalBudget),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'Spent',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                              Text(
-                                formatter.format(totalSpent),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: totalSpent > totalBudget
-                                          ? AppTheme.expenseRed
-                                          : AppTheme.incomeGreen,
-                                    ),
-                              ),
-                            ],
-                          ),
+                // Overall budget summary
+                if (budgets.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.accentPurple.withAlpha(40),
+                          AppTheme.accentTeal.withAlpha(20),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      TweenAnimationBuilder<double>(
-                        tween: Tween(
-                          begin: 0,
-                          end: totalBudget > 0
-                              ? (totalSpent / totalBudget).clamp(0.0, 1.0)
-                              : 0.0,
-                        ),
-                        duration: const Duration(milliseconds: 1000),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) {
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: value,
-                              minHeight: 10,
-                              backgroundColor: isDark
-                                  ? AppTheme.surfaceDark
-                                  : const Color(0xFFE2E8F0),
-                              valueColor: AlwaysStoppedAnimation(
-                                value < 0.7
-                                    ? AppTheme.incomeGreen
-                                    : value < 0.9
-                                        ? AppTheme.warningYellow
-                                        : AppTheme.expenseRed,
-                              ),
-                            ),
-                          );
-                        },
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppTheme.accentPurple.withAlpha(60),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        totalBudget > totalSpent
-                            ? '${formatter.format(totalBudget - totalSpent)} remaining'
-                            : 'Over budget by ${formatter.format(totalSpent - totalBudget)}',
-                        style: TextStyle(
-                          color: totalBudget > totalSpent
-                              ? AppTheme.incomeGreen
-                              : AppTheme.expenseRed,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-
-              // Over-budget alerts
-              if (budgetProvider.getOverBudgetCategories().isNotEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppTheme.expenseRed.withAlpha(20),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.expenseRed.withAlpha(60),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.warning_amber_rounded,
-                        color: AppTheme.expenseRed,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '${budgetProvider.getOverBudgetCategories().length} categor${budgetProvider.getOverBudgetCategories().length == 1 ? 'y' : 'ies'} over budget!',
-                          style: const TextStyle(
-                            color: AppTheme.expenseRed,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total Budget',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                Text(
+                                  formatter.format(totalBudget),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Spent',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                Text(
+                                  formatter.format(totalSpent),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: totalSpent > totalBudget
+                                            ? AppTheme.expenseRed
+                                            : AppTheme.incomeGreen,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(
+                            begin: 0,
+                            end: totalBudget > 0
+                                ? (totalSpent / totalBudget).clamp(0.0, 1.0)
+                                : 0.0,
+                          ),
+                          duration: const Duration(milliseconds: 1000),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: value,
+                                minHeight: 10,
+                                backgroundColor: isDark
+                                    ? AppTheme.surfaceDark
+                                    : const Color(0xFFE2E8F0),
+                                valueColor: AlwaysStoppedAnimation(
+                                  value < 0.7
+                                      ? AppTheme.incomeGreen
+                                      : value < 0.9
+                                          ? AppTheme.warningYellow
+                                          : AppTheme.expenseRed,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          totalBudget > totalSpent
+                              ? '${formatter.format(totalBudget - totalSpent)} remaining'
+                              : 'Over budget by ${formatter.format(totalSpent - totalBudget)}',
+                          style: TextStyle(
+                            color: totalBudget > totalSpent
+                                ? AppTheme.incomeGreen
+                                : AppTheme.expenseRed,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // Category budgets
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Category Budgets',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  IconButton(
-                    tooltip: 'Add',
-                    onPressed: () => _showAddBudgetDialog(
-                      context,
-                      catProvider,
-                      budgetProvider,
-                    ),
-                    icon: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentPurple,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Colors.white,
-                        size: 18,
-                      ),
+                      ],
                     ),
                   ),
+                  const SizedBox(height: 24),
                 ],
-              ),
-              const SizedBox(height: 12),
 
-              if (budgets.isEmpty)
-                _buildEmptyState(context, isDark)
-              else
-                ...budgets.map((budget) {
-                  final cat = catProvider.getCategoryById(budget.categoryId);
-                  final spent = budgetProvider.getSpentForCategory(
-                    budget.categoryId,
-                  );
-                  return BudgetProgressBar(
-                    categoryName: cat?.name ?? 'Unknown',
-                    categoryIcon: cat?.icon ?? Icons.category,
-                    categoryColor: cat?.color ?? Colors.grey,
-                    budgetAmount: budget.amount,
-                    spentAmount: spent,
-                    onTap: () => _showEditBudgetDialog(
-                      context,
-                      budget,
-                      cat,
-                      budgetProvider,
+                // Over-budget alerts
+                if (budgetProvider.getOverBudgetCategories().isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.expenseRed.withAlpha(20),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.expenseRed.withAlpha(60),
+                      ),
                     ),
-                  );
-                }),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: AppTheme.expenseRed,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '${budgetProvider.getOverBudgetCategories().length} categor${budgetProvider.getOverBudgetCategories().length == 1 ? 'y' : 'ies'} over budget!',
+                            style: const TextStyle(
+                              color: AppTheme.expenseRed,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
-              const SizedBox(height: 80),
-            ],
+                // Category budgets
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Category Budgets',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    IconButton(
+                      tooltip: 'Add',
+                      onPressed: () => _showAddBudgetDialog(
+                        context,
+                        catProvider,
+                        budgetProvider,
+                      ),
+                      icon: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentPurple,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (budgets.isEmpty)
+                  _buildEmptyState(context, isDark)
+                else
+                  ...budgets.map((budget) {
+                    final cat = catProvider.getCategoryById(budget.categoryId);
+                    final spent = budgetProvider.getSpentForCategory(
+                      budget.categoryId,
+                    );
+                    return BudgetProgressBar(
+                      categoryName: cat?.name ?? 'Unknown',
+                      categoryIcon: cat?.icon ?? Icons.category,
+                      categoryColor: cat?.color ?? Colors.grey,
+                      budgetAmount: budget.amount,
+                      spentAmount: spent,
+                      onTap: () => _showEditBudgetDialog(
+                        context,
+                        budget,
+                        cat,
+                        budgetProvider,
+                      ),
+                    );
+                  }),
+              ],
+            ),
           ),
         );
       },
