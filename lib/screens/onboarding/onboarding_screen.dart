@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:pet/l10n/app_localizations.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:pet/core/theme/motion.dart';
+import 'package:pet/core/theme/typography.dart';
+import 'package:pet/core/widgets/category_avatar.dart';
 import 'package:pet/services/native_sms_reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -103,6 +107,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _buildStep(
+                    step: 1,
                     icon: Icons.sms_rounded,
                     iconColor: AppTheme.accentTeal,
                     title: l10n.onboardingAutoTitle,
@@ -111,6 +116,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     badgeIcon: Icons.lock_outline,
                   ),
                   _buildStep(
+                    step: 2,
                     icon: Icons.pie_chart_rounded,
                     iconColor: AppTheme.accentPurple,
                     title: l10n.onboardingBudgetTitle,
@@ -119,6 +125,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     badgeIcon: Icons.notifications_active_outlined,
                   ),
                   _buildStep(
+                    step: 3,
                     icon: Icons.category_rounded,
                     iconColor: AppTheme.incomeGreen,
                     title: l10n.onboardingCategoriesTitle,
@@ -142,7 +149,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     children: List.generate(_totalSteps, (index) {
                       final isActive = index == _currentStep;
                       return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
+                        duration: Motion.of(context, Motion.standard),
+                        curve: Motion.easeOut,
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         width: isActive ? 28 : 8,
                         height: 8,
@@ -165,9 +173,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       onPressed: _nextStep,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppTheme.accentPurple,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
                       ),
                       child: Text(
                         _currentStep == _totalSteps - 1
@@ -175,7 +180,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             : l10n.onboardingContinue,
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -190,6 +195,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildStep({
+    required int step,
     required IconData icon,
     required Color iconColor,
     required String title,
@@ -197,72 +203,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     required String badge,
     required IconData badgeIcon,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return _StepLayout(
+      step: step,
+      of: _totalSteps,
+      icon: icon,
+      iconColor: iconColor,
+      title: title,
+      body: Text(
+        subtitle,
+        style: TextStyle(
+          fontSize: 16,
+          color: AppTheme.textSecondary,
+          height: 1.55,
+        ),
+      ),
+      footer: Row(
         children: [
-          // Large icon container
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [iconColor.withAlpha(40), iconColor.withAlpha(10)],
+          Icon(badgeIcon, size: 18, color: iconColor),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              badge,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withAlpha(215),
               ),
-            ),
-            child: Icon(icon, size: 56, color: iconColor),
-          ),
-          const SizedBox(height: 40),
-
-          // Title
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Subtitle
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              color: AppTheme.textSecondary,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(10),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withAlpha(20)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(badgeIcon, size: 16, color: iconColor),
-                const SizedBox(width: 8),
-                Text(
-                  badge,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white.withAlpha(200),
-                  ),
-                ),
-              ],
             ),
           ),
         ],
@@ -272,68 +238,97 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _buildOemStep() {
     final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+    return _StepLayout(
+      step: _totalSteps,
+      of: _totalSteps,
+      icon: Icons.battery_saver_rounded,
+      iconColor: Colors.amber,
+      title: l10n.onboardingOemTitle,
+      body: Text(
+        l10n.onboardingOemBody(_manufacturer),
+        style: TextStyle(
+          fontSize: 15,
+          color: AppTheme.textSecondary,
+          height: 1.55,
+        ),
+      ),
+      footer: OutlinedButton.icon(
+        onPressed: () async {
+          await NativeSmsReader().openBatteryOptimizationSettings();
+        },
+        icon: const Icon(Icons.settings_outlined, size: 18),
+        label: Text(l10n.onboardingOemButton),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.amber,
+          side: BorderSide(color: Colors.amber.withAlpha(120)),
+        ),
+      ),
+    );
+  }
+}
+
+/// One onboarding step: counter, icon tile, a large left-aligned title,
+/// body text and a footer line. Eases in when it appears.
+class _StepLayout extends StatelessWidget {
+  const _StepLayout({
+    required this.step,
+    required this.of,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.body,
+    required this.footer,
+  });
+
+  final int step;
+  final int of;
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final Widget body;
+  final Widget footer;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppTheme.expenseRed.withAlpha(40),
-                  AppTheme.expenseRed.withAlpha(10),
-                ],
-              ),
-            ),
-            child: const Icon(
-              Icons.battery_saver_rounded,
-              size: 56,
-              color: Colors.amber,
-            ),
-          ),
-          const SizedBox(height: 32),
+          CategoryAvatar(icon: icon, color: iconColor, size: 64),
+          const SizedBox(height: 28),
           Text(
-            l10n.onboardingOemTitle,
-            textAlign: TextAlign.center,
+            '$step of $of',
+            style: AppTypography.overline(color: AppTheme.textTertiary),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
             style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
+              fontSize: 30,
+              fontWeight: FontWeight.w700,
               color: Colors.white,
-              letterSpacing: -0.5,
+              letterSpacing: -0.8,
+              height: 1.15,
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            l10n.onboardingOemBody(_manufacturer),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: AppTheme.textSecondary,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () async {
-              await NativeSmsReader().openBatteryOptimizationSettings();
-            },
-            icon: const Icon(Icons.settings_outlined),
-            label: Text(l10n.onboardingOemButton),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.amber,
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
+          const SizedBox(height: 14),
+          body,
+          const SizedBox(height: 28),
+          footer,
         ],
       ),
     );
+    if (Motion.reduced(context)) return content;
+    return content
+        .animate()
+        .fadeIn(duration: Motion.emphasized, curve: Motion.easeOut)
+        .moveY(
+          begin: 12,
+          end: 0,
+          duration: Motion.emphasized,
+          curve: Motion.easeOut,
+        );
   }
 }

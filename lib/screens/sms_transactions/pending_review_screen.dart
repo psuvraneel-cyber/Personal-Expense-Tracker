@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/spacing.dart';
+import 'package:pet/core/theme/typography.dart';
+import 'package:pet/core/widgets/amount_text.dart';
+import 'package:pet/core/widgets/category_avatar.dart';
+import 'package:pet/core/widgets/pressable.dart';
 import 'package:pet/core/theme/color_tokens.dart';
 import 'package:pet/data/models/sms_transaction.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
@@ -72,10 +77,7 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
     );
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
         title: const Text('Pending Review'),
         leading: IconButton(
           tooltip: 'Back',
@@ -140,22 +142,17 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Info banner
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withAlpha(isDark ? 25 : 18),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.amber.withAlpha(isDark ? 40 : 30),
-                  ),
-                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.info_outline_rounded,
-                      color: Colors.amber,
-                      size: 20,
+                    Icon(
+                      Icons.swipe_rounded,
+                      color: isDark
+                          ? AppTheme.textTertiary
+                          : AppTheme.textSecondaryLight,
+                      size: 18,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -164,11 +161,11 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
                         'need your review. Tap one to see the original SMS, swipe right '
                         'to accept or left to reject.',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
                           color: isDark
                               ? AppTheme.textSecondary
                               : AppTheme.textSecondaryLight,
-                          height: 1.4,
+                          height: 1.45,
                         ),
                       ),
                     ),
@@ -644,10 +641,10 @@ class _UncertainTransactionCard extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.only(left: 20),
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: AppTheme.incomeGreen.withAlpha(30),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(Spacing.radiusLg),
         ),
         child: const Row(
           children: [
@@ -667,10 +664,10 @@ class _UncertainTransactionCard extends StatelessWidget {
       secondaryBackground: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: AppTheme.expenseRed.withAlpha(30),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(Spacing.radiusLg),
         ),
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -737,32 +734,25 @@ class _UncertainTransactionCard extends StatelessWidget {
     String confidencePercent,
     BuildContext context,
   ) {
+    final muted = isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.cardDark : AppTheme.cardLight,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.amber.withAlpha(isDark ? 30 : 20)),
+        color: isDark ? AppTheme.cardDark : AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
+        border: isDark
+            ? null
+            : Border.all(color: Colors.black.withAlpha(8), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top row: merchant + amount
           Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.amber.withAlpha(isDark ? 25 : 18),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.help_outline_rounded,
-                  color: Colors.amber,
-                  size: 20,
-                ),
+              const CategoryAvatar(
+                icon: Icons.help_outline_rounded,
+                color: Colors.amber,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -771,25 +761,19 @@ class _UncertainTransactionCard extends StatelessWidget {
                   children: [
                     Text(
                       txn.merchantName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                      style: AppTypography.titleSmall(
                         color: isDark
                             ? AppTheme.textPrimary
                             : AppTheme.textPrimaryLight,
-                      ),
+                      ).copyWith(fontSize: 15),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${txn.bankName}  •  $dateStr',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark
-                            ? AppTheme.textTertiary
-                            : AppTheme.textSecondaryLight,
-                      ),
+                      '${txn.bankName} \u00B7 $dateStr',
+                      style: AppTypography.bodySmall(color: muted)
+                          .copyWith(fontSize: 12.5),
                     ),
                   ],
                 ),
@@ -797,84 +781,59 @@ class _UncertainTransactionCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    currencyFormat.format(txn.amount),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: amountColor,
-                    ),
+                  AmountText(
+                    txn.amount,
+                    size: 16,
+                    decimals: 2,
+                    color: amountColor,
                   ),
                   const SizedBox(height: 2),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withAlpha(isDark ? 20 : 14),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '$confidencePercent% sure',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.amber,
-                      ),
-                    ),
+                  Text(
+                    '$confidencePercent% sure',
+                    style: AppTypography.bodySmall(color: muted)
+                        .copyWith(fontSize: 11.5),
                   ),
                 ],
               ),
             ],
           ),
-
-          const SizedBox(height: 10),
-
-          // Action buttons
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: _ActionButton(
                   label: 'Debit',
-                  icon: Icons.arrow_upward_rounded,
+                  icon: Icons.north_east_rounded,
                   color: AppTheme.expenseRed,
                   isDark: isDark,
                   onTap: () => _acceptFromCard(context, 'debit'),
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               Expanded(
                 child: _ActionButton(
                   label: 'Credit',
-                  icon: Icons.arrow_downward_rounded,
+                  icon: Icons.south_west_rounded,
                   color: AppTheme.incomeGreen,
                   isDark: isDark,
                   onTap: () => _acceptFromCard(context, 'credit'),
                 ),
               ),
               const SizedBox(width: 4),
-              Expanded(
-                child: _ActionButton(
-                  label: 'Edit',
-                  icon: Icons.edit_rounded,
-                  color: Colors.amber,
-                  isDark: isDark,
-                  onTap: onEdit,
-                ),
+              IconButton(
+                tooltip: 'Edit',
+                onPressed: onEdit,
+                icon: Icon(Icons.edit_outlined, size: 20, color: muted),
               ),
-              const SizedBox(width: 4),
-              _ActionButton(
-                label: 'Reject',
-                icon: Icons.close_rounded,
-                color: AppTheme.textTertiary,
-                isDark: isDark,
-                onTap: () {
+              IconButton(
+                tooltip: 'Not a transaction',
+                onPressed: () {
                   Provider.of<SmsTransactionProvider>(
                     context,
                     listen: false,
                   ).rejectUncertainTransaction(txn.id);
                 },
+                icon: Icon(Icons.close_rounded, size: 20, color: muted),
               ),
             ],
           ),
@@ -918,6 +877,7 @@ class _UncertainTransactionCard extends StatelessWidget {
   }
 }
 
+/// "Debit" / "Credit": accepts the message as that kind of transaction.
 class _ActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -935,25 +895,25 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
+      semanticLabel: 'Accept as $label',
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        height: 40,
         decoration: BoxDecoration(
-          color: color.withAlpha(isDark ? 18 : 12),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withAlpha(isDark ? 30 : 20)),
+          color: color.withAlpha(isDark ? 26 : 18),
+          borderRadius: BorderRadius.circular(Spacing.radiusMd - 2),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 4),
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
                 color: color,
               ),
             ),
