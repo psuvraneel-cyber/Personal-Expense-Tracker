@@ -498,14 +498,14 @@ class AlertEvaluator {
       if (hasImminentDeficit) {
         stage = AppAlertStage.critical;
         severity = AlertSeverity.critical;
-        title = '⚠️ Cashflow Risk Warning';
+        title = 'Cashflow Risk Warning';
         final amountStr = (-lowestBal).toStringAsFixed(0);
         message =
             'Your projected cashflow has a deficit (-₹$amountStr) in the next 14 days. Review upcoming bills and expenses.';
       } else if (hasEndingDeficit) {
         stage = AppAlertStage.critical;
         severity = AlertSeverity.critical;
-        title = '⚠️ Cashflow Risk Warning';
+        title = 'Cashflow Risk Warning';
         final deficitAmount = -forecast.projectedEndingBalance;
         message = deficitAmount > 0
             ? 'Your projected cashflow has a deficit (-₹${deficitAmount.toStringAsFixed(0)}) in the next 30 days. Review upcoming bills and expenses.'
@@ -514,7 +514,7 @@ class AlertEvaluator {
         // Safety buffer breach while balance remains non-negative (Defect 3 Fix)
         stage = AppAlertStage.warning;
         severity = AlertSeverity.warning;
-        title = '📉 Safety Buffer Warning';
+        title = 'Safety Buffer Warning';
         final reserveMsg = goalReserves > 0
             ? ' (including ₹${goalReserves.toStringAsFixed(0)} goal reserves)'
             : '';
@@ -612,7 +612,7 @@ class AlertEvaluator {
           type: AppAlertType.goal,
           stage: AppAlertStage.milestone,
           severity: AlertSeverity.info,
-          title: '🎉 Goal Achieved!',
+          title: 'Goal Achieved!',
           message: 'Congratulations! You reached your goal: ${goal.name}.',
           goalId: goal.id,
           amount: goal.currentAmount,

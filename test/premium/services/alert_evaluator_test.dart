@@ -479,7 +479,7 @@ void main() {
       expect(alerts.length, equals(1));
       final alert = alerts.first;
       expect(alert.type, equals(AppAlertType.goal));
-      expect(alert.title, equals('🎉 Goal Achieved!'));
+      expect(alert.title, equals('Goal Achieved!'));
       expect(alert.alertKey, equals('goal_achieved:goal_macbook'));
     });
   });

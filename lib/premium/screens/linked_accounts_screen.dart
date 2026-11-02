@@ -43,7 +43,10 @@ class LinkedAccountsScreen extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('🏦 ', style: TextStyle(fontSize: 20)),
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: Icon(Icons.account_balance_rounded, size: 20),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(

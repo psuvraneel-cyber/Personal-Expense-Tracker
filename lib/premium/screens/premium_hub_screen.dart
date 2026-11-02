@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pet/core/theme/app_theme.dart';
+import 'package:pet/core/theme/spacing.dart';
+import 'package:pet/core/theme/typography.dart';
+import 'package:pet/core/widgets/category_avatar.dart';
+import 'package:pet/core/widgets/pet_section.dart';
 import 'package:pet/data/models/enums.dart';
 import 'package:pet/providers/transaction_provider.dart';
 import 'package:pet/providers/budget_provider.dart';
@@ -21,7 +25,6 @@ import 'package:pet/premium/screens/alerts_screen.dart';
 import 'package:pet/premium/screens/spend_pause_screen.dart';
 import 'package:pet/premium/screens/tax_buckets_screen.dart';
 import 'package:pet/premium/screens/weekly_planner_screen.dart';
-import 'package:pet/premium/widgets/feature_card.dart';
 import 'package:pet/data/models/transaction.dart';
 import 'package:pet/premium/models/saving_goal.dart';
 import 'package:pet/premium/models/recurring_payment.dart';
@@ -97,15 +100,14 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
+    final fmt = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 0,
+    );
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
-      appBar: AppBar(
-        title: const Text('Premium Hub'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Premium Hub')),
       // Open to everyone: free users browse the features and each one
       // shows a preview of their own data before asking them to upgrade.
       body: Consumer4<TransactionProvider, GoalProvider, RecurringProvider,
@@ -239,79 +241,72 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
           // read as part of what a subscription buys (Play store-listing and
           // subscription-transparency rules).
 
-          return CustomScrollView(
-            slivers: [
-              _buildAppBar(context, isDark),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    const SizedBox(height: 8),
-                    if (!isPremium) ...[
-                      _buildUpgradeBanner(context, isDark),
-                      const SizedBox(height: 14),
-                    ],
-                    _buildHealthBanner(context, health, isDark),
-                    const SizedBox(height: 14),
-                    _buildQuickStats(
-                      context,
-                      totalSaved,
-                      billsDueSoon,
-                      _monthIncome,
-                      _monthExpense,
-                      fmt,
-                      isDark,
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSectionTitle(context, 'Features'),
-                    const SizedBox(height: 10),
-                  ]),
-                ),
+          Widget featureRow(int index) {
+            final f = features[index];
+            final locked = !isPremium && !_freeToTry.contains(f.$2);
+            return PetRow(
+              title: f.$2,
+              subtitle: f.$3,
+              leading: CategoryAvatar(icon: f.$1, color: f.$4),
+              trailing: locked
+                  ? Icon(
+                      Icons.lock_outline_rounded,
+                      size: 18,
+                      color: isDark
+                          ? AppTheme.textTertiary
+                          : AppTheme.textSecondaryLight,
+                    )
+                  : (f.$5 == null ? null : _Badge(f.$5!, color: f.$4)),
+              showChevron: true,
+              onTap: f.$6,
+            );
+          }
+
+          return ListView(
+            padding: EdgeInsets.fromLTRB(
+              Spacing.base,
+              Spacing.sm,
+              Spacing.base,
+              MediaQuery.paddingOf(context).bottom + Spacing.xl,
+            ),
+            children: [
+              if (!isPremium) ...[
+                _buildUpgradeBanner(context, isDark),
+                const SizedBox(height: Spacing.md),
+              ],
+              _buildHealthBanner(context, health, isDark),
+              const SizedBox(height: Spacing.md),
+              _buildQuickStats(
+                context,
+                totalSaved,
+                billsDueSoon,
+                _monthIncome,
+                _monthExpense,
+                fmt,
+                isDark,
               ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.1,
-                  ),
-                  delegate: SliverChildBuilderDelegate((_, i) {
-                    final f = features[i];
-                    return FeatureCard(
-                      icon: f.$1,
-                      title: f.$2,
-                      subtitle: f.$3,
-                      accentColor: f.$4,
-                      badge: f.$5,
-                      onTap: f.$6,
-                      // Features with a free tier aren't shown as locked.
-                      locked: !isPremium && !_freeToTry.contains(f.$2),
-                    );
-                  }, childCount: features.length),
-                ),
+              const SizedBox(height: Spacing.xl),
+              PetSection(
+                title: 'Plan',
+                children: [for (var i = 0; i < 5; i++) featureRow(i)],
               ),
-              if (health.insights.isNotEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 80),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildSectionTitle(
-                        context,
-                        '💡 Insights for You',
-                      ),
-                      const SizedBox(height: 10),
-                      ...health.insights.map(
-                        (tip) => _buildInsightCard(context, tip, isDark),
-                      ),
-                    ]),
-                  ),
-                )
-              else
-                const SliverPadding(
-                  padding: EdgeInsets.only(bottom: 80),
+              const SizedBox(height: Spacing.xl),
+              PetSection(
+                title: 'Tools',
+                children: [
+                  for (var i = 5; i < features.length; i++) featureRow(i),
+                ],
+              ),
+              if (health.insights.isNotEmpty) ...[
+                const SizedBox(height: Spacing.xl),
+                PetSection(
+                  title: 'Insights for you',
+                  children: [
+                    for (final tip in health.insights)
+                      _buildInsightCard(context, tip, isDark),
+                  ],
                 ),
+              ],
             ],
           );
         },
@@ -370,57 +365,16 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, bool isDark) {
-    return SliverAppBar(
-      expandedHeight: 0,
-      floating: true,
-      snap: true,
-      backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
-      elevation: 0,
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              gradient: AppTheme.heroGradient,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.workspace_premium_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Text('Premium Hub'),
-        ],
-      ),
-    );
-  }
-
   Widget _buildHealthBanner(
     BuildContext context,
     SpendHealthResult health,
     bool isDark,
   ) {
-    final scoreColor = health.totalScore >= 70
-        ? AppTheme.incomeGreen
-        : health.totalScore >= 50
-            ? AppTheme.warningYellow
-            : AppTheme.expenseRed;
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: AppTheme.heroGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.accentPurple.withAlpha(70),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -446,12 +400,10 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
                     children: [
                       Text(
                         '${health.totalScore}',
-                        style: const TextStyle(
+                        style: AppTypography.amount(
+                          size: 48,
                           color: Colors.white,
-                          fontSize: 52,
-                          fontWeight: FontWeight.bold,
-                          height: 1,
-                        ),
+                        ).copyWith(height: 1),
                       ),
                       const Text(
                         ' / 100',
@@ -467,15 +419,14 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: scoreColor.withAlpha(30),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: scoreColor.withAlpha(80)),
+                  color: Colors.white.withAlpha(30),
+                  borderRadius: BorderRadius.circular(Spacing.radiusSm),
                 ),
                 child: Text(
                   health.grade,
-                  style: TextStyle(
-                    color: scoreColor,
-                    fontWeight: FontWeight.bold,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
                 ),
@@ -490,7 +441,11 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
                   padding: const EdgeInsets.only(right: 6),
                   child: Column(
                     children: [
-                      Text(d.emoji, style: const TextStyle(fontSize: 16)),
+                      Icon(
+                        _dimensionIcon(d.emoji),
+                        size: 16,
+                        color: Colors.white.withAlpha(220),
+                      ),
                       const SizedBox(height: 4),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
@@ -553,81 +508,77 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
       ),
     ];
 
-    return Row(
-      children: stats.map((s) {
-        return Expanded(
-          child: Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.cardDark : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withAlpha(10)
-                    : Colors.black.withAlpha(7),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.cardDark : AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(Spacing.radiusLg),
+        border: isDark
+            ? null
+            : Border.all(color: Colors.black.withAlpha(8), width: 1),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            for (var i = 0; i < stats.length; i++) ...[
+              if (i > 0)
+                const VerticalDivider(width: 1, indent: 4, endIndent: 4),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          stats[i].$3,
+                          style: AppTypography.amount(
+                            size: 17,
+                            color: stats[i].$4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        stats[i].$2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall(
+                          color: isDark
+                              ? AppTheme.textSecondary
+                              : AppTheme.textSecondaryLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(s.$1, size: 18, color: s.$4),
-                const SizedBox(height: 6),
-                Text(
-                  s.$3,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: s.$4,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  s.$2,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppTheme.textTertiary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildSectionTitle(BuildContext context, String title) {
-    return Text(
-      title,
-      style: Theme.of(
-        context,
-      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildInsightCard(BuildContext context, String insight, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.warningYellow.withAlpha(isDark ? 20 : 12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.warningYellow.withAlpha(isDark ? 50 : 35),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('💡', style: TextStyle(fontSize: 18)),
-          const SizedBox(width: 10),
+          const Icon(
+            Icons.lightbulb_outline_rounded,
+            size: 20,
+            color: AppTheme.warningYellow,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               insight,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(height: 1.5),
+              style:
+                  Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
             ),
           ),
         ],
@@ -635,7 +586,46 @@ class _PremiumHubScreenState extends State<PremiumHubScreen> {
     );
   }
 
+  /// The health service tags each dimension with an emoji; show an icon.
+  static IconData _dimensionIcon(String emoji) => switch (emoji) {
+        '\u{1F3AF}' => Icons.track_changes_rounded,
+        '\u{1F3E6}' => Icons.savings_outlined,
+        '\u{1F4CA}' => Icons.insights_rounded,
+        '\u{1F9D8}' => Icons.self_improvement_rounded,
+        _ => Icons.circle_outlined,
+      };
+
   void _push(BuildContext context, Widget screen) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+}
+
+/// A short status next to a feature ("3 tracked", "Try free").
+class _Badge extends StatelessWidget {
+  const _Badge(this.text, {required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 120),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withAlpha(28),
+        borderRadius: BorderRadius.circular(Spacing.radiusSm),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
   }
 }

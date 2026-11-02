@@ -47,7 +47,10 @@ class FamilyScreen extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('📱 ', style: TextStyle(fontSize: 16)),
+                      const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: Icon(Icons.smartphone_rounded, size: 18),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(

@@ -163,7 +163,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 Welcome to P.E.T Premium!'),
+            content: Text('Welcome to P.E.T Premium'),
             backgroundColor: AppTheme.incomeGreen,
           ),
         );
@@ -209,7 +209,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 Purchases successfully restored!'),
+            content: Text('Purchases restored'),
             backgroundColor: AppTheme.incomeGreen,
           ),
         );
