@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:isolate';
+import 'dart:ui' show IsolateNameServer;
 import 'package:pet/premium/services/focus_mode_notifier.dart';
 import 'package:pet/premium/services/bill_payment_matcher.dart';
 import 'dart:convert';
@@ -66,6 +68,59 @@ class FinancialIngestionService {
 
   /// Incremented when the pending-review queue changes.
   static final ValueNotifier<int> reviewRevision = ValueNotifier<int>(0);
+
+  /// Name the UI isolate registers [_revisionPort] under.
+  static const String revisionPortName = 'pet.ingestion.revisions';
+  static const String _ledgerMessage = 'ledger';
+  static const String _reviewMessage = 'review';
+  static ReceivePort? _revisionPort;
+
+  /// Called once from the UI isolate's `main()`. WorkManager tasks (an SMS
+  /// that arrives before the live listener attaches, periodic scans) and
+  /// notification actions ingest in their own isolates, whose copies of
+  /// [ledgerRevision] / [reviewRevision] nobody listens to; they forward
+  /// each bump here so the UI reloads without a restart.
+  static void listenForOtherIsolates() {
+    if (_revisionPort != null) return;
+    final port = ReceivePort();
+    // A hot restart or a crashed UI isolate can leave a stale mapping.
+    IsolateNameServer.removePortNameMapping(revisionPortName);
+    IsolateNameServer.registerPortWithName(port.sendPort, revisionPortName);
+    port.listen((message) {
+      if (message == _ledgerMessage) ledgerRevision.value++;
+      if (message == _reviewMessage) reviewRevision.value++;
+    });
+    _revisionPort = port;
+  }
+
+  @visibleForTesting
+  static void stopListeningForOtherIsolates() {
+    _revisionPort?.close();
+    _revisionPort = null;
+    IsolateNameServer.removePortNameMapping(revisionPortName);
+  }
+
+  static void _ledgerChanged() {
+    ledgerRevision.value++;
+    _forwardToUiIsolate(_ledgerMessage);
+  }
+
+  static void _reviewChanged() {
+    reviewRevision.value++;
+    _forwardToUiIsolate(_reviewMessage);
+  }
+
+  static void _forwardToUiIsolate(String message) {
+    // In the UI isolate the listeners are already local.
+    if (_revisionPort != null) return;
+    IsolateNameServer.lookupPortByName(revisionPortName)?.send(message);
+  }
+
+  @visibleForTesting
+  static void ledgerChangedForTesting() => _ledgerChanged();
+
+  @visibleForTesting
+  static void reviewChangedForTesting() => _reviewChanged();
 
   /// Tail of the in-isolate work queue. Every ingestion / review mutation runs
   /// strictly one after another so concurrent events (live SMS + notification
@@ -611,7 +666,7 @@ class FinancialIngestionService {
         ),
       );
 
-      reviewRevision.value++;
+      _reviewChanged();
 
       // Interactive notification for review (Confirm, Edit, Ignore)
       await NotificationService.showTransactionDetectedNotification(
@@ -783,7 +838,7 @@ class FinancialIngestionService {
       return null;
     }
 
-    ledgerRevision.value++;
+    _ledgerChanged();
     AppLogger.info(
       '[IngestionService] Promoted ₹$amount at $displayMerchant to Core Ledger ($txnId)',
     );
@@ -1143,8 +1198,8 @@ class FinancialIngestionService {
       AppLogger.debug('[IngestionService] Error learning merchant rule: $e');
     }
 
-    ledgerRevision.value++;
-    reviewRevision.value++;
+    _ledgerChanged();
+    _reviewChanged();
     if (linkedTo == txnId) await _afterLedgerInsert(txnRecord);
     return linkedTo == txnId ? txnRecord : null;
   }
@@ -1236,7 +1291,7 @@ class FinancialIngestionService {
             } catch (_) {}
           }
         }
-        ledgerRevision.value++;
+        _ledgerChanged();
       });
 
   /// User rejects an observation (false positive, "Ignore" action, or
@@ -1328,8 +1383,8 @@ class FinancialIngestionService {
       );
     });
 
-    if (ledgerChanged) ledgerRevision.value++;
-    reviewRevision.value++;
+    if (ledgerChanged) _ledgerChanged();
+    _reviewChanged();
   }
 
   /// Whether an SMS is a bank's own service alert with enough evidence to
