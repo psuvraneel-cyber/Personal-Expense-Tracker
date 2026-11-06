@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:ui' show IsolateNameServer;
 import 'package:pet/premium/services/focus_mode_notifier.dart';
 import 'package:pet/premium/services/bill_payment_matcher.dart';
+import 'package:pet/premium/services/invoice_payment_matcher.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
@@ -1220,8 +1221,61 @@ class FinancialIngestionService {
   Future<void> _afterLedgerInsert(TransactionRecord txn) async {
     // Autopaid bills: mark the matching confirmed bill as paid.
     await BillPaymentMatcher.recordIfBillPayment(txn);
+    // Money in: settle the open invoice it pays, or ask about it.
+    final invoiceMatch = await InvoicePaymentMatcher.recordIfInvoicePayment(
+      txn,
+      userId: _syncUserId(),
+    );
+    if (invoiceMatch == InvoiceMatchOutcome.paid) {
+      await _fileAsClientIncomeUnlocked(txn.id);
+    }
+    // Screens were told about the ledger before the invoice changed.
+    if (invoiceMatch != null) _ledgerChanged();
     // Focus Mode: tell the user a paused category was spent in.
     await FocusModeNotifier.notifyIfPaused(txn, userId: _syncUserId());
+  }
+
+  /// Files a client's payment as Freelance income, even when the client is a
+  /// person ("From people" keeps money out of income). Categories the user
+  /// or the importer chose on purpose, like Salary, are left alone.
+  Future<void> fileAsClientIncome(String transactionId) =>
+      _serialized(() async {
+        await _fileAsClientIncomeUnlocked(transactionId);
+        _ledgerChanged();
+      });
+
+  Future<void> _fileAsClientIncomeUnlocked(String transactionId) async {
+    try {
+      final db = await _dbHelper.database;
+      final rows = await db.query(
+        'transactions',
+        where: 'id = ?',
+        whereArgs: [transactionId],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+      final current = TransactionRecord.fromMap(rows.first);
+      const generic = {kFromPeopleCategoryId, 'cat_other_income'};
+      if (!generic.contains(current.categoryId)) return;
+      final updated = current.copyWith(
+        categoryId: 'cat_freelance',
+        updatedAt: DateTime.now(),
+      );
+      await db.transaction((txn) async {
+        await txn.update(
+          'transactions',
+          updated.toMap(),
+          where: 'id = ?',
+          whereArgs: [updated.id],
+        );
+        await txn.insert(
+          'transaction_sync_queue',
+          _syncQueueRow(updated.id, 'update', record: updated),
+        );
+      });
+    } catch (e) {
+      AppLogger.debug('[IngestionService] Client income filing failed: $e');
+    }
   }
 
   /// Remembers the user's "Count as income" choice for the payee of [txn],

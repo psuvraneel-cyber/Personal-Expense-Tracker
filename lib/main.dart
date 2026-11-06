@@ -35,6 +35,7 @@ import 'package:pet/premium/services/bill_reminder_scheduler.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/premium/providers/weekly_planner_provider.dart';
 import 'package:pet/premium/providers/invoice_provider.dart';
+import 'package:pet/premium/screens/invoice_detail_screen.dart';
 import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
@@ -238,6 +239,8 @@ class PETApp extends StatefulWidget {
         return const SpendPauseScreen();
       case 'cashflow':
         return const CashflowScreen();
+      case 'invoice':
+        return InvoiceDetailScreen(invoiceId: observationId ?? '');
       case 'anomaly':
       default:
         return const AlertsScreen();

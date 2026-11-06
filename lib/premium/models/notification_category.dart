@@ -39,6 +39,11 @@ enum NotificationCategory {
     'transactionDetected',
     'Transaction Alerts',
     'Notifications for automatically detected bank transactions',
+  ),
+  invoice(
+    'invoice',
+    'Invoices',
+    'Payments received for invoices, and due-date reminders',
   );
 
   final String key;

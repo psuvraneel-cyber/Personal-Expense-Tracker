@@ -147,9 +147,9 @@ void main() {
       expect(txnCh.enableVibration, isTrue);
     });
 
-    test('allChannels contains 8 category channels + legacy channel', () {
+    test('allChannels contains 9 category channels + legacy channel', () {
       final channels = NotificationService.allChannels;
-      expect(channels.length, equals(9));
+      expect(channels.length, equals(10));
       final ids = channels.map((c) => c.id).toSet();
 
       expect(ids, contains('pet_budget_alerts'));
@@ -160,17 +160,19 @@ void main() {
       expect(ids, contains('pet_goal_progress'));
       expect(ids, contains('pet_cashflow_insights'));
       expect(ids, contains('pet_transactions'));
+      expect(ids, contains('pet_invoices'));
       expect(ids, contains('pet_alerts')); // legacy channel
     });
 
-    test('initialize creates all 9 notification channels on Android', () async {
+    test('initialize creates all 10 notification channels on Android',
+        () async {
       await NotificationService.initialize();
 
       final channelCalls = methodCalls
           .where((call) => call.method == 'createNotificationChannel')
           .toList();
 
-      expect(channelCalls.length, equals(9));
+      expect(channelCalls.length, equals(10));
       final createdIds = channelCalls.map((c) => c.arguments['id']).toSet();
 
       expect(createdIds, contains('pet_budget_alerts'));
@@ -181,6 +183,7 @@ void main() {
       expect(createdIds, contains('pet_goal_progress'));
       expect(createdIds, contains('pet_cashflow_insights'));
       expect(createdIds, contains('pet_transactions'));
+      expect(createdIds, contains('pet_invoices'));
       expect(createdIds, contains('pet_alerts'));
     });
   });

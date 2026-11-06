@@ -5,9 +5,11 @@ import 'package:path/path.dart' as p;
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/premium/models/invoice.dart';
 import 'package:pet/premium/models/invoice_client.dart';
+import 'package:pet/premium/models/invoice_payment_suggestion.dart';
 import 'package:pet/premium/providers/invoice_provider.dart';
 import 'package:pet/premium/repositories/invoice_repository.dart';
 import 'package:pet/premium/services/invoice_pdf_service.dart';
+import 'package:pet/services/financial_ingestion_service.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -177,6 +179,157 @@ void main() {
       updatedAt: (i) => i.updatedAt,
     );
     expect(unchanged, isNull);
+  });
+
+  group('payments spotted on this phone', () {
+    final filed = <String>[];
+
+    setUp(() {
+      filed.clear();
+      provider.dispose();
+      provider = InvoiceProvider(
+        repository: InvoiceRepository(database: db),
+        firestoreSync: _OfflineSync(),
+        clock: () => now,
+        fileClientIncome: (id) async => filed.add(id),
+        syncReminders: (_, __) async {},
+      );
+    });
+
+    Future<InvoicePaymentSuggestion> pending(Invoice inv,
+        {double amount = 1000, String txn = 't1'}) async {
+      await db.insert('transactions', {
+        'id': txn,
+        'amount': amount,
+        'type': 'income',
+        'categoryId': 'cat_other_income',
+        'date': now.toIso8601String(),
+      });
+      final s = InvoicePaymentSuggestion(
+        id: 's-$txn-${inv.id}',
+        invoiceId: inv.id,
+        transactionId: txn,
+        amount: amount,
+        date: now,
+        payer: 'ACME',
+      );
+      await InvoiceRepository(database: db).addSuggestion(s);
+      await provider.load(force: true);
+      return s;
+    }
+
+    test('"yes" records the payment and files the income', () async {
+      await provider.load();
+      final inv = await issue(
+          'Acme', const [InvoiceItem(description: 'x', rate: 1000)]);
+      final s = await pending(inv);
+      expect(provider.suggestionsFor(inv.id), hasLength(1));
+
+      final paid = await provider.confirmSuggestion(s);
+      expect(provider.statusOf(paid!), InvoiceDisplayStatus.paid);
+      expect(paid.payments.single.transactionId, 't1');
+      expect(filed, ['t1']);
+      expect(provider.pendingSuggestions, isEmpty);
+    });
+
+    test('"no" leaves the invoice alone and is not asked again', () async {
+      await provider.load();
+      final inv = await issue(
+          'Acme', const [InvoiceItem(description: 'x', rate: 1000)]);
+      final s = await pending(inv);
+      await provider.dismissSuggestion(s);
+      expect(provider.pendingSuggestions, isEmpty);
+      expect(filed, isEmpty);
+
+      await provider.load(force: true);
+      expect(provider.pendingSuggestions, isEmpty);
+      expect(provider.invoiceById(inv.id)!.payments, isEmpty);
+    });
+
+    test('a "yes" on one invoice clears the same payment from the others',
+        () async {
+      await provider.load();
+      final a =
+          await issue('A', const [InvoiceItem(description: 'x', rate: 1000)]);
+      final b =
+          await issue('B', const [InvoiceItem(description: 'x', rate: 1000)]);
+      final s = await pending(a);
+      await InvoiceRepository(database: db).addSuggestion(
+        InvoicePaymentSuggestion(
+          id: 's2',
+          invoiceId: b.id,
+          transactionId: 't1',
+          amount: 1000,
+          date: now,
+        ),
+      );
+      await provider.load(force: true);
+      expect(provider.pendingSuggestions, hasLength(2));
+      await provider.confirmSuggestion(s);
+      expect(provider.pendingSuggestions, isEmpty);
+    });
+
+    test('an invoice paid some other way stops asking', () async {
+      await provider.load();
+      final inv = await issue(
+          'Acme', const [InvoiceItem(description: 'x', rate: 1000)]);
+      await pending(inv);
+      await provider.recordPayment(provider.invoiceById(inv.id)!,
+          amount: 1000, method: 'Cash');
+      expect(provider.pendingSuggestions, isEmpty);
+    });
+
+    test('a change from an import shows up without reopening', () async {
+      await provider.load();
+      final inv = await issue(
+          'Acme', const [InvoiceItem(description: 'x', rate: 1000)]);
+      final repo = InvoiceRepository(database: db);
+      await repo.upsertInvoice(inv.copyWith(payments: [
+        InvoicePayment(id: 'p', amount: 1000, date: now),
+      ]));
+
+      FinancialIngestionService.ledgerRevision.value++;
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (provider.invoiceById(inv.id)!.payments.isEmpty &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(provider.statusOf(provider.invoiceById(inv.id)!),
+          InvoiceDisplayStatus.paid);
+    });
+  });
+
+  test('reminders follow the invoice through every change', () async {
+    final calls = <(InvoiceStatus, double)>[];
+    provider.dispose();
+    provider = InvoiceProvider(
+      repository: InvoiceRepository(database: db),
+      firestoreSync: _OfflineSync(),
+      clock: () => now,
+      syncReminders: (inv, balance) async => calls.add((inv.status, balance)),
+    );
+    await provider.load();
+    var inv =
+        await issue('Acme', const [InvoiceItem(description: 'x', rate: 1000)]);
+    expect(calls.last, (InvoiceStatus.sent, 1000.0));
+    inv = await provider.recordPayment(inv, amount: 1000);
+    expect(calls.last, (InvoiceStatus.sent, 0.0));
+    await provider.cancel(inv);
+    expect(calls.last.$1, InvoiceStatus.cancelled);
+  });
+
+  test('a reminder failure never blocks saving', () async {
+    provider.dispose();
+    provider = InvoiceProvider(
+      repository: InvoiceRepository(database: db),
+      firestoreSync: _OfflineSync(),
+      clock: () => now,
+      syncReminders: (_, __) async => throw StateError('no plugin'),
+    );
+    await provider.load();
+    final inv =
+        await issue('Acme', const [InvoiceItem(description: 'x', rate: 1000)]);
+    expect(provider.invoiceById(inv.id), isNotNull);
   });
 
   test('the PDF builds, with a UPI QR only when something is due', () async {

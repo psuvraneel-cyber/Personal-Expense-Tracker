@@ -4,9 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/premium/models/invoice.dart';
 import 'package:pet/premium/models/invoice_client.dart';
+import 'package:pet/premium/models/invoice_payment_suggestion.dart';
 import 'package:pet/premium/repositories/invoice_repository.dart';
 import 'package:pet/premium/services/invoice_calculator.dart';
+import 'package:pet/premium/services/invoice_payment_matcher.dart';
+import 'package:pet/premium/services/invoice_reminder_scheduler.dart';
 import 'package:pet/services/account_deletion_service.dart';
+import 'package:pet/services/financial_ingestion_service.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:uuid/uuid.dart';
 
@@ -38,13 +42,26 @@ class InvoiceProvider extends ChangeNotifier {
     InvoiceRepository? repository,
     FirestoreSyncService? firestoreSync,
     DateTime Function()? clock,
+    Future<void> Function(String transactionId)? fileClientIncome,
+    Future<void> Function(Invoice invoice, double balance)? syncReminders,
   })  : _repository = repository ?? InvoiceRepository(),
         _sync = firestoreSync ?? FirestoreSyncService(),
-        _now = clock ?? DateTime.now;
+        _now = clock ?? DateTime.now,
+        _fileClientIncome = fileClientIncome ??
+            ((id) => FinancialIngestionService().fileAsClientIncome(id)),
+        _syncReminders = syncReminders ??
+            ((invoice, balance) =>
+                InvoiceReminderScheduler.sync(invoice, balance: balance)) {
+    // An imported payment may have changed an invoice, possibly in a
+    // background isolate.
+    FinancialIngestionService.ledgerRevision.addListener(_onLedgerChanged);
+  }
 
   final InvoiceRepository _repository;
   final FirestoreSyncService _sync;
   final DateTime Function() _now;
+  final Future<void> Function(String) _fileClientIncome;
+  final Future<void> Function(Invoice, double) _syncReminders;
   static const _uuid = Uuid();
 
   /// Free accounts can issue this many invoices; Premium is unlimited.
@@ -52,6 +69,7 @@ class InvoiceProvider extends ChangeNotifier {
 
   List<Invoice> _invoices = [];
   List<InvoiceClient> _clients = [];
+  List<InvoicePaymentSuggestion> _suggestions = [];
   InvoiceProfile _profile = const InvoiceProfile();
   bool _loaded = false;
   bool _disposed = false;
@@ -62,6 +80,18 @@ class InvoiceProvider extends ChangeNotifier {
   InvoiceProfile get profile => _profile;
   bool get isLoaded => _loaded;
 
+  /// Payments waiting for a yes or no, for invoices that can still take them.
+  List<InvoicePaymentSuggestion> get pendingSuggestions =>
+      _suggestions.where((s) {
+        final invoice = invoiceById(s.invoiceId);
+        return invoice != null &&
+            invoice.status == InvoiceStatus.sent &&
+            balanceOf(invoice) > 0;
+      }).toList();
+
+  List<InvoicePaymentSuggestion> suggestionsFor(String invoiceId) =>
+      pendingSuggestions.where((s) => s.invoiceId == invoiceId).toList();
+
   Future<void> load({bool force = false}) async {
     if (_disposed || (_loaded && !force)) return;
     try {
@@ -69,13 +99,34 @@ class InvoiceProvider extends ChangeNotifier {
         _invoices = await _repository.getInvoices();
         _clients = await _repository.getClients();
         _profile = await _repository.getProfile();
+        _suggestions = await _repository.getSuggestions();
       }
       _loaded = true;
       _notify();
       await _subscribe();
+      await _syncAllReminders();
     } catch (e, st) {
       AppLogger.error('Failed to load invoices',
           error: e, stack: st, label: 'InvoiceProvider');
+    }
+  }
+
+  void _onLedgerChanged() {
+    if (_loaded && !_disposed) unawaited(_reloadInvoices());
+  }
+
+  Future<void> _reloadInvoices() async {
+    if (kIsWeb) return;
+    try {
+      final invoices = await _repository.getInvoices();
+      final suggestions = await _repository.getSuggestions();
+      if (_disposed || !_loaded) return;
+      _invoices = invoices;
+      _suggestions = suggestions;
+      _sortInvoices();
+      _notify();
+    } catch (e) {
+      AppLogger.debug('[InvoiceProvider] Reload failed: $e');
     }
   }
 
@@ -156,7 +207,63 @@ class InvoiceProvider extends ChangeNotifier {
     if (!kIsWeb) await _repository.upsertInvoice(saved);
     _notify();
     _upload(() => _sync.upsertInvoice(saved));
+    await _syncReminder(saved);
     return saved;
+  }
+
+  /// Reminders are a convenience: a failure never blocks saving an invoice.
+  Future<void> _syncReminder(Invoice invoice) async {
+    if (kIsWeb) return;
+    try {
+      await _syncReminders(invoice, balanceOf(invoice));
+    } catch (e) {
+      AppLogger.debug('[InvoiceProvider] Reminder update failed: $e');
+    }
+  }
+
+  /// Covers invoices that came from another device, and the phone's
+  /// scheduled reminders being cleared (an app update or restore).
+  Future<void> _syncAllReminders() async {
+    for (final invoice in _invoices) {
+      if (invoice.status == InvoiceStatus.sent && balanceOf(invoice) > 0) {
+        await _syncReminder(invoice);
+      }
+    }
+  }
+
+  /// "Yes, this payment was for this invoice."
+  Future<Invoice?> confirmSuggestion(
+      InvoicePaymentSuggestion suggestion) async {
+    final invoice = invoiceById(suggestion.invoiceId);
+    if (invoice == null) return null;
+    final updated = await saveInvoice(InvoicePaymentMatcher.applyPayment(
+      invoice,
+      paymentId: _uuid.v4(),
+      amount: suggestion.amount,
+      date: suggestion.date,
+      transactionId: suggestion.transactionId,
+      businessState: _profile.stateCode,
+      now: _now(),
+    ));
+    await _settleSuggestion(suggestion);
+    try {
+      await _fileClientIncome(suggestion.transactionId);
+    } catch (e) {
+      AppLogger.debug('[InvoiceProvider] Filing income failed: $e');
+    }
+    return updated;
+  }
+
+  /// "No, it wasn't." Not asked again, for any invoice.
+  Future<void> dismissSuggestion(InvoicePaymentSuggestion suggestion) =>
+      _settleSuggestion(suggestion);
+
+  Future<void> _settleSuggestion(InvoicePaymentSuggestion suggestion) async {
+    _suggestions = _suggestions
+        .where((s) => s.transactionId != suggestion.transactionId)
+        .toList();
+    if (!kIsWeb) await _repository.decideSuggestions(suggestion.transactionId);
+    _notify();
   }
 
   Future<Invoice> markSent(Invoice invoice) =>
@@ -382,6 +489,7 @@ class InvoiceProvider extends ChangeNotifier {
   Future<void> clearData() async {
     _invoices = [];
     _clients = [];
+    _suggestions = [];
     _profile = const InvoiceProfile();
     _loaded = false;
     await _cancelSubscriptions();
@@ -391,6 +499,7 @@ class InvoiceProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    FinancialIngestionService.ledgerRevision.removeListener(_onLedgerChanged);
     for (final s in _subs) {
       s.cancel();
     }
