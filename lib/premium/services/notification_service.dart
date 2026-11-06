@@ -122,6 +122,7 @@ class NotificationService {
       NotificationCategory.goalProgress => 'pet_goal_progress',
       NotificationCategory.cashflow => 'pet_cashflow_insights',
       NotificationCategory.transactionDetected => 'pet_transactions',
+      NotificationCategory.invoice => 'pet_invoices',
     };
   }
 
@@ -189,6 +190,14 @@ class NotificationService {
           'pet_transactions',
           'Transactions Detected',
           description: 'Alerts when a bank transaction is parsed and imported',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+      NotificationCategory.invoice => const AndroidNotificationChannel(
+          'pet_invoices',
+          'Invoices',
+          description: 'Invoice payments received and due-date reminders',
           importance: Importance.high,
           playSound: true,
           enableVibration: true,

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/premium/models/invoice.dart';
 import 'package:pet/premium/models/invoice_client.dart';
+import 'package:pet/premium/models/invoice_payment_suggestion.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 
 /// Local (encrypted SQLite) storage for invoices, clients and the business
@@ -52,6 +53,64 @@ class InvoiceRepository {
   Future<void> deleteClient(String id) async {
     await (await _db)
         .delete('invoice_clients', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ── Payment suggestions ───────────────────────────────────────────────
+
+  /// Open questions, newest first. Payments the user has since deleted from
+  /// the ledger drop out on their own.
+  Future<List<InvoicePaymentSuggestion>> getSuggestions() async {
+    final rows = await (await _db).rawQuery('''
+      SELECT s.* FROM invoice_payment_suggestions s
+      JOIN transactions t ON t.id = s.transactionId
+      WHERE s.decided = 0
+      ORDER BY s.date DESC
+    ''');
+    return rows.map(InvoicePaymentSuggestion.fromRow).toList();
+  }
+
+  Future<void> addSuggestion(InvoicePaymentSuggestion suggestion) async {
+    await (await _db).insert(
+      'invoice_payment_suggestions',
+      suggestion.toRow(),
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Whether this payment was already looked at, whatever the answer was.
+  Future<bool> hasSuggestionFor(String transactionId) async {
+    final rows = await (await _db).query(
+      'invoice_payment_suggestions',
+      columns: ['id'],
+      where: 'transactionId = ?',
+      whereArgs: [transactionId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  /// Answered (yes or no): every invoice it was offered against is settled,
+  /// and it isn't asked again.
+  Future<void> decideSuggestions(String transactionId) async {
+    await (await _db).update(
+      'invoice_payment_suggestions',
+      {'decided': 1},
+      where: 'transactionId = ?',
+      whereArgs: [transactionId],
+    );
+  }
+
+  /// The payer's UPI ID as read from the message, when there was one.
+  Future<String?> upiIdOfObservation(String? observationId) async {
+    if (observationId == null) return null;
+    final rows = await (await _db).query(
+      'sms_transactions',
+      columns: ['upiId'],
+      where: 'id = ?',
+      whereArgs: [observationId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first['upiId'] as String?;
   }
 
   // ── Business profile ──────────────────────────────────────────────────

@@ -57,6 +57,33 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
     }
   }
 
+  /// Payments spotted on this phone that need a yes or no.
+  Widget _confirmBanner(BuildContext context, InvoiceProvider provider) {
+    final pending = provider.pendingSuggestions;
+    final ids = pending.map((s) => s.transactionId).toSet();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Card(
+        child: ListTile(
+          leading:
+              const Icon(Icons.payments_rounded, color: AppTheme.accentPurple),
+          title: Text(ids.length == 1
+              ? '1 payment to confirm'
+              : '${ids.length} payments to confirm'),
+          subtitle: const Text('Money came in that may be for an invoice'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  InvoiceDetailScreen(invoiceId: pending.first.invoiceId),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   bool _matches(InvoiceProvider p, Invoice inv) {
     final s = p.statusOf(inv);
     return switch (_filter) {
@@ -121,6 +148,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
+          if (provider.pendingSuggestions.isNotEmpty)
+            _confirmBanner(context, provider),
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,

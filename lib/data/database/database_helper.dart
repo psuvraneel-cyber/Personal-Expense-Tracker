@@ -16,7 +16,7 @@ import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/services/sms_service.dart';
 
 /// Current SQLite schema version.
-const int kDatabaseVersion = 25;
+const int kDatabaseVersion = 26;
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -402,6 +402,7 @@ class DatabaseHelper {
 
     // Invoices the user sends to clients
     await _createInvoiceTables(db);
+    await _createInvoiceSuggestionsTable(db);
 
     // Seed default categories
     await _seedDefaultCategories(db);
@@ -590,6 +591,9 @@ class DatabaseHelper {
     if (oldVersion < 25 && newVersion >= 25) {
       await _createInvoiceTables(db);
     }
+    if (oldVersion < 26 && newVersion >= 26) {
+      await _createInvoiceSuggestionsTable(db);
+    }
   }
 
   /// v25: invoices (line items and payments stored as JSON in the row, so
@@ -635,6 +639,28 @@ class DatabaseHelper {
         data TEXT NOT NULL
       )
     ''');
+  }
+
+  /// v26: received payments that might belong to an invoice, waiting for
+  /// the user. [decided] rows are kept so a "No" isn't asked again. Local
+  /// only: worked out on this device and never synced.
+  Future<void> _createInvoiceSuggestionsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS invoice_payment_suggestions (
+        id TEXT PRIMARY KEY,
+        invoiceId TEXT NOT NULL,
+        transactionId TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        payer TEXT NOT NULL DEFAULT '',
+        decided INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(invoiceId, transactionId)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_invoice_suggestions_txn '
+      'ON invoice_payment_suggestions(transactionId)',
+    );
   }
 
   /// Adds any default category the database doesn't have yet (v24: the

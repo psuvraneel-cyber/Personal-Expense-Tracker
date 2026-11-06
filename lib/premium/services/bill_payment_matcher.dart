@@ -1,5 +1,4 @@
-import 'package:flutter/foundation.dart'
-    show ValueNotifier, kIsWeb, visibleForTesting;
+import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 import 'package:uuid/uuid.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/data/models/enums.dart';
@@ -38,7 +37,6 @@ class BillPaymentMatcher {
       RecurringDetectionService.normalizeMerchantName(raw).toLowerCase();
 
   /// Whether [merchant] names the same payee as [billMerchant].
-  @visibleForTesting
   static bool sameMerchant(String? merchant, String billMerchant) {
     if (merchant == null || merchant.trim().isEmpty) return false;
     final a = _merchantKey(merchant);
