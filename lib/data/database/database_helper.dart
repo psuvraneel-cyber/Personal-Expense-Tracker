@@ -24,8 +24,14 @@ class DatabaseHelper {
 
   static Completer<Database>? _dbCompleter;
 
-  /// Longest the first open may take (including retries while locked).
-  static const Duration openTimeout = Duration(seconds: 45);
+  /// Longest a caller waits for the first open. The open itself keeps
+  /// running past this, and the next caller joins it instead of starting
+  /// another, so giving up here only ever costs that one wait.
+  static const Duration openTimeout = Duration(seconds: 90);
+
+  /// Replaces the real open in tests.
+  @visibleForTesting
+  static Future<Database> Function()? openOverride;
 
   factory DatabaseHelper() => _instance;
 
@@ -42,23 +48,35 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
+    // Never leave the app on the splash screen: a stuck open times out into
+    // the startup retry screen.
+    return (_dbCompleter ?? _startOpen()).future.timeout(openTimeout);
+  }
 
-    if (_dbCompleter != null) {
-      return _dbCompleter!.future;
-    }
-
+  Completer<Database> _startOpen() {
     final completer = Completer<Database>();
     _dbCompleter = completer;
-    try {
-      // Never leave the app on the splash screen: a stuck open fails into
-      // the recovery screen, which offers "Try again".
-      _database = await _initDatabase().timeout(openTimeout);
-      completer.complete(_database);
-      return _database!;
-    } catch (e) {
-      _dbCompleter = null;
-      rethrow;
-    }
+    // Failures reach whoever is waiting; nobody may be, after a timeout.
+    completer.future.ignore();
+    (openOverride ?? _initDatabase)().then((db) {
+      _database = db;
+      completer.complete(db);
+    }, onError: (Object e, StackTrace st) {
+      if (identical(_dbCompleter, completer)) _dbCompleter = null;
+      completer.completeError(e, st);
+    });
+    return completer;
+  }
+
+  /// Whether [error] from opening the database just means "busy, try again":
+  /// another task has it, or an update is still working. The data is fine,
+  /// so the app must not suggest resetting it.
+  static bool isTemporaryOpenFailure(Object error) {
+    if (error is TimeoutException) return true;
+    final message = error.toString().toLowerCase();
+    return message.contains('database is locked') ||
+        message.contains('database is busy') ||
+        message.contains('sqlcipher is unavailable');
   }
 
   /// Check if SQLCipher is supported at runtime.
@@ -113,6 +131,8 @@ class DatabaseHelper {
       Duration(seconds: 1),
       Duration(seconds: 2),
       Duration(seconds: 4),
+      Duration(seconds: 8),
+      Duration(seconds: 8),
     ],
   }) async {
     for (var attempt = 0;; attempt++) {
@@ -216,7 +236,7 @@ class DatabaseHelper {
   /// "database is locked".
   static Future<void> _configureConnection(Database db) async {
     try {
-      await db.rawQuery('PRAGMA busy_timeout = 5000');
+      await db.rawQuery('PRAGMA busy_timeout = 10000');
       await db.rawQuery('PRAGMA journal_mode = WAL');
     } catch (e) {
       AppLogger.warn('Could not configure connection: $e', label: 'DB');

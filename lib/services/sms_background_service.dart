@@ -6,6 +6,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/services/app_bootstrap.dart';
 import 'package:pet/data/database/database_helper.dart';
+import 'package:pet/services/background_turn.dart';
 import 'package:pet/data/repositories/budget_repository.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/premium/models/notification_category.dart';
@@ -42,182 +43,186 @@ const String kAlertEvaluationTask = 'com.pet.tracker.alertEvaluation';
 @pragma('vm:entry-point')
 void smsCallbackDispatcher() {
   WidgetsFlutterBinding.ensureInitialized();
-  Workmanager().executeTask((taskName, inputData) async {
-    AppLogger.debug('[PET-BG] Background task started: $taskName');
-    // Each background isolate starts empty: set up time zones (bill
-    // reminders) and Firebase (sync ownership) like the UI isolate does.
-    await AppBootstrap.initTimeZones();
-    await AppBootstrap.initFirebase();
+  Workmanager().executeTask((taskName, inputData) {
+    return BackgroundTurn.run(() => _runTask(taskName));
+  });
+}
 
-    if (taskName == kSmsInboxScanTask) {
-      try {
-        // Use a short lookback (2 days) since we run every hour.
-        // The hash-based dedup and lastProcessedTimestamp watermark
-        // in SmsService prevent duplicates regardless.
-        final smsService = SmsService();
-        final count = await smsService.scanInbox(lookbackDays: 2);
-        AppLogger.debug(
-          '[PET-BG] Background scan found $count new transactions',
-        );
-      } catch (e) {
-        AppLogger.debug('[PET-BG] Background scan error: $e');
-      }
-    } else if (taskName == kReconciliationSweepTask) {
-      try {
-        final reconciliationService = ReconciliationService();
-        final count = await reconciliationService.reconcile();
-        AppLogger.debug(
-          '[PET-BG] Background reconciliation found $count new transactions',
-        );
-      } catch (e) {
-        AppLogger.debug('[PET-BG] Background reconciliation error: $e');
-      }
-    } else if (taskName == kProcessNotificationsTask) {
-      try {
-        final smsService = SmsService();
-        final processed = await smsService.processPendingNotifications();
-        AppLogger.debug(
-          '[PET-BG] Background notification processing completed: ${processed.length} transactions',
-        );
+Future<bool> _runTask(String taskName) async {
+  AppLogger.debug('[PET-BG] Background task started: $taskName');
+  // Each background isolate starts empty: set up time zones (bill
+  // reminders) and Firebase (sync ownership) like the UI isolate does.
+  await AppBootstrap.initTimeZones();
+  await AppBootstrap.initFirebase();
 
-        if (processed.isNotEmpty) {
-          try {
-            await NotificationService.initialize();
-            final now = DateTime.now();
-            final budgetRepo = BudgetRepository();
-            final txnRepo = TransactionRepository();
-            final budgetsList = await budgetRepo.getBudgetsByMonth(
-              now.month,
-              now.year,
-            );
-            final budgetsMap = <String, double>{};
-            final spentMap = <String, double>{};
+  if (taskName == kSmsInboxScanTask) {
+    try {
+      // Use a short lookback (2 days) since we run every hour.
+      // The hash-based dedup and lastProcessedTimestamp watermark
+      // in SmsService prevent duplicates regardless.
+      final smsService = SmsService();
+      final count = await smsService.scanInbox(lookbackDays: 2);
+      AppLogger.debug(
+        '[PET-BG] Background scan found $count new transactions',
+      );
+    } catch (e) {
+      AppLogger.debug('[PET-BG] Background scan error: $e');
+    }
+  } else if (taskName == kReconciliationSweepTask) {
+    try {
+      final reconciliationService = ReconciliationService();
+      final count = await reconciliationService.reconcile();
+      AppLogger.debug(
+        '[PET-BG] Background reconciliation found $count new transactions',
+      );
+    } catch (e) {
+      AppLogger.debug('[PET-BG] Background reconciliation error: $e');
+    }
+  } else if (taskName == kProcessNotificationsTask) {
+    try {
+      final smsService = SmsService();
+      final processed = await smsService.processPendingNotifications();
+      AppLogger.debug(
+        '[PET-BG] Background notification processing completed: ${processed.length} transactions',
+      );
 
-            for (final budget in budgetsList) {
-              budgetsMap[budget.categoryId] = budget.amount;
-              spentMap[budget.categoryId] = await txnRepo.getSpentInCategory(
-                budget.categoryId,
-                now.month,
-                now.year,
-              );
-            }
-
-            final transactions = await txnRepo.getAllTransactions();
-            await AlertEvaluationCoordinator().onTransactionsChanged(
-              transactions,
-              budgets: budgetsMap,
-              spent: spentMap,
-              now: now,
-            );
-          } catch (e) {
-            AppLogger.debug(
-              '[PET-BG] Post-notification alert evaluation error: $e',
-            );
-          }
-        }
-      } catch (e) {
-        AppLogger.debug(
-          '[PET-BG] Background notification processing error: $e',
-        );
-      }
-    } else if (taskName == kAlertEvaluationTask) {
-      try {
-        await DatabaseHelper().purgeExpiredSensitiveData();
-        await NotificationService.initialize();
-
-        final now = DateTime.now();
-        final budgetRepo = BudgetRepository();
-        final txnRepo = TransactionRepository();
-
-        final budgetsList = await budgetRepo.getBudgetsByMonth(
-          now.month,
-          now.year,
-        );
-        final budgetsMap = <String, double>{};
-        final spentMap = <String, double>{};
-
-        for (final budget in budgetsList) {
-          budgetsMap[budget.categoryId] = budget.amount;
-          spentMap[budget.categoryId] = await txnRepo.getSpentInCategory(
-            budget.categoryId,
+      if (processed.isNotEmpty) {
+        try {
+          await NotificationService.initialize();
+          final now = DateTime.now();
+          final budgetRepo = BudgetRepository();
+          final txnRepo = TransactionRepository();
+          final budgetsList = await budgetRepo.getBudgetsByMonth(
             now.month,
             now.year,
           );
-        }
+          final budgetsMap = <String, double>{};
+          final spentMap = <String, double>{};
 
-        final transactions = await txnRepo.getAllTransactions();
-
-        await AlertEvaluationCoordinator().onTransactionsChanged(
-          transactions,
-          budgets: budgetsMap,
-          spent: spentMap,
-          now: now,
-        );
-
-        // Re-arm scheduled bill reminders for boot safety (P0-2)
-        final recurringRepo = RecurringPaymentRepository();
-        final recurringPayments = await recurringRepo.getAll();
-        await BillReminderScheduler.scheduleReminders(
-          recurringPayments,
-          now: now,
-        );
-
-        // Evaluate Daily Expense Reminder (P2-1)
-        final dailyEnabled =
-            await NotificationPreferencesService.isCategoryEnabled(
-          NotificationCategory.dailySummary,
-        );
-        if (dailyEnabled) {
-          final reminderHour =
-              await NotificationPreferencesService.getReminderHour();
-          final lastReminderDate =
-              await NotificationPreferencesService.getLastDailyReminderDate();
-
-          final startOfToday = DateTime(now.year, now.month, now.day);
-          final todayTxns = await txnRepo.getTransactionsByDateRange(
-            startOfToday,
-            now,
-          );
-
-          final shouldFireDaily = DailyReminderEvaluator.shouldFireReminder(
-            now: now,
-            reminderHour: reminderHour,
-            lastReminderDate: lastReminderDate,
-            todayTransactionCount: todayTxns.length,
-          );
-
-          if (shouldFireDaily) {
-            final todayKey = DailyReminderEvaluator.formatDateKey(now);
-            await NotificationPreferencesService.setLastDailyReminderDate(
-              todayKey,
-            );
-
-            await NotificationService.showInstant(
-              id: NotificationService.collisionSafeId('daily_$todayKey'),
-              title: 'Daily Expense Reminder',
-              body: "Don't forget to log your expenses for today!",
-              category: NotificationCategory.dailySummary,
-              payload: 'daily',
+          for (final budget in budgetsList) {
+            budgetsMap[budget.categoryId] = budget.amount;
+            spentMap[budget.categoryId] = await txnRepo.getSpentInCategory(
+              budget.categoryId,
+              now.month,
+              now.year,
             );
           }
+
+          final transactions = await txnRepo.getAllTransactions();
+          await AlertEvaluationCoordinator().onTransactionsChanged(
+            transactions,
+            budgets: budgetsMap,
+            spent: spentMap,
+            now: now,
+          );
+        } catch (e) {
+          AppLogger.debug(
+            '[PET-BG] Post-notification alert evaluation error: $e',
+          );
         }
-
-        // Weekly recap and monthly Money Wrap notifications, when due.
-        await ReportNotifier.maybeNotify(now: now);
-
-        AppLogger.debug(
-          '[PET-BG] Background alert evaluation completed & re-armed bill reminders',
-        );
-      } catch (e) {
-        AppLogger.debug('[PET-BG] Background alert evaluation error: $e');
       }
+    } catch (e) {
+      AppLogger.debug(
+        '[PET-BG] Background notification processing error: $e',
+      );
     }
+  } else if (taskName == kAlertEvaluationTask) {
+    try {
+      await DatabaseHelper().purgeExpiredSensitiveData();
+      await NotificationService.initialize();
 
-    // Imports above may have changed today's spending.
-    await HomeWidgetService.refresh();
+      final now = DateTime.now();
+      final budgetRepo = BudgetRepository();
+      final txnRepo = TransactionRepository();
 
-    return Future.value(true);
-  });
+      final budgetsList = await budgetRepo.getBudgetsByMonth(
+        now.month,
+        now.year,
+      );
+      final budgetsMap = <String, double>{};
+      final spentMap = <String, double>{};
+
+      for (final budget in budgetsList) {
+        budgetsMap[budget.categoryId] = budget.amount;
+        spentMap[budget.categoryId] = await txnRepo.getSpentInCategory(
+          budget.categoryId,
+          now.month,
+          now.year,
+        );
+      }
+
+      final transactions = await txnRepo.getAllTransactions();
+
+      await AlertEvaluationCoordinator().onTransactionsChanged(
+        transactions,
+        budgets: budgetsMap,
+        spent: spentMap,
+        now: now,
+      );
+
+      // Re-arm scheduled bill reminders for boot safety (P0-2)
+      final recurringRepo = RecurringPaymentRepository();
+      final recurringPayments = await recurringRepo.getAll();
+      await BillReminderScheduler.scheduleReminders(
+        recurringPayments,
+        now: now,
+      );
+
+      // Evaluate Daily Expense Reminder (P2-1)
+      final dailyEnabled =
+          await NotificationPreferencesService.isCategoryEnabled(
+        NotificationCategory.dailySummary,
+      );
+      if (dailyEnabled) {
+        final reminderHour =
+            await NotificationPreferencesService.getReminderHour();
+        final lastReminderDate =
+            await NotificationPreferencesService.getLastDailyReminderDate();
+
+        final startOfToday = DateTime(now.year, now.month, now.day);
+        final todayTxns = await txnRepo.getTransactionsByDateRange(
+          startOfToday,
+          now,
+        );
+
+        final shouldFireDaily = DailyReminderEvaluator.shouldFireReminder(
+          now: now,
+          reminderHour: reminderHour,
+          lastReminderDate: lastReminderDate,
+          todayTransactionCount: todayTxns.length,
+        );
+
+        if (shouldFireDaily) {
+          final todayKey = DailyReminderEvaluator.formatDateKey(now);
+          await NotificationPreferencesService.setLastDailyReminderDate(
+            todayKey,
+          );
+
+          await NotificationService.showInstant(
+            id: NotificationService.collisionSafeId('daily_$todayKey'),
+            title: 'Daily Expense Reminder',
+            body: "Don't forget to log your expenses for today!",
+            category: NotificationCategory.dailySummary,
+            payload: 'daily',
+          );
+        }
+      }
+
+      // Weekly recap and monthly Money Wrap notifications, when due.
+      await ReportNotifier.maybeNotify(now: now);
+
+      AppLogger.debug(
+        '[PET-BG] Background alert evaluation completed & re-armed bill reminders',
+      );
+    } catch (e) {
+      AppLogger.debug('[PET-BG] Background alert evaluation error: $e');
+    }
+  }
+
+  // Imports above may have changed today's spending.
+  await HomeWidgetService.refresh();
+
+  return true;
 }
 
 /// Initialize WorkManager for periodic background SMS scanning and alert evaluation.
