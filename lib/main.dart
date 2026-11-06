@@ -22,7 +22,6 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/screens/splash/splash_screen.dart';
 import 'package:pet/screens/splash/database_recovery_screen.dart';
-import 'package:pet/services/secure_storage_service.dart';
 import 'package:pet/premium/providers/premium_provider.dart';
 import 'package:pet/premium/providers/recurring_provider.dart';
 import 'package:pet/premium/providers/goal_provider.dart';
@@ -61,6 +60,7 @@ import 'package:pet/services/financial_ingestion_service.dart';
 import 'package:pet/core/l10n/app_language.dart';
 import 'package:pet/l10n/app_localizations.dart';
 import 'package:pet/services/analytics_service.dart';
+import 'package:pet/services/background_turn.dart';
 import 'package:pet/services/remote_config_service.dart';
 
 void main() async {
@@ -73,6 +73,9 @@ void main() async {
   }
 
   WidgetsFlutterBinding.ensureInitialized();
+  // Background tasks wait for this, so they don't compete for the database
+  // while the app opens it (it may be upgrading after an update).
+  BackgroundTurn.markUiStarting();
   // Before anything loads: background imports (WorkManager, notification
   // actions) report their ledger/review changes to this isolate.
   FinancialIngestionService.listenForOtherIsolates();
@@ -137,7 +140,21 @@ void main() async {
   try {
     // Initialize database
     await DatabaseHelper().database;
-    // Verify database integrity on startup
+  } catch (e, st) {
+    // Never continue with an unusable database (key lost, failed migration,
+    // corruption): every screen would silently fail. Offer recovery instead.
+    AppLogger.error('Database could not be opened', error: e, stack: st);
+    _recordNonFatal(e, st, 'database_open_failed');
+    runApp(DatabaseRecoveryApp(
+      error: e,
+      onRestart: () async => main(),
+    ));
+    return;
+  }
+
+  // Upkeep on a database that opened fine. If it's busy this can wait for the
+  // next start: a failure here says nothing about the user's data.
+  try {
     final isHealthy = await DatabaseHelper().runIntegrityCheck();
     if (!isHealthy) {
       AppLogger.debug(
@@ -146,17 +163,10 @@ void main() async {
     }
     // Enforce message-text retention limits (privacy policy commitments).
     await DatabaseHelper().purgeExpiredSensitiveData();
-  } catch (e, st) {
-    // Never continue with an unusable database (key lost, failed migration,
-    // corruption): every screen would silently fail. Offer recovery instead.
-    AppLogger.error('Database could not be opened', error: e, stack: st);
-    _recordNonFatal(e, st, 'database_open_failed');
-    runApp(DatabaseRecoveryApp(
-      keyProblem: e is DatabaseKeyUnavailableException,
-      onRestart: () async => main(),
-    ));
-    return;
+  } catch (e) {
+    AppLogger.debug('[MAIN] Startup upkeep skipped: $e');
   }
+  BackgroundTurn.markUiStarted();
 
   try {
     // Initialize notifications
