@@ -15,6 +15,7 @@ import 'package:pet/services/household_service.dart';
 import 'package:pet/premium/services/notification_service.dart';
 import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/services/secure_storage_service.dart';
+import 'package:pet/services/session_reset.dart';
 import 'package:pet/services/sms_background_service.dart';
 import 'package:pet/services/sms_service.dart';
 
@@ -51,14 +52,25 @@ class LocalDataWiper {
   };
 
   static Future<void> wipe({DatabaseHelper? dbHelper}) async {
-    Future<void> step(String name, Future<void> Function() action) async {
+    Future<bool> step(String name, Future<void> Function() action) async {
       try {
         await action();
+        return true;
       } catch (e) {
         AppLogger.error('Local wipe step "$name" failed',
             error: e, label: 'Wipe');
+        return false;
       }
     }
+
+    // Remembered so a failed database wipe keeps its owner: the next
+    // account to sign in is then refused the leftover rows and wipes again.
+    String? previousOwner;
+    await step('read data owner', () async {
+      previousOwner =
+          (await SharedPreferences.getInstance()).getString(DataOwner.prefKey);
+    });
+    var databaseWiped = true;
 
     await step('stop SMS listener', () async => SmsService().stopListening());
     if (!kIsWeb) {
@@ -69,7 +81,7 @@ class LocalDataWiper {
     await step('clear native cache',
         () => NativeSmsReader().clearPendingNotifications());
     if (!kIsWeb) {
-      await step('wipe database',
+      databaseWiped = await step('wipe database',
           () => (dbHelper ?? DatabaseHelper()).wipeAllUserData());
     }
     await step('clear secure profile', () async {
@@ -78,6 +90,10 @@ class LocalDataWiper {
     });
     await step('clear entered bank balance', BalanceAnchorService.clear);
     await step('clear preferences', clearUserPreferences);
+    final owner = previousOwner;
+    if (!databaseWiped && owner != null) {
+      await step('keep data owner', () => DataOwner.claim(owner));
+    }
     await step('clear home-screen widget', HomeWidgetService.clear);
     if (!kIsWeb) {
       await step('clear cloud cache', clearFirestoreCache);

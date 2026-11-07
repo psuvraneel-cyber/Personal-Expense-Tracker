@@ -72,6 +72,9 @@ class InvoiceProvider extends ChangeNotifier {
   List<InvoicePaymentSuggestion> _suggestions = [];
   InvoiceProfile _profile = const InvoiceProfile();
   bool _loaded = false;
+
+  /// Bumped by [clearData]; work started before a clear checks it.
+  int _generation = 0;
   bool _disposed = false;
   final List<StreamSubscription<Object?>> _subs = [];
 
@@ -365,8 +368,10 @@ class InvoiceProvider extends ChangeNotifier {
       return;
     }
     final session = _sync.currentSession;
+    final generation = _generation;
     bool current() =>
         !_disposed &&
+        _generation == generation &&
         !AccountDeletionService.isDeletionInProgress &&
         _sync.currentSession.matches(session);
 
@@ -379,8 +384,10 @@ class InvoiceProvider extends ChangeNotifier {
         updatedAt: (i) => i.updatedAt,
         saveLocal: _repository.upsertInvoice,
         upload: _sync.upsertInvoice,
+        isCurrent: current,
       );
-      if (merged != null) {
+      // The account may have changed while the merge awaited the database.
+      if (merged != null && current()) {
         _invoices = merged;
         _sortInvoices();
         _notify();
@@ -395,8 +402,9 @@ class InvoiceProvider extends ChangeNotifier {
         updatedAt: (c) => c.updatedAt,
         saveLocal: _repository.upsertClient,
         upload: _sync.upsertInvoiceClient,
+        isCurrent: current,
       );
-      if (merged != null) {
+      if (merged != null && current()) {
         _clients = merged
           ..sort(
               (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -412,6 +420,7 @@ class InvoiceProvider extends ChangeNotifier {
           (localAt == null || remoteAt.isAfter(localAt))) {
         _profile = remote;
         if (!kIsWeb) await _repository.saveProfile(remote);
+        if (!current()) return;
         _notify();
       } else if (_profile.isSetUp &&
           (remoteAt == null ||
@@ -430,14 +439,17 @@ class InvoiceProvider extends ChangeNotifier {
     required List<T> remote,
     required String Function(T) id,
     required DateTime Function(T) updatedAt,
+    bool Function()? isCurrent,
+    Future<void> Function(T)? saveLocal,
   }) =>
       _mergeLatest(
         local: local,
         remote: remote,
         id: id,
         updatedAt: updatedAt,
-        saveLocal: (_) async {},
+        saveLocal: saveLocal ?? (_) async {},
         upload: (_) async {},
+        isCurrent: isCurrent,
       );
 
   Future<List<T>?> _mergeLatest<T>({
@@ -447,11 +459,16 @@ class InvoiceProvider extends ChangeNotifier {
     required DateTime Function(T) updatedAt,
     required Future<void> Function(T) saveLocal,
     required Future<void> Function(T) upload,
+    bool Function()? isCurrent,
   }) async {
+    // Re-checked after every await: a sign-out during the merge must not
+    // write the old account's rows back after the wipe, or upload them.
+    bool live() => isCurrent?.call() ?? true;
     final byId = {for (final l in local) id(l): l};
     final remoteIds = <String>{};
     var changed = false;
     for (final r in remote) {
+      if (!live()) return null;
       remoteIds.add(id(r));
       final l = byId[id(r)];
       if (l == null || updatedAt(r).isAfter(updatedAt(l))) {
@@ -462,6 +479,7 @@ class InvoiceProvider extends ChangeNotifier {
         _upload(() => upload(l));
       }
     }
+    if (!live()) return null;
     for (final l in local) {
       if (!remoteIds.contains(id(l))) _upload(() => upload(l));
     }
@@ -487,6 +505,8 @@ class InvoiceProvider extends ChangeNotifier {
 
   /// Sign-out: forget everything in memory (the local wipe clears tables).
   Future<void> clearData() async {
+    // Invalidates merges still running for the previous account.
+    _generation++;
     _invoices = [];
     _clients = [];
     _suggestions = [];

@@ -609,6 +609,9 @@ class SmsTransactionProvider extends ChangeNotifier {
   }
 
   void clearData() {
+    // The wipe clears the stored switch too; keep memory in step so the
+    // next account does not see SMS detection as on.
+    _smsFeatureEnabled = false;
     _transactions = [];
     _uncertainTransactions = [];
     _invalidateComputedCache();
