@@ -136,6 +136,7 @@ class FinancialIngestionService {
       try {
         completer.complete(await action());
       } catch (e, st) {
+        _diagnostics.recordFailure();
         completer.completeError(e, st);
       }
     });
@@ -924,6 +925,7 @@ class FinancialIngestionService {
   }) async {
     int promotedCount = 0;
     final db = await _dbHelper.database;
+    _diagnostics.recordMessagesRetrieved(messages.length);
 
     for (final msg in messages) {
       final txn = await ingestMessage(msg);
@@ -1211,6 +1213,9 @@ class FinancialIngestionService {
     }
 
     _ledgerChanged();
+    _diagnostics.recordAutoAccepted();
+    _diagnostics.recordLedgerRowInserted();
+    _diagnostics.recordSmsRowInserted();
     _reviewChanged();
     if (linkedTo == txnId) await _afterLedgerInsert(txnRecord);
     return linkedTo == txnId ? txnRecord : null;
@@ -1514,6 +1519,12 @@ class FinancialIngestionService {
     if (isIncome && looksLikeSalary(text)) return 'cat_salary';
     if (isIncome &&
         classified != null &&
+        const {'refund', 'cashback', 'reversal'}
+            .contains(classified.transactionSubType)) {
+      return 'cat_other_income';
+    }
+    if (isIncome &&
+        classified != null &&
         _plainTransferSubTypes.contains(classified.transactionSubType) &&
         CounterpartyClassifier.classify(
               payeeName: classified.merchantName,
@@ -1524,9 +1535,17 @@ class FinancialIngestionService {
             CounterpartyType.person) {
       return kFromPeopleCategoryId;
     }
+    // When extraction cannot establish a payee, a strong brand in the
+    // transaction text is still deterministic category evidence (for
+    // example, a Swiggy confirmation whose clock phrase was not a merchant).
+    // Only a whole-word brand counts: matching generic category keywords
+    // against the whole message would turn "via" or "Savings" into Bills.
+    final categoryEvidence = merchant == 'Unknown'
+        ? (MerchantNormalizer.findBrandIn(text) ?? '')
+        : merchant;
     return CategoryMapper.mapToCategoryId(
       parserCategory: classified?.category,
-      merchantName: merchant,
+      merchantName: categoryEvidence,
       isIncome: isIncome,
     );
   }

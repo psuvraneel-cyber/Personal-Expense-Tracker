@@ -72,6 +72,35 @@ void main() {
     expect(await ledgerCount(), 1);
   });
 
+  test('P0: same Swiggy reference from SMS and notification is linked once',
+      () async {
+    NativeSmsMessage swiggy(String source, int minute) => NativeSmsMessage(
+          address: 'AD-HDFCBK',
+          body: 'Rs 124.00 debited from HDFC Bank A/c XX1234 on '
+              '22-Sep-26 at Swiggy. UPI Ref 4123000045670001.',
+          dateMillis: DateTime(2026, 9, 22, 16, minute).millisecondsSinceEpoch,
+          source: source,
+        );
+
+    final first = await service.ingestMessage(swiggy('sms', 41));
+    final second = await service.ingestMessage(swiggy('notification', 43));
+
+    expect(first, isNotNull);
+    expect(second, isNull, reason: 'The second source must link, not insert');
+    expect(await ledgerCount(), 1);
+    expect(
+      await db.rawQuery(
+        "SELECT state FROM financial_observations "
+        "WHERE sourceTimestamp LIKE '2026-09-22%' ORDER BY sourceTimestamp",
+      ),
+      containsAllInOrder([
+        containsPair('state', 'promoted'),
+        containsPair('state', 'linked'),
+      ]),
+    );
+    expect(await db.query('sms_transactions'), hasLength(1));
+  });
+
   test('P1-2: UNIQUE index rejects a second row with the same fingerprint',
       () async {
     await service.ingestMessage(debitSms());

@@ -28,6 +28,11 @@ class IngestionDiagnostics {
   int billEvents = 0;
   int balanceObservations = 0;
   int backgroundFailures = 0;
+  int messagesRetrieved = 0;
+  int ledgerRowsInserted = 0;
+  int smsRowsInserted = 0;
+  int ingestionFailures = 0;
+  DateTime? lastFailureAt;
 
   // Ring buffer of recent event records (capped at 50)
   final List<DiagnosticEventEntry> _recentEvents = [];
@@ -50,6 +55,14 @@ class IngestionDiagnostics {
       billEvents = prefs.getInt('${_prefPrefix}billEvents') ?? 0;
       balanceObservations = prefs.getInt('${_prefPrefix}balanceObs') ?? 0;
       backgroundFailures = prefs.getInt('${_prefPrefix}bgFailures') ?? 0;
+      messagesRetrieved = prefs.getInt('${_prefPrefix}retrieved') ?? 0;
+      ledgerRowsInserted = prefs.getInt('${_prefPrefix}ledgerRows') ?? 0;
+      smsRowsInserted = prefs.getInt('${_prefPrefix}smsRows') ?? 0;
+      ingestionFailures = prefs.getInt('${_prefPrefix}failures') ?? 0;
+      final lastFailureMs = prefs.getInt('${_prefPrefix}lastFailureAt');
+      lastFailureAt = lastFailureMs == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(lastFailureMs);
     } catch (e) {
       AppLogger.debug('[IngestionDiagnostics] Error loading metrics: $e');
     }
@@ -69,6 +82,16 @@ class IngestionDiagnostics {
       await prefs.setInt('${_prefPrefix}billEvents', billEvents);
       await prefs.setInt('${_prefPrefix}balanceObs', balanceObservations);
       await prefs.setInt('${_prefPrefix}bgFailures', backgroundFailures);
+      await prefs.setInt('${_prefPrefix}retrieved', messagesRetrieved);
+      await prefs.setInt('${_prefPrefix}ledgerRows', ledgerRowsInserted);
+      await prefs.setInt('${_prefPrefix}smsRows', smsRowsInserted);
+      await prefs.setInt('${_prefPrefix}failures', ingestionFailures);
+      if (lastFailureAt != null) {
+        await prefs.setInt(
+          '${_prefPrefix}lastFailureAt',
+          lastFailureAt!.millisecondsSinceEpoch,
+        );
+      }
     } catch (e) {
       AppLogger.debug('[IngestionDiagnostics] Error saving metrics: $e');
     }
@@ -129,6 +152,27 @@ class IngestionDiagnostics {
     _save();
   }
 
+  void recordMessagesRetrieved(int count) {
+    messagesRetrieved += count;
+    _save();
+  }
+
+  void recordLedgerRowInserted() {
+    ledgerRowsInserted++;
+    _save();
+  }
+
+  void recordSmsRowInserted() {
+    smsRowsInserted++;
+    _save();
+  }
+
+  void recordFailure() {
+    ingestionFailures++;
+    lastFailureAt = DateTime.now();
+    _save();
+  }
+
   /// Adds a privacy-safe diagnostic record to the ring buffer.
   void recordEvent({
     required String source,
@@ -184,6 +228,11 @@ class IngestionDiagnostics {
       'billEvents': billEvents,
       'balanceObservations': balanceObservations,
       'backgroundFailures': backgroundFailures,
+      'messagesRetrieved': messagesRetrieved,
+      'ledgerRowsInserted': ledgerRowsInserted,
+      'smsRowsInserted': smsRowsInserted,
+      'ingestionFailures': ingestionFailures,
+      'lastFailureAt': lastFailureAt?.toIso8601String(),
       'recentEventsCount': _recentEvents.length,
       'recentEvents': _recentEvents.map((e) => e.toMap()).toList(),
     };
@@ -201,6 +250,11 @@ class IngestionDiagnostics {
     billEvents = 0;
     balanceObservations = 0;
     backgroundFailures = 0;
+    messagesRetrieved = 0;
+    ledgerRowsInserted = 0;
+    smsRowsInserted = 0;
+    ingestionFailures = 0;
+    lastFailureAt = null;
     _recentEvents.clear();
     _save();
   }

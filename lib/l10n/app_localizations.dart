@@ -278,6 +278,18 @@ abstract class AppLocalizations {
   /// **'Auto-Detect Transactions'**
   String get smsScreenTitle;
 
+  /// No description provided for @detectedTransactionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Detected Transactions'**
+  String get detectedTransactionsTitle;
+
+  /// No description provided for @detectedTransactionsScopeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'SMS and payment-notification records only. Manually added transactions appear in History.'**
+  String get detectedTransactionsScopeHint;
+
   /// No description provided for @smsHeadline.
   ///
   /// In en, this message translates to:

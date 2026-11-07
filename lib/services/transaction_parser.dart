@@ -797,8 +797,9 @@ class TransactionParser {
     if (upiId != null) {
       // Try to extract a readable name from UPI ID
       final localPart = upiId.split('@').first;
-      // If it's a phone number, keep the full UPI ID
-      if (RegExp(r'^\d{10}$').hasMatch(localPart)) return upiId;
+      // A phone-number VPA is useful evidence for classification, but it is
+      // not a human-readable merchant name.
+      if (RegExp(r'^\d{7,}$').hasMatch(localPart)) return 'Unknown';
       // Otherwise use the local part as name
       return _cleanMerchantName(localPart.replaceAll('.', ' '));
     }
@@ -811,8 +812,8 @@ class TransactionParser {
     if (match == null) return null;
     final value = match.group(1)?.trim();
     if (value == null || value.length < 2) return null;
-    // Reject if it's just a number (account number, not a name)
-    if (RegExp(r'^\d+$').hasMatch(value)) return null;
+    // Reject reference numbers, phone numbers, QR IDs and clock values.
+    if (!EntityExtractor.isUsableMerchantName(value)) return null;
     return value;
   }
 
@@ -824,8 +825,13 @@ class TransactionParser {
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
-    // If it's a UPI ID, keep as-is
-    if (cleaned.contains('@')) return cleaned;
+    // If it's a UPI ID, keep it only when its local part is a usable
+    // counterparty identifier rather than a phone/QR/reference number.
+    if (cleaned.contains('@')) {
+      return EntityExtractor.isUsableMerchantName(cleaned)
+          ? cleaned
+          : 'Unknown';
+    }
 
     // Remove common noise suffixes
     cleaned = cleaned
@@ -840,7 +846,9 @@ class TransactionParser {
     // Truncate overly long names
     if (cleaned.length > 60) cleaned = cleaned.substring(0, 60).trim();
 
-    return cleaned.isEmpty ? 'Unknown' : cleaned;
+    return cleaned.isEmpty || !EntityExtractor.isUsableMerchantName(cleaned)
+        ? 'Unknown'
+        : cleaned;
   }
 
   // ── Stage 8: Reference ID Extraction ──────────────────────────────

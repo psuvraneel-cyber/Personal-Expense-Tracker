@@ -28,8 +28,14 @@ class AppLanguage {
   }
 
   static Future<void> set(String code) async {
-    current.value = localeFor(code);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(kAppLanguagePrefKey, current.value.languageCode);
+    final locale = localeFor(code);
+    // Persist before notifying MaterialApp so a locale rebuild cannot race
+    // with the preference write. A preferences failure must not surface as a
+    // Flutter error screen; the in-memory choice still applies for this run.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(kAppLanguagePrefKey, locale.languageCode);
+    } catch (_) {}
+    if (current.value != locale) current.value = locale;
   }
 }

@@ -18,7 +18,7 @@ void main() {
   });
 
   test('unmatched merchants fall back to real Other categories', () {
-    final expense = CategoryMapper.mapToCategoryId(merchantName: 'Q688163989');
+    final expense = CategoryMapper.mapToCategoryId(merchantName: 'Q900000001');
     final income = CategoryMapper.mapToCategoryId(
       merchantName: 'UPI credit',
       isIncome: true,

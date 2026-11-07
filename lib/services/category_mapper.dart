@@ -1,3 +1,5 @@
+import 'package:pet/core/constants/categories.dart';
+
 /// Central mapping service between parser category strings / merchant types
 /// and canonical P.E.T. category IDs.
 class CategoryMapper {
@@ -151,11 +153,14 @@ class CategoryMapper {
     if (parserCategory != null && parserCategory.trim().isNotEmpty) {
       final normalizedCat = parserCategory.trim().toLowerCase();
       if (_knownCategoryMappings.containsKey(normalizedCat)) {
-        return _knownCategoryMappings[normalizedCat]!;
+        final id = _knownCategoryMappings[normalizedCat]!;
+        if (_categoryMatchesDirection(id, isIncome)) return id;
       }
       for (final entry in _knownCategoryMappings.entries) {
-        if (normalizedCat.contains(entry.key)) {
-          return entry.value;
+        if (_keyMatches(normalizedCat, entry.key)) {
+          if (_categoryMatchesDirection(entry.value, isIncome)) {
+            return entry.value;
+          }
         }
       }
     }
@@ -163,12 +168,55 @@ class CategoryMapper {
     if (merchantName != null && merchantName.trim().isNotEmpty) {
       final normalizedMerchant = merchantName.trim().toLowerCase();
       for (final entry in _knownCategoryMappings.entries) {
-        if (normalizedMerchant.contains(entry.key)) {
-          return entry.value;
+        if (_keyMatches(normalizedMerchant, entry.key)) {
+          if (_categoryMatchesDirection(entry.value, isIncome)) {
+            return entry.value;
+          }
         }
       }
     }
 
     return isIncome ? fallbackIncomeCategoryId : fallbackExpenseCategoryId;
+  }
+
+  /// Short generic words that must match a whole word: as substrings they
+  /// hit ordinary text ("vi" in "via", "Savings" and "Ravi").
+  static const Set<String> _wholeWordKeys = {
+    'food',
+    'cafe',
+    'cab',
+    'ride',
+    'fuel',
+    'gas',
+    'wifi',
+    'vi',
+    'gift',
+  };
+
+  /// Short brands that banks often join to other words ("OLACABS",
+  /// "JIOFIBER", "UBERINDIA"), so they only need to start a word.
+  static const Set<String> _wordStartKeys = {'ola', 'jio', 'uber', 'pvr'};
+
+  static final Map<String, RegExp> _keyPatterns = {};
+
+  static bool _keyMatches(String text, String key) {
+    if (_wholeWordKeys.contains(key)) {
+      final re = _keyPatterns.putIfAbsent(
+          key, () => RegExp('(?<![a-z0-9])${RegExp.escape(key)}(?![a-z0-9])'));
+      return re.hasMatch(text);
+    }
+    if (_wordStartKeys.contains(key)) {
+      final re = _keyPatterns.putIfAbsent(
+          key, () => RegExp('(?<![a-z0-9])${RegExp.escape(key)}'));
+      return re.hasMatch(text);
+    }
+    return text.contains(key);
+  }
+
+  static bool _categoryMatchesDirection(String categoryId, bool isIncome) {
+    final category = defaultCategories.where((c) => c.id == categoryId);
+    if (category.isEmpty) return true;
+    final type = category.first.type;
+    return type == 'transfer' || type == (isIncome ? 'income' : 'expense');
   }
 }

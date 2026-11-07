@@ -106,6 +106,13 @@ class AppLocalizationsHi extends AppLocalizations {
   String get smsScreenTitle => 'लेन-देन अपने-आप पहचानें';
 
   @override
+  String get detectedTransactionsTitle => 'पहचाने गए लेन-देन';
+
+  @override
+  String get detectedTransactionsScopeHint =>
+      'सिर्फ़ SMS और भुगतान नोटिफ़िकेशन के रिकॉर्ड। हाथ से जोड़े गए लेन-देन इतिहास में दिखते हैं।';
+
+  @override
   String get smsHeadline => 'UPI लेन-देन\nअपने-आप पहचानें';
 
   @override

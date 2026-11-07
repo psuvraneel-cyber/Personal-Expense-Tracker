@@ -36,6 +36,8 @@
   "onboardingOemButton": "Open Battery Settings",
 
   "smsScreenTitle": "Auto-Detect Transactions",
+  "detectedTransactionsTitle": "Detected Transactions",
+  "detectedTransactionsScopeHint": "SMS and payment-notification records only. Manually added transactions appear in History.",
   "smsHeadline": "Auto-Detect UPI\nTransactions",
   "smsIntro": "P.E.T reads the SMS messages you receive to find bank and UPI transaction alerts, so you don't have to type them in.",
   "smsOnDeviceTitle": "Processed on your device",
