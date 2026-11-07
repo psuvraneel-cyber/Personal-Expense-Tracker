@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:pet/providers/category_provider.dart';
 import 'package:pet/providers/transaction_provider.dart';
-import 'package:pet/providers/budget_provider.dart';
 import 'package:pet/providers/sms_transaction_provider.dart';
 import 'package:pet/core/theme/app_theme.dart';
 import 'package:pet/core/theme/spacing.dart';
@@ -33,16 +32,6 @@ import 'package:pet/screens/settings/notification_settings_screen.dart';
 import 'package:pet/screens/settings/trusted_messages_screen.dart';
 import 'package:pet/screens/settings/referral_screen.dart';
 import 'package:pet/core/widgets/oem_battery_dialog.dart';
-import 'package:pet/premium/providers/recurring_provider.dart';
-import 'package:pet/premium/providers/goal_provider.dart';
-import 'package:pet/premium/providers/alert_provider.dart';
-import 'package:pet/premium/providers/linked_account_provider.dart';
-import 'package:pet/premium/providers/family_provider.dart';
-import 'package:pet/premium/providers/tax_provider.dart';
-import 'package:pet/premium/providers/weekly_planner_provider.dart';
-import 'package:pet/providers/dashboard_config_provider.dart';
-import 'package:pet/providers/recurring_transaction_provider.dart';
-import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/config/app_links.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -50,6 +39,7 @@ import 'package:pet/services/app_bootstrap.dart' show kCrashReportsPrefKey;
 import 'package:pet/services/analytics_service.dart';
 import 'package:pet/services/home_widget_service.dart';
 import 'package:pet/services/local_data_wiper.dart';
+import 'package:pet/services/session_reset.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pet/screens/sms_transactions/notification_access_disclosure.dart';
@@ -1475,42 +1465,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Invalidate active Firestore sync session immediately to reject any in-flight callbacks
       FirestoreSyncService().onSessionChanged(null);
 
-      // Cache providers before making async calls.
-      final transactionProvider = context.read<TransactionProvider>();
-      final categoryProvider = context.read<CategoryProvider>();
-      final budgetProvider = context.read<BudgetProvider>();
-      final premiumProvider = context.read<PremiumProvider>();
-      final recurringProvider = context.read<RecurringProvider>();
-      final goalProvider = context.read<GoalProvider>();
-      final familyProvider = context.read<FamilyProvider>();
-      final taxProvider = context.read<TaxProvider>();
-      final alertProvider = context.read<AlertProvider>();
-      final linkedAccountProvider = context.read<LinkedAccountProvider>();
-      final weeklyPlannerProvider = context.read<WeeklyPlannerProvider>();
-      final recurringTxnProvider = context.read<RecurringTransactionProvider>();
-      final smsProvider = context.read<SmsTransactionProvider>();
-      final dashboardConfigProvider = context.read<DashboardConfigProvider>();
-      final spendPauseProvider = context.read<SpendPauseProvider>();
-
       // Clear all provider state BEFORE signing out so no stale data
       // remains in memory or SQLite when a different account signs in.
-      await Future.wait([
-        transactionProvider.clearData(),
-        categoryProvider.clearData(),
-        budgetProvider.clearData(),
-        premiumProvider.clearData(),
-        recurringProvider.clearData(),
-        goalProvider.clearData(),
-        alertProvider.clearData(),
-        recurringTxnProvider.clearData(),
-        spendPauseProvider.clearData(),
-      ]);
-      familyProvider.clearData();
-      taxProvider.clearData();
-      linkedAccountProvider.clearData();
-      weeklyPlannerProvider.clearData();
-      dashboardConfigProvider.clearData();
-      smsProvider.clearData();
+      await clearAllProviders(context);
 
       await LocalDataWiper.wipe();
 

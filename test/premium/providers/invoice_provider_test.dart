@@ -181,6 +181,27 @@ void main() {
     expect(unchanged, isNull);
   });
 
+  test('a merge stops writing once the account changes partway through',
+      () async {
+    final a = provider.newDraft().copyWith(updatedAt: DateTime(2026, 11, 3));
+    final b = Invoice.fromMap({...a.toMap(), 'id': 'second'});
+    var live = true;
+    final saved = <String>[];
+    final merged = await provider.mergeLatestForTesting<Invoice>(
+      local: const [],
+      remote: [a, b],
+      id: (i) => i.id,
+      updatedAt: (i) => i.updatedAt,
+      isCurrent: () => live,
+      saveLocal: (i) async {
+        saved.add(i.id);
+        live = false; // sign-out lands while the first row is being written
+      },
+    );
+    expect(merged, isNull, reason: 'the old account\'s list must not return');
+    expect(saved, [a.id], reason: 'no further rows written after sign-out');
+  });
+
   group('payments spotted on this phone', () {
     final filed = <String>[];
 

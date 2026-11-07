@@ -39,6 +39,7 @@ import 'package:pet/premium/providers/spend_pause_provider.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/account_deletion_service.dart';
 import 'package:pet/services/local_data_wiper.dart';
+import 'package:pet/services/session_reset.dart';
 import 'package:pet/providers/dashboard_config_provider.dart';
 import 'package:pet/services/haptic_service.dart';
 import 'package:pet/services/biometric_service.dart';
@@ -360,41 +361,7 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
     if (currentUserId == null && _lastUid != null) {
       AppLogger.debug('[MAIN] Real sign-out detected — clearing data');
       _lastUid = null;
-      final txProv = ctx.read<TransactionProvider>();
-      final catProv = ctx.read<CategoryProvider>();
-      final budProv = ctx.read<BudgetProvider>();
-      final premProv = ctx.read<PremiumProvider>();
-      final recProv = ctx.read<RecurringProvider>();
-      final goalProv = ctx.read<GoalProvider>();
-      final alertProv = ctx.read<AlertProvider>();
-      final recTxProv = ctx.read<RecurringTransactionProvider>();
-      final smsProv = ctx.read<SmsTransactionProvider>();
-      final linkedProv = ctx.read<LinkedAccountProvider>();
-      final familyProv = ctx.read<FamilyProvider>();
-      final taxProv = ctx.read<TaxProvider>();
-      final weeklyProv = ctx.read<WeeklyPlannerProvider>();
-      final dashProv = ctx.read<DashboardConfigProvider>();
-      final spendPauseProv = ctx.read<SpendPauseProvider>();
-      final invoiceProv = ctx.read<InvoiceProvider>();
-
-      await Future.wait([
-        invoiceProv.clearData(),
-        txProv.clearData(),
-        catProv.clearData(),
-        budProv.clearData(),
-        premProv.clearData(),
-        recProv.clearData(),
-        goalProv.clearData(),
-        alertProv.clearData(),
-        recTxProv.clearData(),
-        weeklyProv.clearData(),
-        spendPauseProv.clearData(),
-      ]);
-      smsProv.clearData();
-      linkedProv.clearData();
-      familyProv.clearData();
-      taxProv.clearData();
-      dashProv.clearData();
+      await clearAllProviders(ctx);
 
       await LocalDataWiper.wipe();
     } else if (currentUserId != null && currentUserId != _lastUid) {
@@ -402,6 +369,17 @@ class _PETAppState extends State<PETApp> with WidgetsBindingObserver {
         '[MAIN] New user signed in ($currentUserId) — reloading data',
       );
       _lastUid = currentUserId;
+      // Local data left over from another account (a failed wipe, or rows
+      // added while nobody was signed in) is removed before anything loads.
+      if (!await DataOwner.isOwnedBy(currentUserId)) {
+        AppLogger.debug(
+            '[MAIN] Local data belongs to another account — wiping');
+        if (!ctx.mounted) return;
+        await clearAllProviders(ctx);
+        await LocalDataWiper.wipe();
+        await DataOwner.claim(currentUserId);
+      }
+      if (!ctx.mounted) return;
       ctx.read<CategoryProvider>().loadCategories();
       ctx.read<TransactionProvider>().loadTransactions();
       ctx.read<BudgetProvider>().loadBudgets();

@@ -16,6 +16,7 @@ import 'package:pet/services/account_deletion_service.dart';
 import 'package:pet/services/firestore_sync_service.dart';
 import 'package:pet/services/firebase_auth_service.dart';
 import 'package:pet/services/local_data_wiper.dart';
+import 'package:pet/services/session_reset.dart';
 import 'package:pet/screens/auth/google_sign_in_screen.dart';
 
 class AccountDeletionSheet extends StatefulWidget {
@@ -390,6 +391,7 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
         _step = 3;
         _isDeleting = true;
       });
+      await clearAllProviders(context);
       await LocalDataWiper.wipe();
       await FirebaseAuthService().signOut();
       if (!mounted) return;
@@ -410,10 +412,14 @@ class _AccountDeletionSheetState extends State<AccountDeletionSheet> {
     // Listen to progress stream (once: "Try again" calls this again)
     await _progressSub?.cancel();
     _progressSub = service.progress.listen(
-      (step) {
+      (step) async {
         if (mounted) setState(() => _currentDeletionStep = step);
         if (step == DeletionStep.complete && mounted) {
-          // Immediately route to sign-in
+          // Storage is already wiped; forget the deleted account in memory
+          // too, so the next account starts empty.
+          await clearAllProviders(context);
+          if (!mounted) return;
+          // Route to sign-in
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const GoogleSignInScreen()),
             (route) => false,

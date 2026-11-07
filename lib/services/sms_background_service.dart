@@ -7,6 +7,8 @@ import 'package:pet/core/utils/app_logger.dart';
 import 'package:pet/services/app_bootstrap.dart';
 import 'package:pet/data/database/database_helper.dart';
 import 'package:pet/services/background_turn.dart';
+import 'package:pet/services/background_import_gate.dart';
+import 'package:pet/services/native_sms_reader.dart';
 import 'package:pet/data/repositories/budget_repository.dart';
 import 'package:pet/data/repositories/transaction_repository.dart';
 import 'package:pet/premium/models/notification_category.dart';
@@ -54,6 +56,27 @@ Future<bool> _runTask(String taskName) async {
   // reminders) and Firebase (sync ownership) like the UI isolate does.
   await AppBootstrap.initTimeZones();
   await AppBootstrap.initFirebase();
+
+  if (taskName == kSmsInboxScanTask || taskName == kReconciliationSweepTask) {
+    if (!await BackgroundImportGate.smsImportAllowed()) {
+      AppLogger.debug(
+          '[PET-BG] $taskName skipped: SMS detection off or nobody signed in');
+      await HomeWidgetService.refresh();
+      return true;
+    }
+  } else if (taskName == kProcessNotificationsTask) {
+    if (!await BackgroundImportGate.hasSignedInUser()) {
+      // Captured while nobody was signed in: drop them, never hand them to
+      // the next account.
+      try {
+        await NativeSmsReader().clearPendingNotifications();
+      } catch (e) {
+        AppLogger.debug('[PET-BG] Clearing pending notifications failed: $e');
+      }
+      AppLogger.debug('[PET-BG] $taskName skipped: nobody signed in');
+      return true;
+    }
+  }
 
   if (taskName == kSmsInboxScanTask) {
     try {
@@ -290,9 +313,17 @@ Future<void> initSmsBackgroundService() async {
 }
 
 /// Cancel background SMS scanning, reconciliation, and alert evaluation.
+/// One-off scans queued by the native SMS receiver and notification listener
+/// (see `SmsBroadcastReceiver.kt` and `TransactionNotificationListener.kt`).
+const String kSmsScanImmediateWork = 'com.pet.tracker.smsInboxScan.immediate';
+const String kProcessNotificationsImmediateWork =
+    'com.pet.tracker.processNotifications.immediate';
+
 Future<void> cancelSmsBackgroundService() async {
   if (!Platform.isAndroid) return;
   await Workmanager().cancelByUniqueName(kSmsInboxScanTask);
+  await Workmanager().cancelByUniqueName(kSmsScanImmediateWork);
+  await Workmanager().cancelByUniqueName(kProcessNotificationsImmediateWork);
   await Workmanager().cancelByUniqueName(kReconciliationSweepTask);
   await Workmanager().cancelByUniqueName(kAlertEvaluationTask);
   AppLogger.debug(

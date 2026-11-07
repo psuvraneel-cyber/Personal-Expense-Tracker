@@ -41,11 +41,26 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         private const val TAG = "SmsBroadcastReceiver"
         const val TASK_SMS_SCAN = "com.pet.tracker.smsInboxScan"
         const val WORK_NAME_EXPEDITED_SCAN = "com.pet.tracker.smsInboxScan.immediate"
+
+        // Written by the Flutter app through shared_preferences (legacy store,
+        // which prefixes keys with "flutter."). Sign-out and account deletion
+        // clear it, as does turning SMS detection off.
+        private const val FLUTTER_PREFS = "FlutterSharedPreferences"
+        private const val SMS_FEATURE_KEY = "flutter.smsFeatureEnabled"
+
+        /** Whether the user has SMS detection turned on in the app. */
+        fun isSmsImportEnabled(context: Context): Boolean =
+            context.getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(SMS_FEATURE_KEY, false)
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null || intent == null) return
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
+
+        // Nothing is imported while SMS detection is off or after sign-out:
+        // otherwise a scan would add rows that the next account inherits.
+        if (!isSmsImportEnabled(context)) return
 
         val bundle = intent.extras ?: return
         val pdus = bundle.get("pdus") as? Array<*> ?: return
