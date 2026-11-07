@@ -144,6 +144,17 @@ class MerchantNormalizer {
     return _brandRules.keys.any((rule) => rule.hasMatch(cleaned));
   }
 
+  /// The canonical brand named anywhere in [text] as a whole word (for
+  /// example "Swiggy" in a confirmation whose payee could not be extracted),
+  /// or null. Only the brand list is consulted, never generic keywords.
+  static String? findBrandIn(String text) {
+    if (text.trim().isEmpty) return null;
+    for (final entry in _brandRules.entries) {
+      if (entry.key.hasMatch(text)) return entry.value;
+    }
+    return null;
+  }
+
   /// Normalizes a raw extracted merchant string into a clean, human-readable name.
   static String normalize(String merchant) {
     var cleaned = merchant.trim();

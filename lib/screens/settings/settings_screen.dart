@@ -29,6 +29,7 @@ import 'package:pet/services/platform_stub.dart'
     as platform;
 import 'package:pet/screens/settings/account_deletion_sheet.dart';
 import 'package:pet/screens/settings/notification_settings_screen.dart';
+import 'package:pet/screens/settings/debug_diagnostics_screen.dart';
 import 'package:pet/screens/settings/trusted_messages_screen.dart';
 import 'package:pet/screens/settings/referral_screen.dart';
 import 'package:pet/core/widgets/oem_battery_dialog.dart';
@@ -169,7 +170,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 );
-                if (code != null) await AppLanguage.set(code);
+                if (!mounted || code == null) return;
+                await AppLanguage.set(code);
               },
             ),
             if (!kIsWeb) ...[
@@ -571,6 +573,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: premium.isDeveloperPremiumAccessEnabled,
                       activeThumbColor: Colors.orange,
                       onChanged: (v) => premium.setDeveloperPremiumAccess(v),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingTile(
+                context,
+                isDark: isDark,
+                icon: Icons.health_and_safety_outlined,
+                iconColor: Colors.orange,
+                title: 'Ingestion Diagnostics',
+                subtitle: 'Copy privacy-safe database and SMS diagnostics',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DebugDiagnosticsScreen(),
                     ),
                   );
                 },

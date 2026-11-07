@@ -58,6 +58,7 @@ class SmsTransactionProvider extends ChangeNotifier {
   bool _notificationAccessGranted = false;
   int _lastScanCount = 0;
   int _lastReconciliationCount = 0;
+  DateTime? _lastScanAt;
   DateTime? _lastSyncTimestamp;
 
   // Cached computed values
@@ -355,6 +356,12 @@ class SmsTransactionProvider extends ChangeNotifier {
 
     try {
       _lastScanCount = await _smsService.scanInbox(lookbackDays: lookbackDays);
+      _lastScanAt = DateTime.now();
+      final scanPrefs = await SharedPreferences.getInstance();
+      await scanPrefs.setInt(
+        'pet_sms_last_scan',
+        _lastScanAt!.millisecondsSinceEpoch,
+      );
 
       // Reload transactions after scan
       await loadTransactions();
@@ -593,14 +600,28 @@ class SmsTransactionProvider extends ChangeNotifier {
   /// Get diagnostic information for troubleshooting SMS issues.
   Future<Map<String, dynamic>> getDiagnostics() async {
     final prefs = await SharedPreferences.getInstance();
+    final permissionStatus = await Permission.sms.status;
+    bool? notificationAccess;
+    try {
+      notificationAccess = await _smsService.checkNotificationAccess();
+    } catch (_) {}
+    final lastScanMs = prefs.getInt('pet_sms_last_scan');
+    final reconciliation = await _reconciliationService.getDiagnostics();
     return {
       'isSupported': isSupported,
       'smsFeatureEnabled': _smsFeatureEnabled,
       'permissionsGranted': _permissionsGranted,
+      'smsPermissionStatus': permissionStatus.toString().split('.').last,
+      'notificationAccessGranted': notificationAccess,
       'transactionCount': _transactions.length,
       'uncertainCount': _uncertainTransactions.length,
       'lastScanCount': _lastScanCount,
       'lastReconciliationCount': _lastReconciliationCount,
+      'lastScanAt': (lastScanMs == null
+              ? _lastScanAt
+              : DateTime.fromMillisecondsSinceEpoch(lastScanMs))
+          ?.toIso8601String(),
+      'lastReconciliationAt': reconciliation['lastRunDate'],
       'smsServiceSupported': SmsService.isSupported,
       'lastProcessedTimestamp': prefs.getInt('pet_last_sms_timestamp'),
       'reconciliationWatermark': prefs.getInt('pet_reconciliation_watermark'),

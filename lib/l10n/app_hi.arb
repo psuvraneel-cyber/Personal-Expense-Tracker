@@ -34,6 +34,8 @@
   "onboardingOemButton": "बैटरी सेटिंग्स खोलें",
 
   "smsScreenTitle": "लेन-देन अपने-आप पहचानें",
+  "detectedTransactionsTitle": "पहचाने गए लेन-देन",
+  "detectedTransactionsScopeHint": "सिर्फ़ SMS और भुगतान नोटिफ़िकेशन के रिकॉर्ड। हाथ से जोड़े गए लेन-देन इतिहास में दिखते हैं।",
   "smsHeadline": "UPI लेन-देन\nअपने-आप पहचानें",
   "smsIntro": "P.E.T आपको मिलने वाले SMS पढ़कर बैंक और UPI लेन-देन के अलर्ट ढूँढता है, ताकि आपको उन्हें खुद न लिखना पड़े।",
   "smsOnDeviceTitle": "आपके डिवाइस पर ही प्रोसेस",

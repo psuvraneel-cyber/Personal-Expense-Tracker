@@ -106,6 +106,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get smsScreenTitle => 'Auto-Detect Transactions';
 
   @override
+  String get detectedTransactionsTitle => 'Detected Transactions';
+
+  @override
+  String get detectedTransactionsScopeHint =>
+      'SMS and payment-notification records only. Manually added transactions appear in History.';
+
+  @override
   String get smsHeadline => 'Auto-Detect UPI\nTransactions';
 
   @override

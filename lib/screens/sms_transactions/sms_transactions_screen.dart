@@ -14,6 +14,7 @@ import 'package:pet/screens/sms_transactions/sms_detail_widgets.dart';
 import 'package:pet/screens/sms_transactions/sms_permission_screen.dart';
 import 'package:pet/services/sms_parser/intent_detector.dart';
 import 'package:pet/services/sms_parser/negative_filter.dart';
+import 'package:pet/l10n/app_localizations.dart';
 
 /// Google Pay-style screen displaying UPI transaction history —
 /// both payments sent and payments received.
@@ -61,13 +62,14 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
-        title: const Text('Transaction History'),
+        title: Text(l10n.detectedTransactionsTitle),
         leading: IconButton(
           tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded),
@@ -402,6 +404,7 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
   }
 
   Widget _buildTransactionsList(SmsTransactionProvider provider, bool isDark) {
+    final l10n = AppLocalizations.of(context);
     // Filter transactions
     List<SmsTransaction> filtered;
     switch (_filterType) {
@@ -429,6 +432,22 @@ class _SmsTransactionsScreenState extends State<SmsTransactionsScreen>
       children: [
         // Summary bar
         _buildSummaryBar(provider, isDark),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              l10n.detectedTransactionsScopeHint,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark
+                    ? AppTheme.textTertiary
+                    : AppTheme.textSecondaryLight,
+              ),
+            ),
+          ),
+        ),
 
         // Last synced indicator
         _buildLastSyncedIndicator(provider, isDark),

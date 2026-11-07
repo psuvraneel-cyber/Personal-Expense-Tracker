@@ -448,6 +448,43 @@ class EntityExtractor {
 
   static final RegExp _hasLetter = RegExp(r'[A-Za-z]');
 
+  /// Returns whether a candidate is suitable for display as a counterparty.
+  ///
+  /// Reference numbers, phone numbers, QR identifiers and clock values often
+  /// occur next to payment wording. They remain available in their dedicated
+  /// fields, but must not be promoted to a verified merchant name.
+  static bool isUsableMerchantName(String value) {
+    final candidate = value.trim();
+    if (candidate.isEmpty || !_hasLetter.hasMatch(candidate)) return false;
+    if (candidate.contains('@')) {
+      final localPart = candidate.split('@').first;
+      final localLetters = _hasLetter.allMatches(localPart).length;
+      final localDigits = RegExp(r'\d').allMatches(localPart).length;
+      if (localLetters == 0 || (localDigits >= 6 && localLetters <= 2)) {
+        return false;
+      }
+    }
+    if (RegExp(r'^\d').hasMatch(candidate) &&
+        RegExp(r'^\d[\d\s+()\-]{6,}$').hasMatch(candidate)) {
+      return false;
+    }
+    if (RegExp(r'^\+?\d[\d\s()\-]{6,}$').hasMatch(candidate)) {
+      return false;
+    }
+    if (RegExp(r'^\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?$', caseSensitive: false)
+        .hasMatch(candidate)) {
+      return false;
+    }
+
+    final digitCount = RegExp(r'\d').allMatches(candidate).length;
+    final letterCount = _hasLetter.allMatches(candidate).length;
+    // Tokens such as Q900000001 or QR2810050501011 are identifiers, not
+    // human-readable names. A normal merchant name can still contain a small
+    // number of digits (for example, 7-Eleven).
+    if (digitCount >= 6 && letterCount <= 2) return false;
+    return true;
+  }
+
   /// Extract the counterparty named after "to VPA" (debit) or
   /// "from/by VPA" (credit). The account the money left or reached
   /// ("debited from HDFC Bank A/c XX1234") is the user's own, never the payee.
@@ -497,10 +534,9 @@ class EntityExtractor {
       if (match != null) {
         final raw = match.group(1)?.trim();
         if (raw == null || raw.length < 2) continue;
-        if (RegExp(r'^\d+$').hasMatch(raw)) continue;
 
         final cleaned = _cleanMerchant(raw);
-        if (cleaned != 'Unknown') {
+        if (isUsableMerchantName(cleaned)) {
           reasons.add('Merchant extracted via $name: "$cleaned"');
           return cleaned;
         }
@@ -510,11 +546,9 @@ class EntityExtractor {
     // Fallback: use UPI ID
     if (upiId != null) {
       final localPart = upiId.split('@').first;
-      final name = RegExp(r'^\d{10}$').hasMatch(localPart)
-          ? upiId
-          : _cleanMerchant(localPart.replaceAll('.', ' '));
+      final name = _cleanMerchant(localPart.replaceAll('.', ' '));
       reasons.add('Merchant from UPI ID fallback: "$name"');
-      return name;
+      return isUsableMerchantName(name) ? name : 'Unknown';
     }
 
     reasons.add('Merchant: Unknown (no pattern matched)');
@@ -527,7 +561,9 @@ class EntityExtractor {
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
-    if (cleaned.contains('@')) return cleaned;
+    if (cleaned.contains('@')) {
+      return isUsableMerchantName(cleaned) ? cleaned : 'Unknown';
+    }
 
     cleaned = cleaned
         .replaceAll(RegExp(r'\s*[—–-]\s*$'), '')
@@ -540,7 +576,9 @@ class EntityExtractor {
         .trim();
 
     if (cleaned.length > 60) cleaned = cleaned.substring(0, 60).trim();
-    if (cleaned.isEmpty || cleaned.toLowerCase().startsWith('unknown')) {
+    if (cleaned.isEmpty ||
+        cleaned.toLowerCase().startsWith('unknown') ||
+        !isUsableMerchantName(cleaned)) {
       return 'Unknown';
     }
     return cleaned;
